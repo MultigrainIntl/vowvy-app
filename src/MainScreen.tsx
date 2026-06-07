@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { signOut, User } from 'firebase/auth';
+import { signOut, type User } from 'firebase/auth';
 import {
   collection, doc, setDoc, onSnapshot,
   query, orderBy, serverTimestamp, Timestamp,
