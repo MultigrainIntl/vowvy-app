@@ -250,15 +250,55 @@
   text-align: center;
 }
 
-.ios-hint {
-  font-size: 13px;
-  color: var(--muted-slate);
+/* ---- Chrome iOS modal ---- */
+
+.ios-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 26, 35, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.ios-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 28px 24px 20px;
+  max-width: 320px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   text-align: center;
+}
+
+.ios-modal-message {
+  font-size: 16px;
+  color: var(--charcoal);
+  line-height: 1.6;
   margin: 0;
 }
 
-.ios-hint a {
-  color: var(--terracotta);
+.ios-modal-btn {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 15px;
+  padding: 13px;
+  border-radius: 6px;
+  background: var(--terracotta);
+  color: white;
   text-decoration: none;
-  font-weight: 500;
+}
+
+.ios-modal-dismiss {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--muted-slate);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
 }

@@ -43,7 +43,7 @@ export default function MainScreen({ user }: Props) {
   const [saveError, setSaveError]   = useState('');
   const [containers, setContainers] = useState<Container[]>([]);
 
-  const [showIOSHint, setShowIOSHint] = useState(false);
+  const [showIOSModal, setShowIOSModal] = useState(false);
   const canSave = Boolean(location.trim() && name.trim() && photo) && !saving;
 
   useEffect(() => {
@@ -151,7 +151,12 @@ export default function MainScreen({ user }: Props) {
 
             <label
               className="photo-input-label"
-              onClick={() => { if (/CriOS/.test(navigator.userAgent)) setShowIOSHint(true); }}
+              onClick={(e) => {
+                if (/CriOS/.test(navigator.userAgent)) {
+                  e.preventDefault();
+                  setShowIOSModal(true);
+                }
+              }}
             >
               <input
                 type="file"
@@ -174,13 +179,6 @@ export default function MainScreen({ user }: Props) {
               )}
             </label>
           </div>
-
-          {showIOSHint && (
-            <p className="ios-hint">
-              For camera access on iPhone, open in Safari.{' '}
-              <a href="https://vowvy-1ba5f.web.app">Open in Safari</a>
-            </p>
-          )}
 
           {saveError && <p className="save-error">{saveError}</p>}
 
@@ -214,6 +212,22 @@ export default function MainScreen({ user }: Props) {
           )}
         </section>
       </main>
+
+      {showIOSModal && (
+        <div className="ios-modal-backdrop" onClick={() => setShowIOSModal(false)}>
+          <div className="ios-modal" onClick={e => e.stopPropagation()}>
+            <p className="ios-modal-message">
+              Camera access requires Safari on iPhone. Tap below to open Vowvy in Safari.
+            </p>
+            <a className="ios-modal-btn" href={window.location.href}>
+              Open in Safari
+            </a>
+            <button className="ios-modal-dismiss" onClick={() => setShowIOSModal(false)}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
