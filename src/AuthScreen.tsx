@@ -4,6 +4,7 @@ import {
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { auth } from './firebase';
+import logoMark from './assets/logo-mark.svg';
 
 function friendlyError(code: string): string {
   switch (code) {
@@ -52,6 +53,7 @@ export default function AuthScreen() {
   return (
     <div className="auth-screen">
       <div className="auth-card">
+        <img src={logoMark} alt="" className="auth-logo-mark" />
         <h1 className="auth-logo">Vowvy</h1>
         <p className="auth-tagline">Capture first. Organize later.</p>
 

@@ -7,6 +7,7 @@ import {
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
 import { auth, db, storage } from './firebase';
+import logoMark from './assets/logo-mark.svg';
 import './MainScreen.css';
 
 interface Container {
@@ -115,7 +116,10 @@ export default function MainScreen({ user }: Props) {
   return (
     <div className="main-screen">
       <header className="app-header">
-        <span className="app-wordmark">Vowvy</span>
+        <div className="header-brand">
+          <img src={logoMark} alt="" className="header-logo-mark" />
+          <span className="app-wordmark">Vowvy</span>
+        </div>
         <button className="sign-out-btn" onClick={() => signOut(auth)}>
           Sign out
         </button>
@@ -133,11 +137,17 @@ export default function MainScreen({ user }: Props) {
           <div className="form-fields">
             <input
               type="text"
+              list="locations-list"
               placeholder="Location — e.g. Garage, Storage unit 3"
               value={location}
               disabled={saving}
               onChange={e => setLocation(e.target.value)}
             />
+            <datalist id="locations-list">
+              {[...new Set(containers.map(c => c.location))].sort().map(loc => (
+                <option key={loc} value={loc} />
+              ))}
+            </datalist>
             <input
               type="text"
               placeholder="Container — e.g. Box 12, Blue bin"

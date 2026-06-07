@@ -13,6 +13,17 @@
   border-bottom: 1px solid var(--warm-gray);
 }
 
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-logo-mark {
+  height: 30px;
+  width: auto;
+}
+
 .app-wordmark {
   font-family: var(--font-heading);
   font-size: 28px;
@@ -222,10 +233,11 @@
 }
 
 .container-thumb {
-  width: 54px;
-  height: 54px;
+  width: 72px;
+  height: 72px;
   border-radius: 5px;
-  object-fit: cover;
+  object-fit: contain;
+  background: var(--warm-beige);
   flex-shrink: 0;
 }
 

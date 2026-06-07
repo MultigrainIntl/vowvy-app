@@ -16,6 +16,13 @@
   gap: 16px;
 }
 
+.auth-logo-mark {
+  display: block;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 4px;
+}
+
 .auth-logo {
   font-size: 52px;
   letter-spacing: 0.08em;
