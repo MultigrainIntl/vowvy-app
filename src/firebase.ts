@@ -4,7 +4,7 @@ import { getStorage } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyB1Dk5ahebGjTmdFgy2CG1QZ1HE1_HJzgs",
+  apiKey: "AIzaSyB1Dk5ahebGjTmdFgy2CG1QZlHE1_HJzgs",
   authDomain: "vowvy-1ba5f.firebaseapp.com",
   projectId: "vowvy-1ba5f",
   storageBucket: "vowvy-1ba5f.firebasestorage.app",
