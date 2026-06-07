@@ -141,7 +141,6 @@ export default function MainScreen({ user }: Props) {
             <label className="photo-input-label">
               <input
                 type="file"
-                accept="image/*"
                 disabled={saving}
                 onChange={handlePhotoChange}
                 className="photo-input-hidden"
