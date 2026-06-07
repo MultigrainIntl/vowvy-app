@@ -1,19 +1,60 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signOut, User } from 'firebase/auth';
-import { auth } from './firebase';
+import {
+  collection, doc, setDoc, onSnapshot,
+  query, orderBy, serverTimestamp, Timestamp,
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import imageCompression from 'browser-image-compression';
+import { auth, db, storage } from './firebase';
 import './MainScreen.css';
+
+interface Container {
+  id: string;
+  location: string;
+  name: string;
+  photoUrl: string;
+  photoStoragePath: string;
+  createdAt: Timestamp | null;
+}
+
+function relativeTime(ts: Timestamp | null): string {
+  if (!ts) return 'just now';
+  const seconds = Math.floor((Date.now() - ts.toMillis()) / 1000);
+  if (seconds < 60)        return 'just now';
+  if (seconds < 3600)      return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400)     return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 7 * 86400) return `${Math.floor(seconds / 86400)}d ago`;
+  return ts.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 interface Props {
   user: User;
 }
 
 export default function MainScreen({ user }: Props) {
-  const [location, setLocation] = useState('');
-  const [name, setName]         = useState('');
-  const [photo, setPhoto]       = useState<File | null>(null);
-  const [preview, setPreview]   = useState<string | null>(null);
+  const [location, setLocation]     = useState('');
+  const [name, setName]             = useState('');
+  const [photo, setPhoto]           = useState<File | null>(null);
+  const [preview, setPreview]       = useState<string | null>(null);
+  const [saving, setSaving]         = useState(false);
+  const [saved, setSaved]           = useState(false);
+  const [saveError, setSaveError]   = useState('');
+  const [containers, setContainers] = useState<Container[]>([]);
 
-  const canSave = Boolean(location.trim() && name.trim() && photo);
+  const canSave = Boolean(location.trim() && name.trim() && photo) && !saving;
+
+  useEffect(() => {
+    const q = query(
+      collection(db, `users/${user.uid}/containers`),
+      orderBy('createdAt', 'desc'),
+    );
+    return onSnapshot(q, (snap) => {
+      setContainers(
+        snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Container, 'id'>) }))
+      );
+    });
+  }, [user.uid]);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -22,9 +63,53 @@ export default function MainScreen({ user }: Props) {
     setPreview(file ? URL.createObjectURL(file) : null);
   }
 
-  function handleSave() {
-    // Checkpoint 4: compress → upload → Firestore write
+  async function handleSave() {
+    if (!photo) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      const compressed = await imageCompression(photo, {
+        maxWidthOrHeight: 1600,
+        initialQuality: 0.85,
+        useWebWorker: true,
+        maxSizeMB: 0.5,
+      });
+
+      const containerRef  = doc(collection(db, `users/${user.uid}/containers`));
+      const containerId   = containerRef.id;
+      const storagePath   = `users/${user.uid}/containers/${containerId}/photo.jpg`;
+
+      await uploadBytes(ref(storage, storagePath), compressed);
+      const photoUrl = await getDownloadURL(ref(storage, storagePath));
+
+      await setDoc(containerRef, {
+        location: location.trim(),
+        name: name.trim(),
+        photoUrl,
+        photoStoragePath: storagePath,
+        createdAt: serverTimestamp(),
+      });
+
+      if (preview) URL.revokeObjectURL(preview);
+      setLocation('');
+      setName('');
+      setPhoto(null);
+      setPreview(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setSaveError('Save failed. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
+
+  const grouped = containers.reduce<Record<string, Container[]>>((acc, c) => {
+    if (!acc[c.location]) acc[c.location] = [];
+    acc[c.location].push(c);
+    return acc;
+  }, {});
+  const locationKeys = Object.keys(grouped);
 
   return (
     <div className="main-screen">
@@ -42,12 +127,14 @@ export default function MainScreen({ user }: Props) {
               type="text"
               placeholder="Location — e.g. Garage, Storage unit 3"
               value={location}
+              disabled={saving}
               onChange={e => setLocation(e.target.value)}
             />
             <input
               type="text"
               placeholder="Container — e.g. Box 12, Blue bin"
               value={name}
+              disabled={saving}
               onChange={e => setName(e.target.value)}
             />
 
@@ -56,6 +143,7 @@ export default function MainScreen({ user }: Props) {
                 type="file"
                 accept="image/*"
                 capture="environment"
+                disabled={saving}
                 onChange={handlePhotoChange}
                 className="photo-input-hidden"
               />
@@ -75,13 +163,36 @@ export default function MainScreen({ user }: Props) {
             </label>
           </div>
 
-          <button className="save-btn" onClick={handleSave} disabled={!canSave}>
-            Save Container
+          {saveError && <p className="save-error">{saveError}</p>}
+
+          <button
+            className={`save-btn${saved ? ' saved' : ''}`}
+            onClick={handleSave}
+            disabled={!canSave}
+          >
+            {saving ? 'Saving…' : saved ? 'Saved!' : 'Save Container'}
           </button>
         </section>
 
         <section className="container-list">
-          <p className="list-empty">No containers yet. Add your first one above.</p>
+          {locationKeys.length === 0 ? (
+            <p className="list-empty">No containers yet. Add your first one above.</p>
+          ) : (
+            locationKeys.map(loc => (
+              <div key={loc} className="location-group">
+                <h2 className="location-heading">{loc}</h2>
+                {grouped[loc].map(c => (
+                  <div key={c.id} className="container-row">
+                    <img src={c.photoUrl} alt={c.name} className="container-thumb" />
+                    <div className="container-meta">
+                      <div className="container-name">{c.name}</div>
+                      <div className="container-time">{relativeTime(c.createdAt)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
         </section>
       </main>
     </div>
