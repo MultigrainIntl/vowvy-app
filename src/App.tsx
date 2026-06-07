@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from './firebase';
 import AuthScreen from './AuthScreen';
+import MainScreen from './MainScreen';
 import './App.css';
 
 export default function App() {
@@ -17,10 +18,5 @@ export default function App() {
 
   if (loading) return null;
   if (!user) return <AuthScreen />;
-
-  return (
-    <div style={{ padding: 24, fontFamily: 'var(--font-body)' }}>
-      Signed in as {user.email} — main screen coming next
-    </div>
-  );
+  return <MainScreen user={user} />;
 }

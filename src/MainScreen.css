@@ -1,0 +1,173 @@
+/* ---- Header ---- */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 56px;
+  background: white;
+  border-bottom: 1px solid var(--warm-gray);
+}
+
+.app-wordmark {
+  font-family: var(--font-heading);
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--terracotta);
+  letter-spacing: 0.06em;
+}
+
+.sign-out-btn {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--muted-slate);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 0;
+  transition: color 0.15s;
+}
+
+.sign-out-btn:hover {
+  color: var(--charcoal);
+}
+
+/* ---- Layout ---- */
+
+.main-content {
+  flex: 1;
+  padding: 24px 20px 48px;
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* ---- Capture card ---- */
+
+.capture-card {
+  background: white;
+  border-radius: 10px;
+  border: 1px solid var(--warm-gray);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-fields input[type="text"] {
+  font-family: var(--font-body);
+  font-size: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 6px;
+  background: var(--soft-ivory);
+  color: var(--charcoal);
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+
+.form-fields input[type="text"]:focus {
+  border-color: var(--terracotta);
+  background: white;
+}
+
+/* ---- Photo input ---- */
+
+.photo-input-label {
+  display: block;
+  cursor: pointer;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px dashed var(--warm-gray);
+  transition: border-color 0.2s;
+}
+
+.photo-input-label:hover {
+  border-color: var(--terracotta);
+}
+
+.photo-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.photo-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 20px;
+  color: var(--muted-slate);
+  font-size: 14px;
+}
+
+.photo-placeholder svg {
+  width: 36px;
+  height: 36px;
+  color: var(--warm-sand);
+}
+
+.photo-preview {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+}
+
+/* ---- Save button ---- */
+
+.save-btn {
+  font-family: var(--font-body);
+  font-size: 16px;
+  padding: 14px;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: var(--terracotta);
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.save-btn:not(:disabled):hover {
+  opacity: 0.88;
+}
+
+/* ---- Container list ---- */
+
+.container-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.list-empty {
+  font-size: 14px;
+  color: var(--muted-slate);
+  text-align: center;
+  font-style: italic;
+  padding: 24px 0;
+}
