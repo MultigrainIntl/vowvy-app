@@ -142,7 +142,6 @@ export default function MainScreen({ user }: Props) {
               <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 disabled={saving}
                 onChange={handlePhotoChange}
                 className="photo-input-hidden"
