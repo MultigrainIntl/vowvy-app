@@ -42,6 +42,7 @@ export default function MainScreen({ user }: Props) {
   const [saveError, setSaveError]   = useState('');
   const [containers, setContainers] = useState<Container[]>([]);
 
+  const isChromeIOS = /CriOS/.test(navigator.userAgent);
   const canSave = Boolean(location.trim() && name.trim() && photo) && !saving;
 
   useEffect(() => {
@@ -119,6 +120,13 @@ export default function MainScreen({ user }: Props) {
           Sign out
         </button>
       </header>
+
+      {isChromeIOS && (
+        <div className="ios-banner">
+          <span>For camera access on iPhone, open in Safari.</span>
+          <a href="https://vowvy-1ba5f.web.app">Open in Safari</a>
+        </div>
+      )}
 
       <main className="main-content">
         <section className="capture-card">
