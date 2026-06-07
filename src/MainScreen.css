@@ -47,28 +47,6 @@
   color: var(--charcoal);
 }
 
-/* ---- Chrome iOS banner ---- */
-
-.ios-banner {
-  background: var(--warm-beige);
-  border-bottom: 1px solid var(--warm-gray);
-  padding: 10px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--charcoal);
-}
-
-.ios-banner a {
-  color: var(--terracotta);
-  text-decoration: none;
-  font-weight: 500;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 /* ---- Layout ---- */
 
 .main-content {
@@ -270,4 +248,17 @@
   font-size: 13px;
   color: var(--terracotta);
   text-align: center;
+}
+
+.ios-hint {
+  font-size: 13px;
+  color: var(--muted-slate);
+  text-align: center;
+  margin: 0;
+}
+
+.ios-hint a {
+  color: var(--terracotta);
+  text-decoration: none;
+  font-weight: 500;
 }

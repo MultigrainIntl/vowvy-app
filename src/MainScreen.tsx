@@ -43,7 +43,7 @@ export default function MainScreen({ user }: Props) {
   const [saveError, setSaveError]   = useState('');
   const [containers, setContainers] = useState<Container[]>([]);
 
-  const isChromeIOS = /CriOS/.test(navigator.userAgent);
+  const [showIOSHint, setShowIOSHint] = useState(false);
   const canSave = Boolean(location.trim() && name.trim() && photo) && !saving;
 
   useEffect(() => {
@@ -125,13 +125,6 @@ export default function MainScreen({ user }: Props) {
         </button>
       </header>
 
-      {isChromeIOS && (
-        <div className="ios-banner">
-          <span>For camera access on iPhone, open in Safari.</span>
-          <a href="https://vowvy-1ba5f.web.app">Open in Safari</a>
-        </div>
-      )}
-
       <main className="main-content">
         <section className="capture-card">
           <div className="form-fields">
@@ -156,7 +149,10 @@ export default function MainScreen({ user }: Props) {
               onChange={e => setName(e.target.value)}
             />
 
-            <label className="photo-input-label">
+            <label
+              className="photo-input-label"
+              onClick={() => { if (/CriOS/.test(navigator.userAgent)) setShowIOSHint(true); }}
+            >
               <input
                 type="file"
                 disabled={saving}
@@ -178,6 +174,13 @@ export default function MainScreen({ user }: Props) {
               )}
             </label>
           </div>
+
+          {showIOSHint && (
+            <p className="ios-hint">
+              For camera access on iPhone, open in Safari.{' '}
+              <a href="https://vowvy-1ba5f.web.app">Open in Safari</a>
+            </p>
+          )}
 
           {saveError && <p className="save-error">{saveError}</p>}
 
