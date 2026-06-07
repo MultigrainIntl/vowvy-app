@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserSessionPersistence } from 'firebase/auth';
 // import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 const firebaseConfig = {
@@ -28,4 +28,10 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const auth = getAuth(app);
+// Safari ITP blocks cross-origin IndexedDB (firebaseapp.com treated as tracker).
+// browserSessionPersistence uses sessionStorage which Safari allows.
+// TODO: once app.vowvy.com custom domain is verified in Firebase Hosting,
+// set authDomain to "app.vowvy.com" and remove this — same-origin auth
+// doesn't need the sessionStorage workaround.
+setPersistence(auth, browserSessionPersistence);
 export default app;
