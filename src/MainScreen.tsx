@@ -150,6 +150,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [viewingOwnerUid, setViewingOwnerUid]         = useState(initialOwnerUid ?? user.uid);
   const [sharedInventories, setSharedInventories]     = useState<{ ownerUid: string; ownerName: string }[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [locationsLoaded, setLocationsLoaded]   = useState(false);
+  const [containersLoaded, setContainersLoaded] = useState(false);
+  const [showFirstLocationInput, setShowFirstLocationInput] = useState(false);
+  const [firstLocationName, setFirstLocationName]           = useState('');
+  const [creatingFirstLocation, setCreatingFirstLocation]   = useState(false);
+  const [showHowItWorks, setShowHowItWorks]                 = useState(false);
   const [collaborators, setCollaborators]     = useState<{ uid: string; displayName: string; email: string; inviteToken: string }[]>([]);
   const [showInvitePanel, setShowInvitePanel] = useState(false);
   const [inviteLink, setInviteLink]           = useState<string | null>(null);
@@ -180,7 +186,10 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
   // Listen for locations
   useEffect(() => {
-    return subscribeToLocations(user.uid, setLocations);
+    return subscribeToLocations(user.uid, locs => {
+      setLocations(locs);
+      setLocationsLoaded(true);
+    });
   }, [user.uid]);
 
   // Listen for people who have access to this user's inventory
@@ -216,11 +225,25 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     );
     return onSnapshot(q, snap => {
       setContainers(snap.docs.map(mapContainer));
+      setContainersLoaded(true);
     });
   }, [viewingOwnerUid]);
 
   // Derived state
   const activeContainers = containers.filter(c => !c.deletedAt);
+
+  // Brand-new user: own inventory, both snapshots loaded, and nothing exists yet
+  // (containers.length includes trash on purpose — someone with trashed data is not new).
+  const isBrandNewUser =
+    viewingOwnerUid === user.uid &&
+    locationsLoaded && containersLoaded &&
+    locations.length === 0 && containers.length === 0;
+
+  // Just created their first location, but no box/container yet: nudge the next step.
+  const showFirstBoxHint =
+    viewingOwnerUid === user.uid &&
+    locationsLoaded && containersLoaded &&
+    locations.length > 0 && containers.length === 0;
 
   const trashedContainers = containers.filter(c => c.deletedAt && isRecent(c.deletedAt));
   const trashedPhotos     = containers.filter(c => !c.deletedAt)
@@ -236,6 +259,26 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     selectedContainerId !== '' &&
     (selectedContainerId !== 'new' || newContainerName.trim() !== '');
   const canSave = Boolean(selectedLocationId && containerValid && photo) && !saving;
+
+  async function handleCreateFirstLocation() {
+    const name = firstLocationName.trim();
+    if (!name || creatingFirstLocation) return;
+    setCreatingFirstLocation(true);
+    setSaveError('');
+    try {
+      const id = await createLocation(user.uid, name, null);
+      // Pre-select the new location and open the "new box/container" input so the
+      // next step (name a box, take a photo) is already teed up on the capture card.
+      setSelectedLocationId(id);
+      setSelectedContainerId('new');
+      setFirstLocationName('');
+      setShowFirstLocationInput(false);
+    } catch {
+      setSaveError('Could not create the location. Please try again.');
+    } finally {
+      setCreatingFirstLocation(false);
+    }
+  }
 
   async function handleCreateContainer() {
     if (!selectedLocationId || !newContainerName.trim()) return;
@@ -719,7 +762,86 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       </header>
 
       <main className="main-content">
+        {isBrandNewUser ? (
+        <section className="onboard-card">
+          <img src={logoMark} alt="" className="onboard-logo" />
+          <h1 className="onboard-title">Welcome to Vowvy</h1>
+          <p className="onboard-tagline">
+            Take photos of your boxes, let AI identify and catalog what&rsquo;s inside,
+            organize everything by location and box or container, and share access
+            with people you trust when you need to.
+          </p>
+
+          {!showFirstLocationInput ? (
+            <button className="onboard-primary-btn" onClick={() => setShowFirstLocationInput(true)}>
+              Create your first location
+            </button>
+          ) : (
+            <div className="onboard-input-block">
+              <p className="onboard-input-label">
+                A location is where things live — a home, a garage, a storage unit.
+              </p>
+              <div className="onboard-input-row">
+                <input
+                  type="text"
+                  className="onboard-input"
+                  placeholder="e.g. My House, Storage Unit 3"
+                  value={firstLocationName}
+                  autoFocus
+                  disabled={creatingFirstLocation}
+                  onChange={e => setFirstLocationName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleCreateFirstLocation()}
+                />
+                <button
+                  className="onboard-create-btn"
+                  disabled={!firstLocationName.trim() || creatingFirstLocation}
+                  onClick={handleCreateFirstLocation}
+                >
+                  {creatingFirstLocation ? 'Creating…' : 'Create'}
+                </button>
+              </div>
+            </div>
+          )}
+          {saveError && <p className="save-error">{saveError}</p>}
+
+          <button className="onboard-secondary-btn" onClick={() => setShowHowItWorks(v => !v)}>
+            {showHowItWorks ? 'Hide how Vowvy works' : 'See how Vowvy works'}
+          </button>
+
+          {showHowItWorks && (
+            <ol className="onboard-steps">
+              <li>
+                <span className="onboard-step-icon">📍</span>
+                <span><strong>Location</strong> — where things live: a home, garage, or storage unit.</span>
+              </li>
+              <li>
+                <span className="onboard-step-icon">📦</span>
+                <span><strong>Box or container</strong> — name it, like &ldquo;Box 12&rdquo; or &ldquo;Blue bin&rdquo;.</span>
+              </li>
+              <li>
+                <span className="onboard-step-icon">📷</span>
+                <span><strong>Photos</strong> — snap what&rsquo;s inside. No typing needed.</span>
+              </li>
+              <li>
+                <span className="onboard-step-icon">✨</span>
+                <span><strong>AI catalog</strong> — Vowvy identifies and tags your items so search can find them later.</span>
+              </li>
+              <li>
+                <span className="onboard-step-icon">🔗</span>
+                <span><strong>QR &amp; share</strong> — print a QR label for any box, or share access with people you trust.</span>
+              </li>
+            </ol>
+          )}
+        </section>
+        ) : (
+        <>
         <section className="capture-card">
+          {showFirstBoxHint && (
+            <div className="onboard-hint">
+              <strong>Location saved!</strong> Now add your first box or container below —
+              give it a name and snap a photo of what&rsquo;s inside.
+            </div>
+          )}
           <div className="form-fields">
             <select
               className="container-select"
@@ -796,11 +918,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               disabled={saving}
               onChange={e => { setSelectedContainerId(e.target.value); setNewContainerName(''); }}
             >
-              <option value="">— Select container —</option>
+              <option value="">— Select box or container —</option>
               {containersAtLocation.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
-              <option value="new">＋ Create new container</option>
+              <option value="new">＋ Create new box or container</option>
             </select>
 
             {selectedContainerId && selectedContainerId !== 'new' && (
@@ -812,7 +934,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             {selectedContainerId === 'new' && (
               <input
                 type="text"
-                placeholder="Container name — e.g. Box 12, Blue bin"
+                placeholder="Box or container name — e.g. Box 12, Blue bin"
                 value={newContainerName}
                 disabled={saving}
                 onChange={e => setNewContainerName(e.target.value)}
@@ -871,7 +993,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 background: '#fff', color: '#7a3b2e', fontSize: 15, cursor: 'pointer', marginTop: 4,
               }}
             >
-              {saving ? 'Creating…' : 'Create container (no photo)'}
+              {saving ? 'Creating…' : 'Create box or container (no photo)'}
             </button>
           )}
         </section>
@@ -889,7 +1011,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
         <section className="container-list">
           {activeContainers.length === 0 ? (
-            <p className="list-empty">No containers yet. Add your first one above.</p>
+            <p className="list-empty">No boxes or containers yet. Add your first one above.</p>
           ) : filteredContainers.length === 0 ? (
             <p className="list-empty">No containers match "{searchQuery}".</p>
           ) : trimmedQuery ? (
@@ -906,6 +1028,8 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             ))
           )}
         </section>
+        </>
+        )}
       </main>
 
       <input type="file" ref={updatePhotoInputRef} className="photo-input-hidden" onChange={handleUpdatePhoto} />
