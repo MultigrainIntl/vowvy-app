@@ -1005,3 +1005,162 @@
     gap: 14px;
   }
 }
+
+/* ---- Onboarding (brand-new users only) ---- */
+
+.onboard-card {
+  background: white;
+  border-radius: 10px;
+  border: 1px solid var(--warm-gray);
+  padding: 36px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+}
+
+.onboard-logo {
+  height: 48px;
+  width: auto;
+}
+
+.onboard-title {
+  font-family: var(--font-heading);
+  font-size: 30px;
+  font-weight: 500;
+  color: var(--terracotta);
+  margin: 0;
+}
+
+.onboard-tagline {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--muted-slate);
+  margin: 0;
+  max-width: 380px;
+}
+
+.onboard-primary-btn {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  width: 100%;
+  max-width: 340px;
+  padding: 14px 0;
+  border-radius: 10px;
+  border: none;
+  background: var(--terracotta);
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.onboard-primary-btn:hover { opacity: 0.9; }
+
+.onboard-input-block {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.onboard-input-label {
+  font-size: 13px;
+  color: var(--muted-slate);
+  margin: 0;
+}
+
+.onboard-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.onboard-input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  padding: 12px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--warm-gray);
+}
+
+.onboard-create-btn {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: none;
+  background: var(--terracotta);
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.onboard-create-btn:disabled {
+  background: var(--warm-gray);
+  cursor: not-allowed;
+}
+
+.onboard-secondary-btn {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--terracotta);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.onboard-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.onboard-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--charcoal, #333);
+}
+
+.onboard-step-icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.onboard-hint {
+  background: #f6efe9;
+  border: 1px solid #e4cdbf;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #5a4338;
+}
+
+@media (min-width: 768px) {
+  /* Onboarding replaces the grid children; let it span the full grid width */
+  .onboard-card {
+    grid-column: 1 / -1;
+    max-width: 560px;
+    justify-self: center;
+    width: 100%;
+  }
+}
