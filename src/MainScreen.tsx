@@ -305,8 +305,10 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         createdAt: serverTimestamp(),
         deletedAt: null,
       });
-      setSelectedLocationId(''); setNewLocationName(''); setSelectedContainerId('');
-      setNewContainerName(''); setPhoto(null); setExtraPhotos([]); setPreview(null);
+      setNewLocationName(''); setNewContainerName('');
+      setPhoto(null); setExtraPhotos([]); setPreview(null);
+      setSelectedLocationId(resolvedLocationId);
+      setSelectedContainerId(containerRef.id);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
