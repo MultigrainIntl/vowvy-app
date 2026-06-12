@@ -34,6 +34,8 @@ export default function ManageScreen({ user }: Props) {
   const [newSubName, setNewSubName]   = useState('');
   const [addingContainerUnder, setAddingContainerUnder] = useState<string | null>(null);
   const [newContainerName, setNewContainerName]         = useState('');
+  const [addingTopLevel, setAddingTopLevel]             = useState(false);
+  const [newTopLevelName, setNewTopLevelName]           = useState('');
 
   useEffect(() => subscribeToLocations(user.uid, setLocations), [user.uid]);
 
@@ -263,8 +265,36 @@ export default function ManageScreen({ user }: Props) {
       <div className="manage-content">
         <h2 className="manage-title">Manage Locations</h2>
 
-        {topLevel.length === 0 && (
-          <p className="manage-empty">No locations yet. Add your first location from the main screen.</p>
+        {topLevel.length === 0 && !addingTopLevel && (
+          <div className="manage-empty">
+            <p>No locations yet.</p>
+            <button className="manage-btn add" onClick={() => setAddingTopLevel(true)}>+ Add first location</button>
+          </div>
+        )}
+        {addingTopLevel && (
+          <div className="manage-add-row">
+            <input
+              autoFocus
+              className="manage-input"
+              placeholder="Location name — e.g. Kitchen, Garage"
+              value={newTopLevelName}
+              onChange={e => setNewTopLevelName(e.target.value)}
+              onKeyDown={async e => {
+                if (e.key === 'Enter' && newTopLevelName.trim()) {
+                  await createLocation(user.uid, newTopLevelName.trim(), null);
+                  setAddingTopLevel(false);
+                  setNewTopLevelName('');
+                }
+                if (e.key === 'Escape') { setAddingTopLevel(false); setNewTopLevelName(''); }
+              }}
+            />
+            <button className="manage-btn save" onClick={async () => {
+              if (!newTopLevelName.trim()) return;
+              await createLocation(user.uid, newTopLevelName.trim(), null);
+              setAddingTopLevel(false);
+              setNewTopLevelName('');
+            }}>Add</button>
+          </div>
         )}
 
         {topLevel.map(loc => renderLocation(loc))}
