@@ -1,0 +1,56 @@
+.claim-screen { min-height: 100vh; background: #faf8f6; font-family: 'Lora', serif; }
+
+.claim-content {
+  max-width: 480px; margin: 0 auto;
+  padding: 40px 20px;
+  display: flex; flex-direction: column; align-items: center;
+}
+
+.claim-card {
+  width: 100%; background: #fff; border-radius: 16px;
+  padding: 32px 28px; box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+.claim-sponsor {
+  display: flex; flex-direction: column; gap: 4px;
+  padding-bottom: 16px; border-bottom: 1px solid #eee;
+}
+
+.claim-sponsor-label { font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.claim-sponsor-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px; color: #2c5f8a; text-decoration: none; font-weight: 600;
+}
+
+.claim-sponsor-name:hover { text-decoration: underline; }
+
+.claim-sponsor-tagline { font-size: 13px; color: #888; margin: 0; }
+
+.claim-box-id {
+  font-size: 13px; color: #aaa; letter-spacing: 0.05em;
+}
+
+.claim-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px; color: #7a3b2e; margin: 0; font-weight: 600;
+}
+
+.claim-body { font-size: 14px; color: #555; margin: 0; line-height: 1.6; }
+
+.claim-btn {
+  width: 100%; padding: 14px 0; border-radius: 10px; border: none;
+  background: #7a3b2e; color: #fff; font-size: 15px;
+  cursor: pointer; font-family: 'Lora', serif; margin-top: 4px;
+}
+
+.claim-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+.claim-icon {
+  font-size: 32px; text-align: center;
+}
+
+.claim-icon-error { color: #a04030; }
+
+.claim-loading { color: #888; text-align: center; font-size: 14px; }

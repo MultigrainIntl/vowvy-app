@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "vowvy-1ba5f"
+  },
+  "targets": {},
+  "etags": {
+    "vowvy-1ba5f": {
+      "extensionInstances": {
+        "firestore-send-email": "e6f8f2e183ec4080e42578a68a12bae77a0a528b2442c055686c46a2d7ae92a6"
+      }
+    }
   }
 }

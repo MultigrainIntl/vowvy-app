@@ -1,8 +1,66 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isActiveCollaborator(ownerUid, callerUid) {
+      return callerUid != null
+        && exists(/databases/$(database)/documents/users/$(ownerUid)/collaborators/$(callerUid))
+        && get(/databases/$(database)/documents/users/$(ownerUid)/collaborators/$(callerUid)).data.status == 'active';
+    }
+
+    // Owner has full access to their own data tree.
+    // Active collaborators can read/write containers (and their subcollections).
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    match /users/{userId}/containers/{containerId} {
+      allow read, write: if request.auth != null && isActiveCollaborator(userId, request.auth.uid);
+    }
+
+    match /users/{userId}/containers/{containerId}/{sub=**} {
+      allow read, write: if request.auth != null && isActiveCollaborator(userId, request.auth.uid);
+    }
+
+    // Collaborators subcollection — owner manages it, collaborators can read their own doc.
+    // Recipients can also create their own doc when a valid pending invite exists.
+    match /users/{userId}/collaborators/{collaboratorId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == userId || request.auth.uid == collaboratorId);
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null
+        && request.auth.uid == collaboratorId
+        && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteToken))
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteToken)).data.ownerUid == userId
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteToken)).data.status == 'pending';
+    }
+
+    // Invites — top-level collection.
+    // Any authenticated user can read a pending invite by token (needed for accept screen).
+    // Only the owner can create/revoke.
+    // The recipient can accept (write acceptedByUid, acceptedAt, status) once — only if still pending.
+    match /invites/{token} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if request.auth != null && (
+        // Owner can update (revoke)
+        request.auth.uid == resource.data.ownerUid
+        // Recipient can accept — only if still pending and not yet accepted by someone else
+        || (resource.data.status == 'pending'
+            && request.resource.data.status == 'active'
+            && request.resource.data.acceptedByUid == request.auth.uid)
+      );
+    }
+
+    // Partner boxes — any authenticated user can read; only unclaimed boxes can be claimed by auth users
+    match /partnerBoxes/{boxId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null
+        && (resource.data.claimedByUid == null
+            || resource.data.claimedByUid == request.auth.uid);
+    }
+
   }
 }

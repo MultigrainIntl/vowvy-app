@@ -18,8 +18,8 @@
 
 .auth-logo-mark {
   display: block;
-  width: 52px;
-  height: 52px;
+  height: 80px;
+  width: auto;
   margin: 0 auto 4px;
 }
 
@@ -105,4 +105,34 @@
 
 .auth-buttons button:not(:disabled):hover {
   opacity: 0.85;
+}
+
+.auth-forgot {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--muted-slate);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-top: 6px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s;
+}
+
+.auth-forgot:hover {
+  color: var(--charcoal);
+}
+
+.auth-forgot:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.auth-reset-msg {
+  font-size: 13px;
+  color: var(--muted-slate);
+  text-align: center;
+  margin-top: 2px;
 }

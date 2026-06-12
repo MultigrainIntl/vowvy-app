@@ -1,0 +1,225 @@
+.container-screen {
+  min-height: 100dvh;
+  background: #faf8f5;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.cs-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e8e3dc;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.cs-back {
+  background: none;
+  border: none;
+  color: #b85c38;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-right: auto;
+}
+
+.cs-logo {
+  width: 28px;
+  height: 28px;
+}
+
+/* Main */
+.cs-main {
+  padding: 24px 20px 48px;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.cs-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: #2a1f1a;
+  margin: 0 0 4px;
+}
+
+.cs-location {
+  font-size: 14px;
+  color: #8c7b72;
+  margin: 0 0 20px;
+}
+
+.cs-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: #8c7b72;
+}
+
+/* Photo grid */
+.cs-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.cs-photo-wrap {
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #e8e3dc;
+}
+
+.cs-photo-wrap .container-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+
+/* Add photo */
+.cs-add-photo-row {
+  margin-bottom: 20px;
+}
+
+.cs-add-photo-btn {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: #b85c38;
+  background: none;
+  border: 1px solid #e8c4b0;
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.cs-add-photo-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.photo-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* AI */
+.cs-ai-processing {
+  font-size: 13px;
+  color: #b85c38;
+  margin-bottom: 12px;
+}
+
+.cs-ai-desc {
+  font-size: 14px;
+  color: #4a3728;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.cs-ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+/* Lightbox */
+.cs-lb-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.cs-lb-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 20px;
+}
+
+.cs-lb-delete,
+.cs-lb-close {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.cs-lb-img {
+  max-width: 90vw;
+  max-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cs-lb-img .container-thumb {
+  max-width: 90vw;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 4px;
+  width: auto;
+  height: auto;
+}
+
+.cs-lb-nav {
+  position: absolute;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.cs-lb-prev,
+.cs-lb-next {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cs-lb-prev:disabled,
+.cs-lb-next:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.cs-lb-counter {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  min-width: 48px;
+  text-align: center;
+}

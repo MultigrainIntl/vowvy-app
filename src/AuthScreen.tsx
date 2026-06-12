@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { auth } from './firebase';
 import logoMark from './assets/logo-mark.svg';
@@ -19,10 +20,11 @@ function friendlyError(code: string): string {
 }
 
 export default function AuthScreen() {
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError]       = useState('');
-  const [busy, setBusy]         = useState(false);
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
+  const [error, setError]         = useState('');
+  const [busy, setBusy]           = useState(false);
+  const [resetMsg, setResetMsg]   = useState('');
 
   const canSubmit = Boolean(email && password) && !busy;
 
@@ -35,6 +37,21 @@ export default function AuthScreen() {
       setError(friendlyError(e.code));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleResetPassword() {
+    setError('');
+    setResetMsg('');
+    if (!email.trim()) {
+      setResetMsg('Enter your email above first.');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setResetMsg('Check your email for a reset link.');
+    } catch {
+      setResetMsg('Check your email for a reset link.');
     }
   }
 
@@ -87,6 +104,11 @@ export default function AuthScreen() {
             Sign Up
           </button>
         </div>
+
+        <button className="auth-forgot" onClick={handleResetPassword} disabled={busy}>
+          Forgot password?
+        </button>
+        {resetMsg && <p className="auth-reset-msg">{resetMsg}</p>}
       </div>
     </div>
   );
