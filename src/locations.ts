@@ -61,3 +61,24 @@ export function getLocationChildren(
 ): Location[] {
   return allLocations.filter(l => l.parentId === parentId);
 }
+
+// All descendant ids of a location (children, grandchildren, …), excluding itself.
+// Used to prevent moving a location under itself or any of its own descendants,
+// which would create a cycle in the location tree.
+export function getDescendantIds(
+  locationId: string,
+  allLocations: Location[]
+): Set<string> {
+  const result = new Set<string>();
+  const stack = [locationId];
+  while (stack.length) {
+    const current = stack.pop()!;
+    for (const child of allLocations.filter(l => l.parentId === current)) {
+      if (!result.has(child.id)) {
+        result.add(child.id);
+        stack.push(child.id);
+      }
+    }
+  }
+  return result;
+}

@@ -9,7 +9,7 @@ import { useEffect } from 'react';
 import { navigate } from './nav';
 import {
   subscribeToLocations, createLocation,
-  getLocationChildren, getLocationPath, type Location,
+  getLocationChildren, getLocationPath, getDescendantIds, type Location,
 } from './locations';
 import logoMark from './assets/logo-mark.svg';
 import './ManageScreen.css';
@@ -36,6 +36,7 @@ export default function ManageScreen({ user }: Props) {
   const [newContainerName, setNewContainerName]         = useState('');
   const [addingTopLevel, setAddingTopLevel]             = useState(false);
   const [newTopLevelName, setNewTopLevelName]           = useState('');
+  const [movingId, setMovingId]                         = useState<string | null>(null);
 
   useEffect(() => subscribeToLocations(user.uid, setLocations), [user.uid]);
 
@@ -88,6 +89,21 @@ export default function ManageScreen({ user }: Props) {
     setEditingId(null);
   }
 
+  async function moveLocation(id: string, newParentId: string | null) {
+    const loc = locations.find(l => l.id === id);
+    if (!loc) { setMovingId(null); return; }
+    // No-op: selecting the current parent just closes the picker.
+    if ((loc.parentId ?? null) === (newParentId ?? null)) { setMovingId(null); return; }
+    // Safety: never under itself or any of its own descendants (prevents cycles).
+    if (newParentId === id || getDescendantIds(id, locations).has(newParentId ?? '')) {
+      setMovingId(null);
+      return;
+    }
+    // Writes ONLY parentId. Containers, photos, name, and id are untouched.
+    await updateDoc(doc(db, `users/${user.uid}/locations/${id}`), { parentId: newParentId });
+    setMovingId(null);
+  }
+
   function renderLocation(loc: Location, depth = 0) {
     const children = getLocationChildren(loc.id, locations);
     const containersHere = containers.filter(c => c.locationId === loc.id);
@@ -120,6 +136,9 @@ export default function ManageScreen({ user }: Props) {
             ) : (
               <button className="manage-btn edit" onClick={() => { setEditingId(loc.id); setEditingName(loc.name); }}>Rename</button>
             )}
+            <button className="manage-btn edit" onClick={() => {
+              setMovingId(movingId === loc.id ? null : loc.id);
+            }}>Move</button>
             <button className="manage-btn add" onClick={() => {
               setAddingUnder(loc.id);
               setNewSubName('');
@@ -133,6 +152,27 @@ export default function ManageScreen({ user }: Props) {
             <button className="manage-btn delete" onClick={() => deleteLocation(loc.id)}>Delete</button>
           </div>
         </div>
+
+        {movingId === loc.id && (() => {
+          const blocked = getDescendantIds(loc.id, locations);
+          const eligible = locations.filter(l => l.id !== loc.id && !blocked.has(l.id));
+          return (
+            <div className="manage-add-row" style={{ marginLeft: 20 }}>
+              <select
+                autoFocus
+                className="manage-input"
+                defaultValue={loc.parentId ?? ''}
+                onChange={e => moveLocation(loc.id, e.target.value === '' ? null : e.target.value)}
+              >
+                <option value="">Top level (no parent)</option>
+                {eligible.map(l => (
+                  <option key={l.id} value={l.id}>{getLocationPath(l.id, locations)}</option>
+                ))}
+              </select>
+              <button className="manage-btn" onClick={() => setMovingId(null)}>Cancel</button>
+            </div>
+          );
+        })()}
 
         {isExpanded && (
           <div className="manage-children">
