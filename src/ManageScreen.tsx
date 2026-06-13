@@ -106,6 +106,13 @@ export default function ManageScreen({ user }: Props) {
     setMovingId(null);
   }
 
+  // Health Check repair: reattach an orphaned location to the top level so the
+  // normal Rename/Move/Delete tools become reachable. Writes ONLY parentId. The
+  // user must click the button — no automatic repair.
+  async function repairOrphanToTopLevel(id: string) {
+    await updateDoc(doc(db, `users/${user.uid}/locations/${id}`), { parentId: null });
+  }
+
   function renderLocation(loc: Location, depth = 0) {
     const children = getLocationChildren(loc.id, locations);
     const containersHere = containers.filter(c => c.locationId === loc.id);
@@ -322,7 +329,15 @@ export default function ManageScreen({ user }: Props) {
               <ul className="health-list">
                 {healthIssues.map((issue, i) => (
                   <li key={i} className={`health-item health-${issue.severity}`}>
-                    {issue.message}
+                    <span>{issue.message}</span>
+                    {issue.type === 'orphaned' && issue.locationIds[0] && (
+                      <button
+                        className="health-repair-btn"
+                        onClick={() => repairOrphanToTopLevel(issue.locationIds[0])}
+                      >
+                        Move to top level
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

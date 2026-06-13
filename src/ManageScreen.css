@@ -179,3 +179,24 @@
   border-left-color: var(--muted-slate);
   color: var(--muted-slate);
 }
+
+.health-item span {
+  display: block;
+}
+
+.health-repair-btn {
+  margin-top: 8px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--terracotta);
+  color: white;
+  cursor: pointer;
+}
+
+.health-repair-btn:hover {
+  opacity: 0.9;
+}
