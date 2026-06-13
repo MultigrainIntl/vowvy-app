@@ -421,11 +421,23 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: false, maxSizeMB: 0.5,
           });
           console.log('Compression done');
-          const storagePath = `users/${viewingOwnerUid}/containers/${id}/photos/${Date.now()}.jpg`;
-          console.log('Starting upload');
-          await uploadBytes(ref(storage, storagePath), compressed);
-          console.log('Upload done');
-          const photoUrl  = await getDownloadURL(ref(storage, storagePath));
+          let photoUrl: string;
+          let storagePath: string;
+          if (viewingOwnerUid !== user.uid) {
+            console.log('Starting collaborator upload');
+            const ab = await compressed.arrayBuffer();
+            const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
+            const fn = httpsCallable<{ ownerUid: string; containerId: string; imageBase64: string; contentType: string }, { downloadURL: string; storagePath: string }>(functions, 'uploadCollaboratorPhoto');
+            const r = await fn({ ownerUid: viewingOwnerUid, containerId: id, imageBase64: b64, contentType: 'image/jpeg' });
+            photoUrl = r.data.downloadURL;
+            storagePath = r.data.storagePath;
+          } else {
+            storagePath = `users/${viewingOwnerUid}/containers/${id}/photos/${Date.now()}.jpg`;
+            console.log('Starting upload');
+            await uploadBytes(ref(storage, storagePath), compressed);
+            console.log('Upload done');
+            photoUrl = await getDownloadURL(ref(storage, storagePath));
+          }
           const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' };
           const existing = containers.find(c => c.id === id);
           const updatedPhotos = [...(existing?.photos ?? []), photoItem];
@@ -634,20 +646,20 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             onDelete={handleDeleteNote}
           />
           <div className="container-actions">
+            <button
+              className="add-photo-btn"
+              onClick={() => {
+                setContinuousCapture(false);
+                setCaptureContainerId(null);
+                if (/CriOS/.test(navigator.userAgent)) { setShowIOSModal(true); return; }
+                setUpdatingContainerId(c.id);
+                updatePhotoInputRef.current?.click();
+              }}
+            >
+              Add Photo
+            </button>
             {viewingOwnerUid === user.uid && (
               <>
-                <button
-                  className="add-photo-btn"
-                  onClick={() => {
-                    setContinuousCapture(false);
-                    setCaptureContainerId(null);
-                    if (/CriOS/.test(navigator.userAgent)) { setShowIOSModal(true); return; }
-                    setUpdatingContainerId(c.id);
-                    updatePhotoInputRef.current?.click();
-                  }}
-                >
-                  Add Photo
-                </button>
                 <button
                   className="add-photo-btn"
                   style={{ background: captureContainerId === c.id ? '#7a3b2e' : undefined, color: captureContainerId === c.id ? '#fff' : undefined }}
@@ -1074,47 +1086,56 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 photoId: lightboxItems[lightboxIndex].id,
               });
             }}>Move</button>
-            {viewingOwnerUid === user.uid && (
-              <label className="lightbox-delete" style={{ cursor: 'pointer' }}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="photo-input-hidden"
-                  onChange={async e => {
-                    const file = e.target.files?.[0] ?? null;
-                    e.target.value = '';
-                    if (!file || !lightboxContainerId) return;
-                    setSaving(true);
-                    try {
-                      if (!auth.currentUser) return;
-                      await auth.currentUser.getIdToken(true);
-                      const compressed = await imageCompression(file, {
-                        maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: false, maxSizeMB: 0.5,
-                      });
-                      const storagePath = `users/${viewingOwnerUid}/containers/${lightboxContainerId}/photos/${Date.now()}.jpg`;
+            <label className="lightbox-delete" style={{ cursor: 'pointer' }}>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="photo-input-hidden"
+                onChange={async e => {
+                  const file = e.target.files?.[0] ?? null;
+                  e.target.value = '';
+                  if (!file || !lightboxContainerId) return;
+                  setSaving(true);
+                  try {
+                    if (!auth.currentUser) return;
+                    await auth.currentUser.getIdToken(true);
+                    const compressed = await imageCompression(file, {
+                      maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: false, maxSizeMB: 0.5,
+                    });
+                    let photoUrl: string;
+                    let storagePath: string;
+                    if (viewingOwnerUid !== user.uid) {
+                      const ab = await compressed.arrayBuffer();
+                      const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
+                      const fn = httpsCallable<{ ownerUid: string; containerId: string; imageBase64: string; contentType: string }, { downloadURL: string; storagePath: string }>(functions, 'uploadCollaboratorPhoto');
+                      const r = await fn({ ownerUid: viewingOwnerUid, containerId: lightboxContainerId, imageBase64: b64, contentType: 'image/jpeg' });
+                      photoUrl = r.data.downloadURL;
+                      storagePath = r.data.storagePath;
+                    } else {
+                      storagePath = `users/${viewingOwnerUid}/containers/${lightboxContainerId}/photos/${Date.now()}.jpg`;
                       await uploadBytes(ref(storage, storagePath), compressed);
-                      const photoUrl = await getDownloadURL(ref(storage, storagePath));
-                      const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' };
-                      const existing = containers.find(c => c.id === lightboxContainerId);
-                      await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), {
-                        photos: [...(existing?.photos ?? []), photoItem],
-                        photoUrls: arrayUnion(photoUrl),
-                        photoStoragePaths: arrayUnion(storagePath),
-                        lastModifiedAt: serverTimestamp(),
-                        lastModifiedBy: user.uid,
-                        lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
-                      });
-                    } catch {
-                      setSaveError('Photo failed to save.');
-                    } finally {
-                      setSaving(false);
+                      photoUrl = await getDownloadURL(ref(storage, storagePath));
                     }
-                  }}
-                />
-                📷
-              </label>
-            )}
+                    const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' };
+                    const existing = containers.find(c => c.id === lightboxContainerId);
+                    await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), {
+                      photos: [...(existing?.photos ?? []), photoItem],
+                      photoUrls: arrayUnion(photoUrl),
+                      photoStoragePaths: arrayUnion(storagePath),
+                      lastModifiedAt: serverTimestamp(),
+                      lastModifiedBy: user.uid,
+                      lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+                    });
+                  } catch {
+                    setSaveError('Photo failed to save.');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              />
+              📷
+            </label>
             {viewingOwnerUid === user.uid && lightboxContainerId && (
               <button
                 className="lightbox-delete"
