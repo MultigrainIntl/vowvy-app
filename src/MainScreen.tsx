@@ -1184,6 +1184,14 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                       lastModifiedBy: user.uid,
                       lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
                     });
+                    // Update lightboxItems immediately so the new photo appears without
+                    // closing and reopening the lightbox. Prepend because the array is
+                    // newest-first (matches the .reverse() in openLightbox).
+                    setLightboxItems(prev => prev ? [photoItem, ...prev] : [photoItem]);
+                    setLightboxIndex(0);
+                    setTimeout(() => {
+                      if (scrollRef.current) scrollRef.current.scrollLeft = 0;
+                    }, 0);
                   } catch {
                     setSaveError('Photo failed to save.');
                   } finally {
