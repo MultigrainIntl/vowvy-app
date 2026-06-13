@@ -91,6 +91,96 @@ export const setAdminClaim = onCall(async (request) => {
   return { success: true };
 });
 
+export const getAdminUserData = onCall(
+  { timeoutSeconds: 60, memory: '256MiB' },
+  async (request) => {
+    if (request.auth?.token?.isAdmin !== true) {
+      throw new HttpsError('permission-denied', 'Admin access required.');
+    }
+
+    const db = getFirestore();
+    const auth = getAuth();
+
+    // All four reads in parallel
+    const [listResult, containerSnap, locationSnap, collabSnap, inviteSnap] = await Promise.all([
+      auth.listUsers(1000),
+      db.collectionGroup('containers').get(),
+      db.collectionGroup('locations').get(),
+      db.collectionGroup('collaborators').get(),
+      db.collection('invites').get(),
+    ]);
+
+    // Container counts per user (exclude soft-deleted)
+    const containerCounts: Record<string, number> = {};
+    for (const d of containerSnap.docs) {
+      if (d.data().deletedAt) continue;
+      const uid = d.ref.path.split('/')[1];
+      containerCounts[uid] = (containerCounts[uid] ?? 0) + 1;
+    }
+
+    // Location counts per user
+    const locationCounts: Record<string, number> = {};
+    for (const d of locationSnap.docs) {
+      const uid = d.ref.path.split('/')[1];
+      locationCounts[uid] = (locationCounts[uid] ?? 0) + 1;
+    }
+
+    // Active collaborators per owner
+    const collaboratorsByOwner: Record<string, { uid: string; email: string; displayName: string }[]> = {};
+    for (const d of collabSnap.docs) {
+      if (d.data().status !== 'active') continue;
+      const ownerUid = d.ref.path.split('/')[1];
+      const data = d.data();
+      if (!collaboratorsByOwner[ownerUid]) collaboratorsByOwner[ownerUid] = [];
+      collaboratorsByOwner[ownerUid].push({
+        uid: d.id,
+        email: data.email ?? '',
+        displayName: data.displayName ?? '',
+      });
+    }
+
+    // Invites per owner
+    const invitesByOwner: Record<string, { token: string; status: string; acceptedByEmail?: string }[]> = {};
+    for (const d of inviteSnap.docs) {
+      const data = d.data();
+      const ownerUid = data.ownerUid as string | undefined;
+      if (!ownerUid) continue;
+      if (!invitesByOwner[ownerUid]) invitesByOwner[ownerUid] = [];
+      invitesByOwner[ownerUid].push({
+        token: d.id,
+        status: data.status,
+        acceptedByEmail: data.acceptedByEmail,
+      });
+    }
+
+    // Bidirectional connection map
+    const connectedTo: Record<string, Set<string>> = {};
+    for (const ownerUid of Object.keys(collaboratorsByOwner)) {
+      if (!connectedTo[ownerUid]) connectedTo[ownerUid] = new Set();
+      for (const collab of collaboratorsByOwner[ownerUid]) {
+        connectedTo[ownerUid].add(collab.uid);
+        if (!connectedTo[collab.uid]) connectedTo[collab.uid] = new Set();
+        connectedTo[collab.uid].add(ownerUid);
+      }
+    }
+
+    const users = listResult.users.map(u => ({
+      uid: u.uid,
+      email: u.email ?? null,
+      displayName: u.displayName ?? null,
+      createdAt: u.metadata.creationTime ?? '',
+      lastSignInAt: u.metadata.lastSignInTime ?? '',
+      containerCount: containerCounts[u.uid] ?? 0,
+      locationCount: locationCounts[u.uid] ?? 0,
+      collaborators: collaboratorsByOwner[u.uid] ?? [],
+      invitesSent: invitesByOwner[u.uid] ?? [],
+      connectedTo: Array.from(connectedTo[u.uid] ?? []),
+    }));
+
+    return { users };
+  }
+);
+
 export const analyzeContainerPhoto = onDocumentWritten(
   {
     document: 'users/{uid}/containers/{containerId}',
