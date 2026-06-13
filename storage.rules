@@ -1,8 +1,19 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    function isActiveCollaborator(userId, callerUid) {
+      return callerUid != null
+        && firestore.exists(/databases/(default)/documents/users/$(userId)/collaborators/$(callerUid))
+        && firestore.get(/databases/(default)/documents/users/$(userId)/collaborators/$(callerUid)).data.status == 'active';
     }
+
+    match /users/{userId}/{allPaths=**} {
+      // Owner has full read/write access to their own storage.
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Active collaborators can read and upload to the owner's storage paths.
+      allow read, write: if request.auth != null && isActiveCollaborator(userId, request.auth.uid);
+    }
+
   }
 }

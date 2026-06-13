@@ -184,13 +184,14 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     });
   }, [user.uid]);
 
-  // Listen for locations
+  // Listen for locations — use viewingOwnerUid so collaborators see the owner's locations
   useEffect(() => {
-    return subscribeToLocations(user.uid, locs => {
+    setLocationsLoaded(false);
+    return subscribeToLocations(viewingOwnerUid, locs => {
       setLocations(locs);
       setLocationsLoaded(true);
     });
-  }, [user.uid]);
+  }, [viewingOwnerUid]);
 
   // Listen for people who have access to this user's inventory
   useEffect(() => {

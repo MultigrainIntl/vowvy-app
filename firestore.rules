@@ -22,6 +22,11 @@ service cloud.firestore {
       allow read, write: if request.auth != null && isActiveCollaborator(userId, request.auth.uid);
     }
 
+    // Active collaborators can read owner locations (read-only — they cannot create or delete locations).
+    match /users/{userId}/locations/{document=**} {
+      allow read: if request.auth != null && isActiveCollaborator(userId, request.auth.uid);
+    }
+
     // Collaborators subcollection — owner manages it, collaborators can read their own doc.
     // Recipients can also create their own doc when a valid pending invite exists.
     match /users/{userId}/collaborators/{collaboratorId} {
