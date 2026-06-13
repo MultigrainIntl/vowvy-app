@@ -158,6 +158,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [creatingFirstLocation, setCreatingFirstLocation]   = useState(false);
   const [showHowItWorks, setShowHowItWorks]                 = useState(false);
   const [collaborators, setCollaborators]     = useState<{ uid: string; displayName: string; email: string; inviteToken: string }[]>([]);
+  const [showMobileMenu, setShowMobileMenu]   = useState(false);
   const [showInvitePanel, setShowInvitePanel] = useState(false);
   const [inviteLink, setInviteLink]           = useState<string | null>(null);
   const [inviteCopied, setInviteCopied]       = useState(false);
@@ -647,7 +648,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           />
           <div className="container-actions">
             <button
-              className="add-photo-btn"
+              className="card-action-btn"
               onClick={() => {
                 setContinuousCapture(false);
                 setCaptureContainerId(null);
@@ -656,11 +657,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 updatePhotoInputRef.current?.click();
               }}
             >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
               Add Photo
             </button>
             <button
-              className="add-photo-btn"
-              style={{ background: captureContainerId === c.id ? '#7a3b2e' : undefined, color: captureContainerId === c.id ? '#fff' : undefined }}
+              className={`card-action-btn${captureContainerId === c.id ? ' card-action-btn--active' : ''}`}
               onClick={() => {
                 if (captureContainerId === c.id) {
                   setCaptureContainerId(null);
@@ -671,17 +672,20 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 }
               }}
             >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.776 48.776 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" /></svg>
               {captureContainerId === c.id ? 'Done' : 'Take Photos'}
             </button>
             {viewingOwnerUid === user.uid && (
-              <button className="add-photo-btn" onClick={() => setPrintContainer(c)}>
+              <button className="card-action-btn" onClick={() => setPrintContainer(c)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.75h16.5m-16.5 0A2.25 2.25 0 0 1 6 7.5h12a2.25 2.25 0 0 1 2.25 2.25m-16.5 0v8.25A2.25 2.25 0 0 0 6 20.25h12a2.25 2.25 0 0 0 2.25-2.25V9.75M8.25 21h7.5" /></svg>
                 Print QR
               </button>
             )}
             <button
-              className="add-photo-btn"
+              className="card-action-btn"
               onClick={() => setMoveSource({ containerId: c.id, mode: 'container' })}
             >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
               Move
             </button>
           </div>
@@ -732,6 +736,15 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           <img src={logoMark} alt="" className="header-logo-mark" />
           <span className="app-wordmark">Vowvy</span>
         </div>
+        {/* Hamburger — mobile only, hidden on desktop via CSS */}
+        <button
+          className="mobile-menu-btn"
+          aria-label="Open menu"
+          onClick={() => setShowMobileMenu(v => !v)}
+        >
+          <span /><span /><span />
+        </button>
+
         <div className="header-actions">
           {sharedInventories.length > 0 && (
             <select
@@ -798,6 +811,52 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           <button className="sign-out-btn" onClick={() => signOut(auth)}>Sign out</button>
         </div>
       </header>
+
+      {/* Mobile slide-down menu */}
+      {showMobileMenu && (
+        <div className="mobile-menu-backdrop" onClick={() => setShowMobileMenu(false)}>
+          <div className="mobile-menu-panel" onClick={e => e.stopPropagation()}>
+            {sharedInventories.length > 0 && (
+              <div className="mobile-menu-section">
+                <span className="mobile-menu-label">Inventory</span>
+                <select
+                  value={viewingOwnerUid}
+                  onChange={e => { setViewingOwnerUid(e.target.value); setShowMobileMenu(false); }}
+                  className="mobile-menu-select"
+                >
+                  <option value={user.uid}>My inventory</option>
+                  {sharedInventories.map(s => (
+                    <option key={s.ownerUid} value={s.ownerUid}>{s.ownerName}'s inventory</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {viewingOwnerUid === user.uid && (
+              <button className="mobile-menu-item" onClick={() => { navigate('/manage'); setShowMobileMenu(false); }}>Manage</button>
+            )}
+            {viewingOwnerUid === user.uid && (
+              <button className="mobile-menu-item" onClick={() => { navigate('/collaborators'); setShowMobileMenu(false); }}>Collaborators</button>
+            )}
+            {viewingOwnerUid === user.uid && (
+              <button className="mobile-menu-item" onClick={() => { setShowInvitePanel(true); setShowMobileMenu(false); }}>Share inventory</button>
+            )}
+            {trashCount > 0 && (
+              <button className="mobile-menu-item" onClick={() => { navigate('/trash'); setShowMobileMenu(false); }}>
+                Recently Deleted ({trashCount})
+              </button>
+            )}
+            <button className="mobile-menu-item" onClick={() => { navigate('/profile'); setShowMobileMenu(false); }}>Profile</button>
+            <button className="mobile-menu-item mobile-menu-signout" onClick={() => signOut(auth)}>Sign out</button>
+          </div>
+        </div>
+      )}
+
+      {/* Collaborator mode banner */}
+      {viewingOwnerUid !== user.uid && (
+        <div className="collab-banner">
+          Viewing {sharedInventories.find(s => s.ownerUid === viewingOwnerUid)?.ownerName ?? 'another user'}'s inventory
+        </div>
+      )}
 
       <main className="main-content">
         {isBrandNewUser ? (
@@ -984,7 +1043,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               style={{ position: 'relative' }}
               onClick={e => { if (/CriOS/.test(navigator.userAgent)) { e.preventDefault(); setShowIOSModal(true); } }}
             >
-              <input type="file" multiple disabled={saving} onChange={e => {
+              <input type="file" accept="image/*" multiple disabled={saving} onChange={e => {
                 const files = Array.from(e.target.files ?? []);
                 if (files.length === 0) return;
                 if (preview) URL.revokeObjectURL(preview);
@@ -1076,15 +1135,15 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         <div className="lightbox-backdrop" onClick={() => setLightboxItems(null)}>
           <div className="lightbox-toolbar" onClick={e => e.stopPropagation()}>
             <button className="lightbox-delete" onClick={handleDeletePhoto}>Delete</button>
-            <button className="lightbox-delete" onClick={() => {
+            <button className="lightbox-action" onClick={() => {
               if (!lightboxContainerId || !lightboxItems) return;
               setMoveSource({
                 containerId: lightboxContainerId,
                 mode: 'photo',
                 photoId: lightboxItems[lightboxIndex].id,
               });
-            }}>Move</button>
-            <label className="lightbox-delete" style={{ cursor: 'pointer' }}>
+            }}>Move photo</button>
+            <label className="lightbox-action lightbox-camera-label">
               <input
                 type="file"
                 accept="image/*"
@@ -1132,14 +1191,15 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   }
                 }}
               />
-              📷
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.776 48.776 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" /></svg>
+              Add Photo
             </label>
             {viewingOwnerUid === user.uid && lightboxContainerId && (
               <button
-                className="lightbox-delete"
+                className="lightbox-action"
                 onClick={() => setMoveSource({ containerId: lightboxContainerId, mode: 'container' })}
               >
-                Move container
+                Move box
               </button>
             )}
             <button className="lightbox-close" onClick={() => setLightboxItems(null)} aria-label="Close">✕</button>
