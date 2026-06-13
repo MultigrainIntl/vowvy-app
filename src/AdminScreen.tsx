@@ -43,6 +43,40 @@ interface BackfillResult {
   dryRun: boolean;
 }
 
+interface DryRunUserEntry {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  createdAt: string;
+  lastSignInAt: string;
+  isAdmin: boolean;
+  onboardingCompleted: boolean;
+  onboardingSkipped: boolean;
+  locationCount: number;
+  containerCount: number;
+  photoReferenceCount: number;
+  collaboratorRecordCount: number;
+  inviteCount: number;
+  storageFileCount: number | null;
+  category: 'KEEP' | 'UNKNOWN';
+  wouldClear: string[];
+}
+
+interface DryRunResult {
+  users: DryRunUserEntry[];
+  totals: {
+    total: number;
+    keep: number;
+    unknown: number;
+    locations: number;
+    containers: number;
+    photoReferences: number;
+    storageFiles: number | null;
+    invites: number;
+    collaboratorRecords: number;
+  };
+}
+
 export default function AdminScreen({ user }: Props) {
   const [users, setUsers]     = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +93,25 @@ export default function AdminScreen({ user }: Props) {
   const [conRunning, setConRunning] = useState(false);
   const [conResult, setConResult]   = useState<BackfillResult | null>(null);
   const [conError, setConError]     = useState('');
+
+  const [dryRunRunning, setDryRunRunning] = useState(false);
+  const [dryRunResult, setDryRunResult]   = useState<DryRunResult | null>(null);
+  const [dryRunError, setDryRunError]     = useState('');
+
+  async function runContentDryRun() {
+    setDryRunRunning(true);
+    setDryRunResult(null);
+    setDryRunError('');
+    try {
+      const fn = httpsCallable<void, DryRunResult>(functions, 'dryRunContentReset', { timeout: 290000 });
+      const result = await fn();
+      setDryRunResult(result.data);
+    } catch (err: any) {
+      setDryRunError(err.message ?? 'Dry-run call failed.');
+    } finally {
+      setDryRunRunning(false);
+    }
+  }
 
   async function runBackfill(dryRun: boolean) {
     if (!dryRun) {
@@ -257,6 +310,143 @@ export default function AdminScreen({ user }: Props) {
               </tbody>
             </table>
           )}
+        </section>
+
+        {/* Content Reset — Dry-Run Report */}
+        <section style={{ marginBottom: 40, padding: '20px 24px', border: '2px solid #b0c4de', borderRadius: 10, background: '#f4f8fc' }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: '#1a3a5c', marginBottom: 4 }}>
+            Content Reset — Dry-Run Report
+          </p>
+          <p style={{ fontSize: 13, color: '#4a6080', marginBottom: 4 }}>
+            Read-only report. No data will be changed. Shows what a content reset would affect per account.
+          </p>
+          <p style={{ fontSize: 12, color: '#c0392b', fontWeight: 600, marginBottom: 16 }}>
+            ⚠ Deletion is NOT implemented. This is planning only.
+          </p>
+
+          <button
+            disabled={dryRunRunning}
+            onClick={runContentDryRun}
+            style={{
+              padding: '9px 22px', borderRadius: 8, border: '1px solid #4a6080',
+              background: dryRunRunning ? '#ccc' : '#1a3a5c',
+              color: '#fff', fontSize: 13,
+              cursor: dryRunRunning ? 'not-allowed' : 'pointer',
+              marginBottom: 16,
+            }}
+          >
+            {dryRunRunning ? 'Running dry-run (may take ~30s)…' : 'Run dry-run report'}
+          </button>
+
+          {dryRunError && (
+            <p style={{ fontSize: 13, color: '#c0392b', marginBottom: 12 }}>Error: {dryRunError}</p>
+          )}
+
+          {dryRunResult && (() => {
+            const { users: dryUsers, totals } = dryRunResult;
+            const keepUsers    = dryUsers.filter(u => u.category === 'KEEP');
+            const unknownUsers = dryUsers.filter(u => u.category === 'UNKNOWN');
+
+            return (
+              <>
+                {/* Totals */}
+                <div style={{ marginBottom: 20, padding: '14px 18px', background: '#fff', borderRadius: 8, border: '1px solid #ccd8e8' }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: '#4a6080', marginBottom: 8 }}>TOTALS ACROSS ALL ACCOUNTS</p>
+                  <table style={{ fontSize: 13, borderCollapse: 'collapse' }}>
+                    <tbody>
+                      {([
+                        ['Auth users', totals.total],
+                        ['  KEEP (admin/protected)', totals.keep],
+                        ['  UNKNOWN (pending decision)', totals.unknown],
+                        ['Locations', totals.locations],
+                        ['Containers (incl. soft-deleted)', totals.containers],
+                        ['Photo references (Firestore)', totals.photoReferences],
+                        ['Storage files', totals.storageFiles === null ? 'unavailable' : totals.storageFiles],
+                        ['Active collaborator records', totals.collaboratorRecords],
+                        ['Invites', totals.invites],
+                      ] as [string, string | number][]).map(([label, val]) => (
+                        <tr key={label}>
+                          <td style={{ padding: '2px 20px 2px 0', color: '#4a6080', whiteSpace: 'nowrap' }}>{label}</td>
+                          <td style={{ padding: '2px 0', fontWeight: label.startsWith('  ') ? 400 : 600 }}>{val}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* KEEP accounts */}
+                {keepUsers.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#217a3c', marginBottom: 8 }}>
+                      ✓ KEEP — {keepUsers.length} protected account{keepUsers.length !== 1 ? 's' : ''} (admin / master UID)
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {keepUsers.map(u => (
+                        <div key={u.uid} style={{ padding: '10px 14px', background: '#edfaf2', border: '1px solid #a8d5b5', borderRadius: 8, fontSize: 13 }}>
+                          <span style={{ fontWeight: 600 }}>{u.email ?? '(no email)'}</span>
+                          <span style={{ marginLeft: 10, fontFamily: 'monospace', fontSize: 11, color: '#555' }}>{u.uid}</span>
+                          {u.isAdmin && <span style={{ marginLeft: 8, background: '#217a3c', color: '#fff', borderRadius: 4, padding: '1px 6px', fontSize: 11 }}>admin</span>}
+                          <span style={{ marginLeft: 12, color: '#555' }}>
+                            {u.locationCount} loc · {u.containerCount} containers · {u.photoReferenceCount} photo refs
+                            {u.storageFileCount !== null ? ` · ${u.storageFileCount} storage files` : ''}
+                          </span>
+                          <div style={{ marginTop: 4, fontSize: 12, color: '#555' }}>
+                            onboarding: completed={String(u.onboardingCompleted)} skipped={String(u.onboardingSkipped)}
+                          </div>
+                          <div style={{ marginTop: 2, fontSize: 12, color: '#888', fontStyle: 'italic' }}>
+                            Protected — excluded from any reset
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* UNKNOWN accounts */}
+                {unknownUsers.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#8a6000', marginBottom: 8 }}>
+                      ? UNKNOWN — {unknownUsers.length} account{unknownUsers.length !== 1 ? 's' : ''} pending your decision
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {unknownUsers.map(u => (
+                        <div key={u.uid} style={{ padding: '10px 14px', background: '#fffbee', border: '1px solid #d4b84a', borderRadius: 8, fontSize: 13 }}>
+                          <span style={{ fontWeight: 600 }}>{u.email ?? '(no email)'}</span>
+                          <span style={{ marginLeft: 10, fontFamily: 'monospace', fontSize: 11, color: '#555' }}>{u.uid}</span>
+                          <span style={{ marginLeft: 12, color: '#555' }}>
+                            {u.locationCount} loc · {u.containerCount} containers · {u.photoReferenceCount} photo refs
+                            {u.storageFileCount !== null ? ` · ${u.storageFileCount} storage files` : ''}
+                          </span>
+                          <div style={{ marginTop: 4, fontSize: 12, color: '#555' }}>
+                            Created {fmt(u.createdAt)} · Last sign-in {fmt(u.lastSignInAt)}
+                          </div>
+                          <div style={{ marginTop: 2, fontSize: 12, color: '#555' }}>
+                            onboarding: completed={String(u.onboardingCompleted)} skipped={String(u.onboardingSkipped)}
+                            {u.collaboratorRecordCount > 0 && ` · ${u.collaboratorRecordCount} collab records`}
+                            {u.inviteCount > 0 && ` · ${u.inviteCount} invites`}
+                          </div>
+                          {u.wouldClear.length > 0 && (
+                            <div style={{ marginTop: 4, fontSize: 12, color: '#8a6000' }}>
+                              Would clear: {u.wouldClear.join(' · ')}
+                            </div>
+                          )}
+                          {u.wouldClear.length === 0 && (
+                            <div style={{ marginTop: 4, fontSize: 12, color: '#888', fontStyle: 'italic' }}>
+                              No content — nothing to clear
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <p style={{ fontSize: 12, color: '#4a6080', marginTop: 12, fontStyle: 'italic' }}>
+                  Deletion requires separate explicit approval. Provide approval wording before any deletion code is written.
+                </p>
+              </>
+            );
+          })()}
         </section>
 
         {/* Console links */}
