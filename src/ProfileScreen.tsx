@@ -91,6 +91,23 @@ export default function ProfileScreen({ user }: Props) {
           )}
         </section>
 
+        {user.email === 'george@multigrain.com' && (
+          <section style={{ marginBottom: 32 }}>
+            <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginBottom: 10 }}>Platform</p>
+            <button
+              onClick={() => navigate('/admin')}
+              style={{
+                fontFamily: 'var(--font-body)', fontSize: 14,
+                padding: '10px 18px', borderRadius: 6, cursor: 'pointer',
+                background: 'white', color: 'var(--charcoal)',
+                border: '1px solid var(--warm-gray)',
+              }}
+            >
+              Admin
+            </button>
+          </section>
+        )}
+
         <section>
           <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginBottom: 10 }}>Password</p>
           <button
