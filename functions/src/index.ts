@@ -63,6 +63,116 @@ export const backfillIsPrivateOnce = onCall(
   }
 );
 
+// ---------------------------------------------------------------------------
+// TEMPORARY — backfill visibility + effectiveIsPrivate on locations.
+// Remove after backfill confirmed complete.
+// ---------------------------------------------------------------------------
+export const backfillLocationsVisibility = onCall(
+  { timeoutSeconds: 540, memory: '512MiB' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.');
+    if (request.auth.token?.isAdmin !== true) throw new HttpsError('permission-denied', 'Admin access required.');
+
+    const { dryRun } = (request.data ?? {}) as { dryRun?: boolean };
+    const isDryRun = dryRun !== false;
+
+    const db = getFirestore();
+    const snap = await db.collectionGroup('locations').get();
+    const missing = snap.docs.filter(d => {
+      const data = d.data();
+      return data.visibility === undefined || data.effectiveIsPrivate === undefined;
+    });
+
+    console.log(`backfillLocationsVisibility: scanned=${snap.size} missing=${missing.length} dryRun=${isDryRun}`);
+
+    if (isDryRun || missing.length === 0) {
+      return { scanned: snap.size, missing: missing.length, patched: 0, remainingMissing: missing.length, dryRun: isDryRun };
+    }
+
+    const BATCH_SIZE = 400;
+    let patched = 0;
+    for (let i = 0; i < missing.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      for (const d of missing.slice(i, i + BATCH_SIZE)) {
+        const data = d.data();
+        const update: Record<string, unknown> = {};
+        if (data.visibility === undefined) update.visibility = 'inherit';
+        if (data.effectiveIsPrivate === undefined) update.effectiveIsPrivate = false;
+        batch.update(d.ref, update);
+      }
+      await batch.commit();
+      patched += missing.slice(i, i + BATCH_SIZE).length;
+      console.log(`backfillLocationsVisibility: patched ${patched}/${missing.length}`);
+    }
+
+    const verify = await db.collectionGroup('locations').get();
+    const remainingMissing = verify.docs.filter(d => {
+      const data = d.data();
+      return data.visibility === undefined || data.effectiveIsPrivate === undefined;
+    }).length;
+
+    console.log(`backfillLocationsVisibility: complete patched=${patched} remainingMissing=${remainingMissing}`);
+    return { scanned: snap.size, missing: missing.length, patched, remainingMissing, dryRun: false };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// TEMPORARY — backfill visibility + effectiveIsPrivate on containers.
+// Remove after backfill confirmed complete.
+// ---------------------------------------------------------------------------
+export const backfillContainersVisibility = onCall(
+  { timeoutSeconds: 540, memory: '512MiB' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.');
+    if (request.auth.token?.isAdmin !== true) throw new HttpsError('permission-denied', 'Admin access required.');
+
+    const { dryRun } = (request.data ?? {}) as { dryRun?: boolean };
+    const isDryRun = dryRun !== false;
+
+    const db = getFirestore();
+    const snap = await db.collectionGroup('containers').get();
+    const missing = snap.docs.filter(d => {
+      const data = d.data();
+      return data.visibility === undefined || data.effectiveIsPrivate === undefined;
+    });
+
+    console.log(`backfillContainersVisibility: scanned=${snap.size} missing=${missing.length} dryRun=${isDryRun}`);
+
+    if (isDryRun || missing.length === 0) {
+      return { scanned: snap.size, missing: missing.length, patched: 0, remainingMissing: missing.length, dryRun: isDryRun };
+    }
+
+    const BATCH_SIZE = 400;
+    let patched = 0;
+    for (let i = 0; i < missing.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      for (const d of missing.slice(i, i + BATCH_SIZE)) {
+        const data = d.data();
+        const update: Record<string, unknown> = {};
+        if (data.visibility === undefined) {
+          update.visibility = data.isPrivate === true ? 'private' : 'inherit';
+        }
+        if (data.effectiveIsPrivate === undefined) {
+          update.effectiveIsPrivate = data.isPrivate === true;
+        }
+        batch.update(d.ref, update);
+      }
+      await batch.commit();
+      patched += missing.slice(i, i + BATCH_SIZE).length;
+      console.log(`backfillContainersVisibility: patched ${patched}/${missing.length}`);
+    }
+
+    const verify = await db.collectionGroup('containers').get();
+    const remainingMissing = verify.docs.filter(d => {
+      const data = d.data();
+      return data.visibility === undefined || data.effectiveIsPrivate === undefined;
+    }).length;
+
+    console.log(`backfillContainersVisibility: complete patched=${patched} remainingMissing=${remainingMissing}`);
+    return { scanned: snap.size, missing: missing.length, patched, remainingMissing, dryRun: false };
+  }
+);
+
 export const proxyImage = onRequest(
   {
     cors: ['https://vowvy-1ba5f.web.app', 'https://app.vowvy.com'],

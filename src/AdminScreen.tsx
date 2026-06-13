@@ -52,6 +52,14 @@ export default function AdminScreen({ user }: Props) {
   const [backfillResult, setBackfillResult]   = useState<BackfillResult | null>(null);
   const [backfillError, setBackfillError]     = useState('');
 
+  const [locRunning, setLocRunning] = useState(false);
+  const [locResult, setLocResult]   = useState<BackfillResult | null>(null);
+  const [locError, setLocError]     = useState('');
+
+  const [conRunning, setConRunning] = useState(false);
+  const [conResult, setConResult]   = useState<BackfillResult | null>(null);
+  const [conError, setConError]     = useState('');
+
   async function runBackfill(dryRun: boolean) {
     if (!dryRun) {
       const ok = window.confirm(
@@ -70,6 +78,40 @@ export default function AdminScreen({ user }: Props) {
       setBackfillError(err.message ?? 'Backfill call failed.');
     } finally {
       setBackfillRunning(false);
+    }
+  }
+
+  async function runLocBackfill(dryRun: boolean) {
+    if (!dryRun) {
+      const ok = window.confirm('This will add visibility: "inherit" and effectiveIsPrivate: false to locations missing these fields. Continue?');
+      if (!ok) return;
+    }
+    setLocRunning(true); setLocResult(null); setLocError('');
+    try {
+      const fn = httpsCallable<{ dryRun: boolean }, BackfillResult>(functions, 'backfillLocationsVisibility');
+      const result = await fn({ dryRun });
+      setLocResult(result.data);
+    } catch (err: any) {
+      setLocError(err.message ?? 'Backfill call failed.');
+    } finally {
+      setLocRunning(false);
+    }
+  }
+
+  async function runConBackfill(dryRun: boolean) {
+    if (!dryRun) {
+      const ok = window.confirm('This will add visibility + effectiveIsPrivate to containers missing these fields (derived from isPrivate). Continue?');
+      if (!ok) return;
+    }
+    setConRunning(true); setConResult(null); setConError('');
+    try {
+      const fn = httpsCallable<{ dryRun: boolean }, BackfillResult>(functions, 'backfillContainersVisibility');
+      const result = await fn({ dryRun });
+      setConResult(result.data);
+    } catch (err: any) {
+      setConError(err.message ?? 'Backfill call failed.');
+    } finally {
+      setConRunning(false);
     }
   }
 
@@ -148,6 +190,70 @@ export default function AdminScreen({ user }: Props) {
                 <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Missing isPrivate</td><td>{backfillResult.missing}</td></tr>
                 <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Patched</td><td>{backfillResult.patched}</td></tr>
                 {!backfillResult.dryRun && <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Remaining missing</td><td>{backfillResult.remainingMissing}</td></tr>}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        {/* TEMPORARY — Location visibility backfill. Remove after backfill confirmed complete. */}
+        <section style={{ marginBottom: 40, padding: '20px 24px', border: '1px solid #e0b0a0', borderRadius: 10, background: '#fffaf8' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--terracotta)', marginBottom: 4 }}>
+            Location Visibility Backfill (temporary)
+          </p>
+          <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginBottom: 16 }}>
+            Adds <code>visibility: "inherit"</code> and <code>effectiveIsPrivate: false</code> to locations missing these fields.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+            <button disabled={locRunning} onClick={() => runLocBackfill(true)}
+              style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid var(--warm-gray)', background: '#fff', fontSize: 13, cursor: locRunning ? 'not-allowed' : 'pointer', color: 'var(--charcoal)' }}>
+              {locRunning ? 'Running…' : 'Dry-run locations'}
+            </button>
+            <button disabled={locRunning} onClick={() => runLocBackfill(false)}
+              style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #c8a090', background: 'var(--terracotta)', fontSize: 13, cursor: locRunning ? 'not-allowed' : 'pointer', color: '#fff' }}>
+              {locRunning ? 'Running…' : 'Write locations'}
+            </button>
+          </div>
+          {locError && <p style={{ fontSize: 13, color: 'var(--terracotta)' }}>Error: {locError}</p>}
+          {locResult && (
+            <table style={{ fontSize: 13, borderCollapse: 'collapse', fontFamily: 'var(--font-body)' }}>
+              <tbody>
+                <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Mode</td><td>{locResult.dryRun ? 'Dry run (no writes)' : 'Write'}</td></tr>
+                <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Scanned</td><td>{locResult.scanned}</td></tr>
+                <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Missing fields</td><td>{locResult.missing}</td></tr>
+                <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Patched</td><td>{locResult.patched}</td></tr>
+                {!locResult.dryRun && <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Remaining missing</td><td>{locResult.remainingMissing}</td></tr>}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        {/* TEMPORARY — Container visibility backfill. Remove after backfill confirmed complete. */}
+        <section style={{ marginBottom: 40, padding: '20px 24px', border: '1px solid #e0b0a0', borderRadius: 10, background: '#fffaf8' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--terracotta)', marginBottom: 4 }}>
+            Container Visibility Backfill (temporary)
+          </p>
+          <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginBottom: 16 }}>
+            Adds <code>visibility</code> and <code>effectiveIsPrivate</code> to containers missing these fields, derived from existing <code>isPrivate</code>.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+            <button disabled={conRunning} onClick={() => runConBackfill(true)}
+              style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid var(--warm-gray)', background: '#fff', fontSize: 13, cursor: conRunning ? 'not-allowed' : 'pointer', color: 'var(--charcoal)' }}>
+              {conRunning ? 'Running…' : 'Dry-run containers'}
+            </button>
+            <button disabled={conRunning} onClick={() => runConBackfill(false)}
+              style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #c8a090', background: 'var(--terracotta)', fontSize: 13, cursor: conRunning ? 'not-allowed' : 'pointer', color: '#fff' }}>
+              {conRunning ? 'Running…' : 'Write containers'}
+            </button>
+          </div>
+          {conError && <p style={{ fontSize: 13, color: 'var(--terracotta)' }}>Error: {conError}</p>}
+          {conResult && (
+            <table style={{ fontSize: 13, borderCollapse: 'collapse', fontFamily: 'var(--font-body)' }}>
+              <tbody>
+                <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Mode</td><td>{conResult.dryRun ? 'Dry run (no writes)' : 'Write'}</td></tr>
+                <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Scanned</td><td>{conResult.scanned}</td></tr>
+                <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Missing fields</td><td>{conResult.missing}</td></tr>
+                <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Patched</td><td>{conResult.patched}</td></tr>
+                {!conResult.dryRun && <tr><td style={{ padding: '3px 16px 3px 0', color: 'var(--muted-slate)' }}>Remaining missing</td><td>{conResult.remainingMissing}</td></tr>}
               </tbody>
             </table>
           )}
