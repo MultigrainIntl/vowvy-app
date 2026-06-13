@@ -75,6 +75,15 @@ export default function ManageScreen({ user }: Props) {
   }
 
   async function deleteLocation(id: string) {
+    // Block deletion when sub-locations exist, to avoid orphaning children.
+    // No data is modified in this case — the user resolves it with Move/Delete.
+    const childLocations = getLocationChildren(id, locations);
+    if (childLocations.length > 0) {
+      const loc = locations.find(l => l.id === id);
+      const name = loc?.name.trim() || 'this location';
+      window.alert(`You can't delete “${name}” because it has sub-locations. Move or delete its sub-locations first.`);
+      return;
+    }
     if (!window.confirm('Delete this location? Containers inside it will become unassigned.')) return;
     // Unassign containers in this location
     const affected = containers.filter(c => c.locationId === id);
