@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { signOut, type User } from 'firebase/auth';
+import { useTranslation } from 'react-i18next';
+import i18next from 'i18next';
 import {
   collection, doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, onSnapshot,
   query, orderBy, where, arrayUnion, serverTimestamp, Timestamp,
@@ -39,7 +41,8 @@ interface Container {
 }
 
 function QRPrintModal({ container, onClose }: { container: Container; onClose: () => void }) {
-  const [tagline, setTagline] = useState("What's in your box?");
+  const { t } = useTranslation();
+  const [tagline, setTagline] = useState(() => t('main.qr.defaultTagline'));
   const [svgString, setSvgString] = useState('');
 
   useEffect(() => {
@@ -52,8 +55,8 @@ function QRPrintModal({ container, onClose }: { container: Container; onClose: (
   return (
     <div className="qr-print-overlay">
       <div className="qr-print-controls">
-        <button className="qr-btn-print" onClick={() => window.print()}>Print</button>
-        <button className="qr-btn-close" onClick={onClose}>Close</button>
+        <button className="qr-btn-print" onClick={() => window.print()}>{t('main.qr.print')}</button>
+        <button className="qr-btn-close" onClick={onClose}>{t('main.qr.close')}</button>
       </div>
       <div className="qr-print-card">
         <img src={logoMark} alt="Vowvy" className="qr-logo" />
@@ -74,13 +77,14 @@ function QRPrintModal({ container, onClose }: { container: Container; onClose: (
 }
 
 function relativeTime(ts: Timestamp | null): string {
-  if (!ts) return 'just now';
+  const t = i18next.t.bind(i18next);
+  if (!ts) return t('main.time.justNow');
   const seconds = Math.floor((Date.now() - ts.toMillis()) / 1000);
-  if (seconds < 60)        return 'just now';
-  if (seconds < 3600)      return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400)     return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 7 * 86400) return `${Math.floor(seconds / 86400)}d ago`;
-  return ts.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (seconds < 60)        return t('main.time.justNow');
+  if (seconds < 3600)      return t('main.time.minutesAgo', { count: Math.floor(seconds / 60) });
+  if (seconds < 86400)     return t('main.time.hoursAgo',  { count: Math.floor(seconds / 3600) });
+  if (seconds < 7 * 86400) return t('main.time.daysAgo',   { count: Math.floor(seconds / 86400) });
+  return ts.toDate().toLocaleDateString(i18next.language || 'en', { month: 'short', day: 'numeric' });
 }
 
 function mapContainer(d: any): Container {
@@ -123,6 +127,7 @@ function mapContainer(d: any): Container {
 interface Props { user: User; initialOwnerUid?: string | null }
 
 export default function MainScreen({ user, initialOwnerUid }: Props) {
+  const { t, i18n } = useTranslation();
   const [selectedLocationId, setSelectedLocationId]   = useState('');
   const [selectedParentId, setSelectedParentId]       = useState<string | null>(null);
   const [newLocationName, setNewLocationName]         = useState('');
@@ -297,7 +302,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       let resolvedLocationId = selectedLocationId;
       let resolvedLocationName = '';
       if (selectedLocationId === 'new') {
-        if (!newLocationName.trim()) { setSaveError('Please enter a location name.'); setSaving(false); return; }
+        if (!newLocationName.trim()) { setSaveError(t('main.errors.locationRequired')); setSaving(false); return; }
         resolvedLocationId = await createLocation(user.uid, newLocationName.trim(), selectedParentId);
         resolvedLocationName = newLocationName.trim();
       } else {
@@ -319,7 +324,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
-      setSaveError('Failed to create container. Please try again.');
+      setSaveError(t('main.errors.createFailed'));
     } finally {
       setSaving(false);
     }
@@ -333,14 +338,14 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     let resolvedLocationId = selectedLocationId;
     let resolvedLocationName = '';
     if (selectedLocationId === 'new') {
-      if (!newLocationName.trim()) { setSaveError('Please enter a location name.'); setSaving(false); return; }
+      if (!newLocationName.trim()) { setSaveError(t('main.errors.locationRequired')); setSaving(false); return; }
       resolvedLocationId = await createLocation(user.uid, newLocationName.trim(), selectedParentId);
       resolvedLocationName = newLocationName.trim();
     } else {
       resolvedLocationName = getLocationPath(selectedLocationId, locations);
     }
     try {
-      if (!auth.currentUser) { setSaveError('Session expired. Please sign in again.'); setSaving(false); return; }
+      if (!auth.currentUser) { setSaveError(t('main.errors.sessionExpired')); setSaving(false); return; }
       await auth.currentUser.getIdToken(true);
 
       const compressOpts = { maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: true, maxSizeMB: 0.5 };
@@ -397,7 +402,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       setTimeout(() => setSaved(false), 2000);
     } catch (err: any) {
       console.error('[handleSave] code:', err?.code, '| message:', err?.message, '| full:', err);
-      setSaveError('Save failed. Please try again.');
+      setSaveError(t('main.errors.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -415,7 +420,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     try {
       await Promise.race([
         (async () => {
-          if (!auth.currentUser) { setSaveError('Session expired. Please sign in again.'); return; }
+          if (!auth.currentUser) { setSaveError(t('main.errors.sessionExpired')); return; }
           await auth.currentUser.getIdToken(true);
           console.log('Starting compression');
           const compressed = await imageCompression(file, {
@@ -460,7 +465,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       ]);
     } catch (e: any) {
       const msg = e?.message ?? e?.code ?? 'unknown error';
-      setSaveError(msg === 'TIMEOUT' ? 'Save timed out. Please try again.' : `Add photo failed: ${msg}`);
+      setSaveError(msg === 'TIMEOUT' ? t('main.errors.saveTimeout') : t('main.errors.addPhotoFailed', { message: msg }));
     } finally {
       setSaving(false);
     }
@@ -617,7 +622,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     isPrivate: !c.isPrivate,
                   });
                 }}
-                title={c.isPrivate ? 'Private — tap to make visible to collaborators' : 'Visible to collaborators — tap to make private'}
+                title={c.isPrivate ? t('main.card.privateLabel') : t('main.card.visibleLabel')}
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
                   fontSize: 15, padding: '0 4px', opacity: c.isPrivate ? 1 : 0.3,
@@ -629,7 +634,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           </div>
           {showLocation && <div className="container-location">{displayLocation(c)}</div>}
           <div className="container-time">{relativeTime(c.createdAt)}</div>
-          {c.aiStatus === 'processing' && <div className="ai-processing">Analyzing…</div>}
+          {c.aiStatus === 'processing' && <div className="ai-processing">{t('main.card.aiProcessing')}</div>}
           {c.aiStatus === 'done' && c.aiTags.length > 0 && (
             <div className="ai-tags">
               {c.aiTags.map(tag => (
@@ -658,7 +663,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-              Add Photo
+              {t('main.card.addPhoto')}
             </button>
             <button
               className={`card-action-btn${captureContainerId === c.id ? ' card-action-btn--active' : ''}`}
@@ -673,12 +678,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.776 48.776 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" /></svg>
-              {captureContainerId === c.id ? 'Done' : 'Take Photos'}
+              {captureContainerId === c.id ? t('main.card.done') : t('main.card.takePhotos')}
             </button>
             {viewingOwnerUid === user.uid && (
               <button className="card-action-btn" onClick={() => setPrintContainer(c)}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.75h16.5m-16.5 0A2.25 2.25 0 0 1 6 7.5h12a2.25 2.25 0 0 1 2.25 2.25m-16.5 0v8.25A2.25 2.25 0 0 0 6 20.25h12a2.25 2.25 0 0 0 2.25-2.25V9.75M8.25 21h7.5" /></svg>
-                Print QR
+                {t('main.card.printQR')}
               </button>
             )}
             <button
@@ -686,7 +691,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               onClick={() => setMoveSource({ containerId: c.id, mode: 'container' })}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
-              Move
+              {t('main.card.move')}
             </button>
           </div>
         </div>
@@ -755,9 +760,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 background: '#faf8f6', fontSize: 13, color: '#333', cursor: 'pointer',
               }}
             >
-              <option value={user.uid}>My inventory</option>
+              <option value={user.uid}>{t('main.header.myInventory')}</option>
               {sharedInventories.map(s => (
-                <option key={s.ownerUid} value={s.ownerUid}>{s.ownerName}'s inventory</option>
+                <option key={s.ownerUid} value={s.ownerUid}>{t('main.header.othersInventory', { name: s.ownerName })}</option>
               ))}
             </select>
           )}
@@ -769,7 +774,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 background: '#fff', color: '#555', fontSize: 13, cursor: 'pointer',
               }}
             >
-              Manage
+              {t('main.header.manage')}
             </button>
           )}
           {viewingOwnerUid === user.uid && (
@@ -780,7 +785,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 background: '#fff', color: '#555', fontSize: 13, cursor: 'pointer',
               }}
             >
-              Collaborators
+              {t('main.header.collaborators')}
             </button>
           )}
           {viewingOwnerUid === user.uid && (
@@ -791,12 +796,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 background: '#fff', color: '#7a3b2e', fontSize: 13, cursor: 'pointer',
               }}
             >
-              Share
+              {t('main.header.share')}
             </button>
           )}
           {trashCount > 0 && (
             <button className="trash-link" onClick={() => navigate('/trash')}>
-              Recently Deleted ({trashCount})
+              {t('main.header.recentlyDeleted', { count: trashCount })}
             </button>
           )}
           <button
@@ -806,9 +811,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               background: '#fff', color: '#555', fontSize: 13, cursor: 'pointer',
             }}
           >
-            Profile
+            {t('main.header.profile')}
           </button>
-          <button className="sign-out-btn" onClick={() => signOut(auth)}>Sign out</button>
+          <button className="sign-out-btn" onClick={() => signOut(auth)}>{t('main.header.signOut')}</button>
         </div>
       </header>
 
@@ -818,35 +823,55 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           <div className="mobile-menu-panel" onClick={e => e.stopPropagation()}>
             {sharedInventories.length > 0 && (
               <div className="mobile-menu-section">
-                <span className="mobile-menu-label">Inventory</span>
+                <span className="mobile-menu-label">{t('main.menu.inventoryLabel')}</span>
                 <select
                   value={viewingOwnerUid}
                   onChange={e => { setViewingOwnerUid(e.target.value); setShowMobileMenu(false); }}
                   className="mobile-menu-select"
                 >
-                  <option value={user.uid}>My inventory</option>
+                  <option value={user.uid}>{t('main.header.myInventory')}</option>
                   {sharedInventories.map(s => (
-                    <option key={s.ownerUid} value={s.ownerUid}>{s.ownerName}'s inventory</option>
+                    <option key={s.ownerUid} value={s.ownerUid}>{t('main.header.othersInventory', { name: s.ownerName })}</option>
                   ))}
                 </select>
               </div>
             )}
             {viewingOwnerUid === user.uid && (
-              <button className="mobile-menu-item" onClick={() => { navigate('/manage'); setShowMobileMenu(false); }}>Manage</button>
+              <button className="mobile-menu-item" onClick={() => { navigate('/manage'); setShowMobileMenu(false); }}>{t('main.header.manage')}</button>
             )}
             {viewingOwnerUid === user.uid && (
-              <button className="mobile-menu-item" onClick={() => { navigate('/collaborators'); setShowMobileMenu(false); }}>Collaborators</button>
+              <button className="mobile-menu-item" onClick={() => { navigate('/collaborators'); setShowMobileMenu(false); }}>{t('main.header.collaborators')}</button>
             )}
             {viewingOwnerUid === user.uid && (
-              <button className="mobile-menu-item" onClick={() => { setShowInvitePanel(true); setShowMobileMenu(false); }}>Share inventory</button>
+              <button className="mobile-menu-item" onClick={() => { setShowInvitePanel(true); setShowMobileMenu(false); }}>{t('main.header.share')}</button>
             )}
             {trashCount > 0 && (
               <button className="mobile-menu-item" onClick={() => { navigate('/trash'); setShowMobileMenu(false); }}>
-                Recently Deleted ({trashCount})
+                {t('main.header.recentlyDeleted', { count: trashCount })}
               </button>
             )}
-            <button className="mobile-menu-item" onClick={() => { navigate('/profile'); setShowMobileMenu(false); }}>Profile</button>
-            <button className="mobile-menu-item mobile-menu-signout" onClick={() => signOut(auth)}>Sign out</button>
+            <button className="mobile-menu-item" onClick={() => { navigate('/profile'); setShowMobileMenu(false); }}>{t('main.header.profile')}</button>
+            <div className="mobile-menu-section">
+              <span className="mobile-menu-label">{t('language.label')}</span>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                {(['en', 'es', 'pt-BR'] as const).map(lang => {
+                  const resolved = i18n.resolvedLanguage ?? i18n.language;
+                  const isActive = lang === 'pt-BR' ? resolved.startsWith('pt') : resolved.startsWith(lang);
+                  const label = lang === 'en' ? t('language.en') : lang === 'es' ? t('language.es') : t('language.ptBR');
+                  return (
+                    <button key={lang} onClick={() => i18n.changeLanguage(lang)}
+                      style={{ padding: '6px 12px', borderRadius: 20,
+                        border: `1px solid ${isActive ? 'var(--terracotta)' : 'var(--warm-gray)'}`,
+                        background: isActive ? 'var(--terracotta)' : 'none',
+                        color: isActive ? 'white' : 'var(--charcoal)',
+                        fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <button className="mobile-menu-item mobile-menu-signout" onClick={() => signOut(auth)}>{t('main.header.signOut')}</button>
           </div>
         </div>
       )}
@@ -854,7 +879,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       {/* Collaborator mode banner */}
       {viewingOwnerUid !== user.uid && (
         <div className="collab-banner">
-          Viewing {sharedInventories.find(s => s.ownerUid === viewingOwnerUid)?.ownerName ?? 'another user'}'s inventory
+          {t('main.collab.banner', { name: sharedInventories.find(s => s.ownerUid === viewingOwnerUid)?.ownerName ?? 'another user' })}
         </div>
       )}
 
@@ -862,27 +887,23 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         {isBrandNewUser ? (
         <section className="onboard-card">
           <img src={logoMark} alt="" className="onboard-logo" />
-          <h1 className="onboard-title">Welcome to Vowvy</h1>
-          <p className="onboard-tagline">
-            Take photos of your boxes, let AI identify and catalog what&rsquo;s inside,
-            organize everything by location and box or container, and share access
-            with people you trust when you need to.
-          </p>
+          <h1 className="onboard-title">{t('main.onboarding.title')}</h1>
+          <p className="onboard-tagline">{t('main.onboarding.tagline')}</p>
 
           {!showFirstLocationInput ? (
             <button className="onboard-primary-btn" onClick={() => setShowFirstLocationInput(true)}>
-              Create your first location
+              {t('main.onboarding.createFirstLocation')}
             </button>
           ) : (
             <div className="onboard-input-block">
               <p className="onboard-input-label">
-                A location is where things live — a home, a garage, a storage unit.
+                {t('main.onboarding.locationInputLabel')}
               </p>
               <div className="onboard-input-row">
                 <input
                   type="text"
                   className="onboard-input"
-                  placeholder="e.g. My House, Storage Unit 3"
+                  placeholder={t('main.onboarding.locationPlaceholder')}
                   value={firstLocationName}
                   autoFocus
                   disabled={creatingFirstLocation}
@@ -894,7 +915,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   disabled={!firstLocationName.trim() || creatingFirstLocation}
                   onClick={handleCreateFirstLocation}
                 >
-                  {creatingFirstLocation ? 'Creating…' : 'Create'}
+                  {creatingFirstLocation ? t('main.onboarding.creating') : t('main.onboarding.create')}
                 </button>
               </div>
             </div>
@@ -902,30 +923,30 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           {saveError && <p className="save-error">{saveError}</p>}
 
           <button className="onboard-secondary-btn" onClick={() => setShowHowItWorks(v => !v)}>
-            {showHowItWorks ? 'Hide how Vowvy works' : 'See how Vowvy works'}
+            {showHowItWorks ? t('main.onboarding.hideHowItWorks') : t('main.onboarding.seeHowItWorks')}
           </button>
 
           {showHowItWorks && (
             <ol className="onboard-steps">
               <li>
                 <span className="onboard-step-icon">📍</span>
-                <span><strong>Location</strong> — where things live: a home, garage, or storage unit.</span>
+                <span><strong>{t('main.onboarding.steps.locationTitle')}</strong> — {t('main.onboarding.steps.locationBody')}</span>
               </li>
               <li>
                 <span className="onboard-step-icon">📦</span>
-                <span><strong>Box or container</strong> — name it, like &ldquo;Box 12&rdquo; or &ldquo;Blue bin&rdquo;.</span>
+                <span><strong>{t('main.onboarding.steps.containerTitle')}</strong> — {t('main.onboarding.steps.containerBody')}</span>
               </li>
               <li>
                 <span className="onboard-step-icon">📷</span>
-                <span><strong>Photos</strong> — snap what&rsquo;s inside. No typing needed.</span>
+                <span><strong>{t('main.onboarding.steps.photosTitle')}</strong> — {t('main.onboarding.steps.photosBody')}</span>
               </li>
               <li>
                 <span className="onboard-step-icon">✨</span>
-                <span><strong>AI catalog</strong> — Vowvy identifies and tags your items so search can find them later.</span>
+                <span><strong>{t('main.onboarding.steps.aiTitle')}</strong> — {t('main.onboarding.steps.aiBody')}</span>
               </li>
               <li>
                 <span className="onboard-step-icon">🔗</span>
-                <span><strong>QR &amp; share</strong> — print a QR label for any box, or share access with people you trust.</span>
+                <span><strong>{t('main.onboarding.steps.qrTitle')}</strong> — {t('main.onboarding.steps.qrBody')}</span>
               </li>
             </ol>
           )}
@@ -934,10 +955,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         <>
         <section className="capture-card">
           {showFirstBoxHint && (
-            <div className="onboard-hint">
-              <strong>Location saved!</strong> Now add your first box or container below —
-              give it a name and snap a photo of what&rsquo;s inside.
-            </div>
+            <div className="onboard-hint">{t('main.firstBoxHint')}</div>
           )}
           <div className="form-fields">
             <select
@@ -952,13 +970,13 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 setNewContainerName('');
               }}
             >
-              <option value="">— Select location —</option>
+              <option value="">{t('main.capture.selectLocation')}</option>
               {locations.map(loc => (
                 <option key={loc.id} value={loc.id}>
                   {getLocationPath(loc.id, locations)}
                 </option>
               ))}
-              <option value="new">＋ Add new location</option>
+              <option value="new">{t('main.capture.addNewLocation')}</option>
             </select>
 
             {selectedLocationId === 'new' && (
@@ -967,7 +985,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   <input
                     type="text"
                     className="container-input"
-                    placeholder="e.g. My House, Storage Unit 3, Mom's Garage"
+                    placeholder={t('main.capture.locationNamePlaceholder')}
                     value={newLocationName}
                     disabled={saving}
                     style={{ flex: 1 }}
@@ -988,7 +1006,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    Add
+                    {t('main.capture.add')}
                   </button>
                 </div>
                 {locations.length > 0 && (
@@ -998,10 +1016,10 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     disabled={saving}
                     onChange={e => setSelectedParentId(e.target.value || null)}
                   >
-                    <option value="">Top level — e.g. a Property or building</option>
+                    <option value="">{t('main.capture.topLevel')}</option>
                     {locations.map(loc => (
                       <option key={loc.id} value={loc.id}>
-                        Inside: {getLocationPath(loc.id, locations)}
+                        {t('main.capture.insideLocation', { name: getLocationPath(loc.id, locations) })}
                       </option>
                     ))}
                   </select>
@@ -1015,23 +1033,23 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               disabled={saving}
               onChange={e => { setSelectedContainerId(e.target.value); setNewContainerName(''); }}
             >
-              <option value="">— Select box or container —</option>
+              <option value="">{t('main.capture.selectContainer')}</option>
               {containersAtLocation.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
-              <option value="new">＋ Create new box or container</option>
+              <option value="new">{t('main.capture.createNewContainer')}</option>
             </select>
 
             {selectedContainerId && selectedContainerId !== 'new' && (
               <p className="container-confirm">
-                Adding to: <strong>{activeContainers.find(c => c.id === selectedContainerId)?.name}</strong>
+                {t('main.capture.addingTo', { name: activeContainers.find(c => c.id === selectedContainerId)?.name })}
               </p>
             )}
 
             {selectedContainerId === 'new' && (
               <input
                 type="text"
-                placeholder="Box or container name — e.g. Box 12, Blue bin"
+                placeholder={t('main.capture.containerNamePlaceholder')}
                 value={newContainerName}
                 disabled={saving}
                 onChange={e => setNewContainerName(e.target.value)}
@@ -1061,8 +1079,8 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     <path strokeLinecap="round" strokeLinejoin="round"
                       d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
                   </svg>
-                  <span>Take photo or choose files</span>
-                  <span style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>Tap to select one or more photos</span>
+                  <span>{t('main.capture.photoPlaceholder')}</span>
+                  <span style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>{t('main.capture.photoHint')}</span>
                 </div>
               )}
               {extraPhotos.length > 0 && (
@@ -1071,7 +1089,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   background: '#7a3b2e', color: '#fff', borderRadius: 12,
                   padding: '3px 10px', fontSize: 13, fontWeight: 600,
                 }}>
-                  {extraPhotos.length + 1} photos selected
+                  {t('main.capture.photosSelected', { count: extraPhotos.length + 1 })}
                 </div>
               )}
             </label>
@@ -1079,7 +1097,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
           {saveError && <p className="save-error">{saveError}</p>}
           <button className={`save-btn${saved ? ' saved' : ''}`} onClick={handleSave} disabled={!canSave}>
-            {saving ? 'Saving…' : saved ? 'Saved!' : 'Save'}
+            {saving ? t('main.capture.saving') : saved ? t('main.capture.saved') : t('main.capture.save')}
           </button>
           {selectedContainerId === 'new' && newContainerName.trim() !== '' && selectedLocationId && !photo && (
             <button
@@ -1090,7 +1108,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 background: '#fff', color: '#7a3b2e', fontSize: 15, cursor: 'pointer', marginTop: 4,
               }}
             >
-              {saving ? 'Creating…' : 'Create box or container (no photo)'}
+              {saving ? t('main.capture.creating') : t('main.capture.createNoPhoto')}
             </button>
           )}
         </section>
@@ -1099,7 +1117,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           <input
             type="text"
             className="search-input"
-            placeholder="Search containers…"
+            placeholder={t('main.search.placeholder')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -1108,9 +1126,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
         <section className="container-list">
           {activeContainers.length === 0 ? (
-            <p className="list-empty">No boxes or containers yet. Add your first one above.</p>
+            <p className="list-empty">{t('main.search.empty')}</p>
           ) : filteredContainers.length === 0 ? (
-            <p className="list-empty">No containers match "{searchQuery}".</p>
+            <p className="list-empty">{t('main.search.noResults', { query: searchQuery })}</p>
           ) : trimmedQuery ? (
             filteredContainers.map(c => renderContainerRow(c, true))
           ) : (
@@ -1134,7 +1152,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       {lightboxItems && (
         <div className="lightbox-backdrop" onClick={() => setLightboxItems(null)}>
           <div className="lightbox-toolbar" onClick={e => e.stopPropagation()}>
-            <button className="lightbox-delete" onClick={handleDeletePhoto}>Delete</button>
+            <button className="lightbox-delete" onClick={handleDeletePhoto}>{t('main.lightbox.delete')}</button>
             <button className="lightbox-action" onClick={() => {
               if (!lightboxContainerId || !lightboxItems) return;
               setMoveSource({
@@ -1142,7 +1160,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 mode: 'photo',
                 photoId: lightboxItems[lightboxIndex].id,
               });
-            }}>Move photo</button>
+            }}>{t('main.lightbox.movePhoto')}</button>
             <label className="lightbox-action lightbox-camera-label">
               <input
                 type="file"
@@ -1193,21 +1211,21 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                       if (scrollRef.current) scrollRef.current.scrollLeft = 0;
                     }, 0);
                   } catch {
-                    setSaveError('Photo failed to save.');
+                    setSaveError(t('main.lightbox.photoFailed'));
                   } finally {
                     setSaving(false);
                   }
                 }}
               />
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.776 48.776 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" /></svg>
-              Add Photo
+              {t('main.lightbox.addPhoto')}
             </label>
             {viewingOwnerUid === user.uid && lightboxContainerId && (
               <button
                 className="lightbox-action"
                 onClick={() => setMoveSource({ containerId: lightboxContainerId, mode: 'container' })}
               >
-                Move box
+                {t('main.lightbox.moveBox')}
               </button>
             )}
             <button className="lightbox-close" onClick={() => setLightboxItems(null)} aria-label="Close">✕</button>
@@ -1241,7 +1259,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               type="text"
               className="lightbox-desc-input"
               value={lightboxDescDraft}
-              placeholder="Add a description…"
+              placeholder={t('main.lightbox.descriptionPlaceholder')}
               onChange={e => setLightboxDescDraft(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter' && lightboxDescDraft !== (lightboxItems[lightboxIndex]?.description ?? '')) {
@@ -1250,7 +1268,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               }}
             />
             {lightboxDescDraft !== (lightboxItems[lightboxIndex]?.description ?? '') && (
-              <button className="lightbox-desc-save" onClick={handleSavePhotoDescription}>Save</button>
+              <button className="lightbox-desc-save" onClick={handleSavePhotoDescription}>{t('main.lightbox.save')}</button>
             )}
           </div>
         </div>
@@ -1263,14 +1281,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       {showIOSModal && (
         <div className="ios-modal-backdrop" onClick={() => setShowIOSModal(false)}>
           <div className="ios-modal" onClick={e => e.stopPropagation()}>
-            <p className="ios-modal-message">
-              Camera access requires Safari on iPhone. Tap below to open Vowvy in Safari.
-            </p>
-            <p className="ios-modal-instruction">Paste this link into Safari for camera access.</p>
+            <p className="ios-modal-message">{t('main.ios.message')}</p>
+            <p className="ios-modal-instruction">{t('main.ios.instruction')}</p>
             <button className="ios-modal-btn" onClick={handleCopyLink}>
-              {copied ? 'Copied!' : 'Copy Link'}
+              {copied ? t('main.ios.copied') : t('main.ios.copyLink')}
             </button>
-            <button className="ios-modal-dismiss" onClick={() => setShowIOSModal(false)}>Dismiss</button>
+            <button className="ios-modal-dismiss" onClick={() => setShowIOSModal(false)}>{t('main.ios.dismiss')}</button>
           </div>
         </div>
       )}
@@ -1350,7 +1366,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
                   });
                 } catch {
-                  setSaveError('Some photos failed to save. Please try again.');
+                  setSaveError(t('main.errors.somePhotosFailed'));
                 } finally {
                   setSaving(false);
                 }
@@ -1364,7 +1380,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 14, cursor: 'pointer',
             }}
           >
-            {captureQueue.length > 0 ? `Save ${captureQueue.length} photo${captureQueue.length > 1 ? 's' : ''}` : 'Done'}
+            {captureQueue.length > 0 ? t('main.captureMode.save', { count: captureQueue.length }) : t('main.captureMode.done')}
           </button>
         </div>
       )}
@@ -1387,16 +1403,16 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             }}
           >
             <h2 style={{ margin: 0, fontSize: 20, fontFamily: 'Cormorant Garamond, serif', color: '#7a3b2e' }}>
-              {moveSource.mode === 'container' ? 'Move to a different location' : 'Move to another container'}
+              {moveSource.mode === 'container' ? t('main.move.containerTitle') : t('main.move.photoTitle')}
             </h2>
             <p style={{ margin: 0, fontSize: 14, color: '#555' }}>
-              {moveSource.mode === 'container' ? 'Select a destination location.' : 'Select a destination container.'}
+              {moveSource.mode === 'container' ? t('main.move.containerSubtitle') : t('main.move.photoSubtitle')}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
               {moveSource.mode === 'container' ? (
                 locations.length === 0 ? (
                   <p style={{ color: '#888', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>
-                    No locations available. Create one in Manage first.
+                    {t('main.move.noLocations')}
                   </p>
                 ) : (
                   locations.map(loc => (
@@ -1424,13 +1440,13 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               ) : (
                 containers.filter(c => !c.deletedAt && c.id !== moveSource.containerId).length === 0 && locations.length === 0 ? (
                   <p style={{ color: '#888', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>
-                    No destinations available. Create a container or location first.
+                    {t('main.move.noDestinations')}
                   </p>
                 ) : (
                   <>
                     {locations.length > 0 && (
                       <>
-                        <p style={{ margin: '4px 0', fontSize: 12, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Locations</p>
+                        <p style={{ margin: '4px 0', fontSize: 12, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('main.move.locationsHeading')}</p>
                         {locations.map(loc => (
                           <button
                             key={loc.id}
@@ -1496,7 +1512,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     )}
                     {containers.filter(c => !c.deletedAt && c.id !== moveSource.containerId).length > 0 && (
                       <>
-                        <p style={{ margin: '8px 0 4px', fontSize: 12, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Containers</p>
+                        <p style={{ margin: '8px 0 4px', fontSize: 12, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('main.move.containersHeading')}</p>
                         {containers
                           .filter(c => !c.deletedAt && c.id !== moveSource.containerId)
                           .map(dest => (
@@ -1564,7 +1580,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 background: '#fff', fontSize: 14, cursor: 'pointer', color: '#555',
               }}
             >
-              Cancel
+              {t('main.move.cancel')}
             </button>
           </div>
         </div>
@@ -1588,10 +1604,10 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             }}
           >
             <h2 style={{ margin: 0, fontSize: 20, fontFamily: 'Cormorant Garamond, serif', color: '#7a3b2e' }}>
-              Share your inventory
+              {t('main.invite.title')}
             </h2>
             <p style={{ margin: 0, fontSize: 14, color: '#555' }}>
-              Generate a link and send it to a collaborator. They can add photos and edit containers in your inventory.
+              {t('main.invite.description')}
             </p>
 
             {inviteLink ? (
@@ -1614,7 +1630,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                       background: '#7a3b2e', color: '#fff', fontSize: 14, cursor: 'pointer',
                     }}
                   >
-                    {inviteCopied ? '✓ Copied!' : 'Copy link'}
+                    {inviteCopied ? t('main.invite.copied') : t('main.invite.copyLink')}
                   </button>
                   <button
                     onClick={() => { setInviteLink(null); setInviteCopied(false); }}
@@ -1623,14 +1639,14 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                       background: '#fff', fontSize: 14, cursor: 'pointer', color: '#555',
                     }}
                   >
-                    New link
+                    {t('main.invite.newLink')}
                   </button>
                 </div>
               </div>
             ) : (
               <>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, color: '#555' }}>Link expires after</label>
+                <label style={{ fontSize: 13, color: '#555' }}>{t('main.invite.expiryLabel')}</label>
                 <select
                   value={inviteExpiry ?? 'never'}
                   onChange={e => setInviteExpiry(e.target.value === 'never' ? null : Number(e.target.value))}
@@ -1639,10 +1655,10 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     background: '#faf8f6', fontSize: 14, color: '#333',
                   }}
                 >
-                  <option value={1}>24 hours</option>
-                  <option value={7}>7 days</option>
-                  <option value={30}>30 days</option>
-                  <option value="never">No expiry</option>
+                  <option value={1}>{t('main.invite.expiry24h')}</option>
+                  <option value={7}>{t('main.invite.expiry7d')}</option>
+                  <option value={30}>{t('main.invite.expiry30d')}</option>
+                  <option value="never">{t('main.invite.expiryNever')}</option>
                 </select>
               </div>
               <button
@@ -1654,14 +1670,14 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   color: '#fff', fontSize: 14, cursor: generatingInvite ? 'not-allowed' : 'pointer',
                 }}
               >
-                {generatingInvite ? 'Generating…' : 'Generate invite link'}
+                {generatingInvite ? t('main.invite.generating') : t('main.invite.generate')}
               </button>
               </>
             )}
 
             {collaborators.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#333' }}>People with access</p>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#333' }}>{t('main.invite.peopleWithAccess')}</p>
                 {collaborators.map(c => (
                   <div key={c.uid} style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1675,7 +1691,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                         background: '#fff', color: '#a04030', fontSize: 12, cursor: 'pointer',
                       }}
                     >
-                      Revoke
+                      {t('main.invite.revoke')}
                     </button>
                   </div>
                 ))}
@@ -1689,7 +1705,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 background: '#fff', fontSize: 14, cursor: 'pointer', color: '#555',
               }}
             >
-              Close
+              {t('main.invite.close')}
             </button>
           </div>
         </div>

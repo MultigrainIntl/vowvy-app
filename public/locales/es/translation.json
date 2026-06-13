@@ -1,0 +1,185 @@
+{
+  "auth": {
+    "tagline": "Captura primero. Organiza después.",
+    "emailPlaceholder": "Correo electrónico",
+    "passwordPlaceholder": "Contraseña",
+    "showPassword": "Mostrar",
+    "hidePassword": "Ocultar",
+    "showPasswordAriaLabel": "Mostrar contraseña",
+    "hidePasswordAriaLabel": "Ocultar contraseña",
+    "signIn": "Iniciar sesión",
+    "signUp": "Registrarse",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "errors": {
+      "invalidEmail": "Dirección de correo no válida.",
+      "noAccount": "No encontramos una cuenta — intenta registrarte.",
+      "wrongPassword": "Contraseña incorrecta.",
+      "wrongCredential": "Correo o contraseña incorrectos.",
+      "emailInUse": "El correo ya está en uso — intenta iniciar sesión.",
+      "weakPassword": "La contraseña debe tener al menos 6 caracteres.",
+      "generic": "Algo salió mal. Por favor intenta de nuevo."
+    },
+    "reset": {
+      "enterEmail": "Ingresa tu correo arriba primero.",
+      "sent": "Revisa tu correo para el enlace de restablecimiento."
+    }
+  },
+  "shared": {
+    "addNote": "Agregar una nota…",
+    "save": "Guardar"
+  },
+  "main": {
+    "header": {
+      "manage": "Administrar",
+      "collaborators": "Colaboradores",
+      "share": "Compartir",
+      "recentlyDeleted": "Eliminados recientemente ({{count}})",
+      "profile": "Perfil",
+      "signOut": "Cerrar sesión",
+      "myInventory": "Mi inventario",
+      "othersInventory": "Inventario de {{name}}"
+    },
+    "menu": {
+      "inventoryLabel": "Inventario"
+    },
+    "collab": {
+      "banner": "Viendo el inventario de {{name}}"
+    },
+    "time": {
+      "justNow": "justo ahora",
+      "minutesAgo": "hace {{count}}m",
+      "hoursAgo": "hace {{count}}h",
+      "daysAgo": "hace {{count}}d"
+    },
+    "onboarding": {
+      "title": "Bienvenido a Vowvy",
+      "tagline": "Toma fotos de tus cajas, deja que la IA identifique y catalogue el contenido, organiza todo por ubicación y caja o contenedor, y comparte el acceso con personas de confianza cuando lo necesites.",
+      "createFirstLocation": "Crea tu primera ubicación",
+      "locationInputLabel": "Una ubicación es donde viven las cosas — un hogar, un garaje, un depósito.",
+      "locationPlaceholder": "p.ej. Mi casa, Depósito 3",
+      "creating": "Creando…",
+      "create": "Crear",
+      "seeHowItWorks": "Ver cómo funciona Vowvy",
+      "hideHowItWorks": "Ocultar cómo funciona Vowvy",
+      "steps": {
+        "locationTitle": "Ubicación",
+        "locationBody": "dónde viven las cosas: un hogar, garaje o depósito.",
+        "containerTitle": "Caja o contenedor",
+        "containerBody": "ponle nombre, como «Caja 12» o «Bandeja azul».",
+        "photosTitle": "Fotos",
+        "photosBody": "fotografía el interior. Sin necesidad de escribir.",
+        "aiTitle": "Catálogo con IA",
+        "aiBody": "Vowvy identifica y etiqueta tus objetos para que puedas encontrarlos con la búsqueda.",
+        "qrTitle": "QR y compartir",
+        "qrBody": "imprime una etiqueta QR para cualquier caja, o comparte el acceso con personas de confianza."
+      }
+    },
+    "firstBoxHint": "¡Ubicación guardada! Ahora agrega tu primera caja o contenedor — dale un nombre y toma una foto del interior.",
+    "capture": {
+      "selectLocation": "— Selecciona una ubicación —",
+      "addNewLocation": "＋ Agregar nueva ubicación",
+      "locationNamePlaceholder": "p.ej. Mi casa, Depósito 3, Garaje de mamá",
+      "topLevel": "Nivel superior — p.ej. una propiedad o edificio",
+      "insideLocation": "Dentro de: {{name}}",
+      "add": "Agregar",
+      "selectContainer": "— Selecciona una caja o contenedor —",
+      "createNewContainer": "＋ Crear nueva caja o contenedor",
+      "addingTo": "Agregando a: {{name}}",
+      "containerNamePlaceholder": "Nombre — p.ej. Caja 12, Bandeja azul",
+      "photoPlaceholder": "Tomar foto o elegir archivos",
+      "photoHint": "Toca para seleccionar una o más fotos",
+      "photosSelected": "{{count}} fotos seleccionadas",
+      "save": "Guardar",
+      "saving": "Guardando…",
+      "saved": "¡Guardado!",
+      "createNoPhoto": "Crear caja o contenedor (sin foto)",
+      "creating": "Creando…"
+    },
+    "search": {
+      "placeholder": "Buscar contenedores…",
+      "empty": "Sin cajas ni contenedores aún. Agrega el primero arriba.",
+      "noResults": "Ningún contenedor coincide con «{{query}}»."
+    },
+    "card": {
+      "aiProcessing": "Analizando…",
+      "addPhoto": "Agregar foto",
+      "takePhotos": "Tomar fotos",
+      "done": "Listo",
+      "printQR": "Imprimir QR",
+      "move": "Mover",
+      "privateLabel": "Privado — toca para hacer visible a colaboradores",
+      "visibleLabel": "Visible para colaboradores — toca para hacerlo privado"
+    },
+    "lightbox": {
+      "delete": "Eliminar",
+      "movePhoto": "Mover foto",
+      "addPhoto": "Agregar foto",
+      "moveBox": "Mover caja",
+      "descriptionPlaceholder": "Agregar una descripción…",
+      "save": "Guardar",
+      "photoFailed": "No se pudo guardar la foto."
+    },
+    "ios": {
+      "message": "El acceso a la cámara requiere Safari en iPhone. Toca abajo para abrir Vowvy en Safari.",
+      "instruction": "Pega este enlace en Safari para acceder a la cámara.",
+      "copyLink": "Copiar enlace",
+      "copied": "¡Copiado!",
+      "dismiss": "Cerrar"
+    },
+    "captureMode": {
+      "save_one": "Guardar {{count}} foto",
+      "save_other": "Guardar {{count}} fotos",
+      "done": "Listo",
+      "photosFailed": "Algunas fotos no se pudieron guardar. Por favor intenta de nuevo."
+    },
+    "move": {
+      "containerTitle": "Mover a otra ubicación",
+      "photoTitle": "Mover a otro contenedor",
+      "containerSubtitle": "Selecciona una ubicación de destino.",
+      "photoSubtitle": "Selecciona un contenedor de destino.",
+      "noLocations": "No hay ubicaciones disponibles. Crea una en Administrar primero.",
+      "locationsHeading": "Ubicaciones",
+      "containersHeading": "Contenedores",
+      "noDestinations": "No hay destinos disponibles. Crea un contenedor o ubicación primero.",
+      "cancel": "Cancelar"
+    },
+    "invite": {
+      "title": "Compartir tu inventario",
+      "description": "Genera un enlace y envíaselo a un colaborador. Podrá agregar fotos y editar contenedores en tu inventario.",
+      "expiryLabel": "El enlace expira en",
+      "expiry24h": "24 horas",
+      "expiry7d": "7 días",
+      "expiry30d": "30 días",
+      "expiryNever": "Sin vencimiento",
+      "generating": "Generando…",
+      "generate": "Generar enlace de invitación",
+      "copyLink": "Copiar enlace",
+      "copied": "✓ ¡Copiado!",
+      "newLink": "Nuevo enlace",
+      "peopleWithAccess": "Personas con acceso",
+      "revoke": "Revocar",
+      "close": "Cerrar"
+    },
+    "qr": {
+      "print": "Imprimir",
+      "close": "Cerrar",
+      "defaultTagline": "¿Qué hay en tu caja?"
+    },
+    "errors": {
+      "locationRequired": "Por favor ingresa un nombre de ubicación.",
+      "createFailed": "No se pudo crear el contenedor. Por favor intenta de nuevo.",
+      "saveFailed": "Error al guardar. Por favor intenta de nuevo.",
+      "sessionExpired": "Sesión expirada. Por favor inicia sesión nuevamente.",
+      "saveTimeout": "El guardado tardó demasiado. Por favor intenta de nuevo.",
+      "addPhotoFailed": "Error al agregar foto: {{message}}",
+      "photoFailed": "No se pudo guardar la foto.",
+      "somePhotosFailed": "Algunas fotos no se pudieron guardar. Por favor intenta de nuevo."
+    }
+  },
+  "language": {
+    "label": "Idioma",
+    "en": "English",
+    "es": "Español",
+    "ptBR": "Português"
+  }
+}
