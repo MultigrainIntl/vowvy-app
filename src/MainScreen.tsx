@@ -36,6 +36,7 @@ interface Container {
   deletedAt: number | null;
   isPrivate: boolean;
   effectiveIsPrivate: boolean;
+  visibility: 'inherit' | 'private' | 'shared';
   lastModifiedAt: Timestamp | null;
   lastModifiedBy: string | null;
   lastModifiedByName: string | null;
@@ -120,6 +121,7 @@ function mapContainer(d: any): Container {
     deletedAt: data.deletedAt ?? null,
     isPrivate: data.isPrivate ?? false,
     effectiveIsPrivate: data.effectiveIsPrivate ?? data.isPrivate ?? false,
+    visibility: (data.visibility ?? 'inherit') as 'inherit' | 'private' | 'shared',
     lastModifiedAt: data.lastModifiedAt ?? null,
     lastModifiedBy: data.lastModifiedBy ?? null,
     lastModifiedByName: data.lastModifiedByName ?? null,
@@ -642,13 +644,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     });
                   }
                 }}
+                className="container-lock-btn"
+                aria-label={c.effectiveIsPrivate ? t('main.card.privateLabel') : t('main.card.visibleLabel')}
                 title={c.effectiveIsPrivate ? t('main.card.privateLabel') : t('main.card.visibleLabel')}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 15, padding: '0 4px', opacity: c.effectiveIsPrivate ? 1 : 0.3,
-                }}
+                data-locked={c.effectiveIsPrivate ? 'true' : 'false'}
               >
-                🔒
+                {c.effectiveIsPrivate ? '🔒' : '🔓'}
               </button>
             )}
           </div>
@@ -1291,6 +1292,42 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               <button className="lightbox-desc-save" onClick={handleSavePhotoDescription}>{t('main.lightbox.save')}</button>
             )}
           </div>
+
+          {viewingOwnerUid === user.uid && lightboxContainerId && (() => {
+            const lbContainer = containers.find(c => c.id === lightboxContainerId);
+            if (!lbContainer) return null;
+            const locEffective = lbContainer.locationId
+              ? (locations.find(l => l.id === lbContainer.locationId)?.effectiveIsPrivate ?? false)
+              : false;
+            return (
+              <div className="lightbox-privacy" onClick={e => e.stopPropagation()}>
+                <span className="lightbox-privacy-icon" aria-hidden="true">
+                  {lbContainer.effectiveIsPrivate ? '🔒' : '🔓'}
+                </span>
+                <span className="lightbox-privacy-label">Container privacy</span>
+                <select
+                  className="lightbox-privacy-select"
+                  value={lbContainer.visibility}
+                  onChange={async e => {
+                    const newVis = e.target.value as 'inherit' | 'private' | 'shared';
+                    const newEffective = newVis === 'private' ? true : newVis === 'shared' ? false : locEffective;
+                    await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), {
+                      visibility: newVis,
+                      effectiveIsPrivate: newEffective,
+                      isPrivate: newEffective,
+                    });
+                  }}
+                >
+                  <option value="inherit">Inherit</option>
+                  <option value="private">Private</option>
+                  <option value="shared">Shared</option>
+                </select>
+                <span className="lightbox-privacy-status">
+                  {lbContainer.effectiveIsPrivate ? 'Hidden from collaborators' : 'Visible to collaborators'}
+                </span>
+              </div>
+            );
+          })()}
         </div>
       )}
 
