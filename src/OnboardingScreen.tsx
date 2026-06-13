@@ -80,6 +80,9 @@ export default function OnboardingScreen({ user, onDone }: Props) {
   const [extras, setExtras]           = useState<string[]>(['Kitchen', 'Living Room', 'Garage']);
   const [storageOpts, setStorageOpts] = useState<string[]>([]);
 
+  // Home — vehicles
+  const [vehicles, setVehicles] = useState(0);
+
   // Moving answers
   const [movingBeds, setMovingBeds]       = useState(2);
   const [includeGarage, setIncludeGarage] = useState(true);
@@ -112,7 +115,7 @@ export default function OnboardingScreen({ user, onDone }: Props) {
   function goToPreview() {
     let tree: StarterNode[] = [];
     if (templateId === 'home')
-      tree = buildHomeTree({ bedrooms, bathrooms, extras, storage: storageOpts });
+      tree = buildHomeTree({ bedrooms, bathrooms, extras, storage: storageOpts, vehicles });
     else if (templateId === 'moving')
       tree = buildMovingTree({ bedrooms: movingBeds, includeGarage });
     else if (templateId === 'storage')
@@ -242,6 +245,25 @@ export default function OnboardingScreen({ user, onDone }: Props) {
               <label key={name} className="ob-check">
                 <input type="checkbox" checked={storageOpts.includes(name)} onChange={() => toggleStorageOpt(name)} />
                 {name}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="ob-field">
+          <label className="ob-label">Do you want to add your car(s)?</label>
+          <div className="ob-size-group">
+            {([0, 1, 2, 3] as const).map(n => (
+              <label key={n} className={`ob-size-card${vehicles === n ? ' selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="ob-vehicles"
+                  value={n}
+                  checked={vehicles === n}
+                  onChange={() => setVehicles(n)}
+                />
+                <span className="ob-size-label">{n === 0 ? 'None' : n}</span>
+                <span className="ob-size-desc">{n === 0 ? 'Skip' : n === 1 ? 'vehicle' : 'vehicles'}</span>
               </label>
             ))}
           </div>

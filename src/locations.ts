@@ -212,6 +212,7 @@ export interface HomeAnswers {
   bathrooms: number;
   extras: string[];
   storage: string[];
+  vehicles: number;  // 0 = none, 1–3 = Vehicle 1 … Vehicle N
 }
 
 export interface MovingAnswers {
@@ -252,6 +253,17 @@ export function buildHomeTree(a: HomeAnswers): StarterNode[] {
     children.push(node);
   }
   if (withUtilityCloset) children.push({ name: 'Utility Closet' });
+
+  const vehicleChildren: StarterNode[] = [
+    { name: 'Documents' },
+    { name: 'Emergency Gear' },
+    { name: 'Tools' },
+    { name: 'Maintenance' },
+    { name: 'Storage / Trunk' },
+  ];
+  for (let i = 1; i <= Math.min(a.vehicles, 3); i++) {
+    children.push({ name: `Vehicle ${i}`, children: vehicleChildren.map(c => ({ ...c })) });
+  }
 
   return [{ name: 'Home', children }];
 }
