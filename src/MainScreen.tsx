@@ -658,27 +658,25 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             >
               Add Photo
             </button>
+            <button
+              className="add-photo-btn"
+              style={{ background: captureContainerId === c.id ? '#7a3b2e' : undefined, color: captureContainerId === c.id ? '#fff' : undefined }}
+              onClick={() => {
+                if (captureContainerId === c.id) {
+                  setCaptureContainerId(null);
+                  setContinuousCapture(false);
+                } else {
+                  setCaptureContainerId(c.id);
+                  setContinuousCapture(true);
+                }
+              }}
+            >
+              {captureContainerId === c.id ? 'Done' : 'Take Photos'}
+            </button>
             {viewingOwnerUid === user.uid && (
-              <>
-                <button
-                  className="add-photo-btn"
-                  style={{ background: captureContainerId === c.id ? '#7a3b2e' : undefined, color: captureContainerId === c.id ? '#fff' : undefined }}
-                  onClick={() => {
-                    if (captureContainerId === c.id) {
-                      setCaptureContainerId(null);
-                      setContinuousCapture(false);
-                    } else {
-                      setCaptureContainerId(c.id);
-                      setContinuousCapture(true);
-                    }
-                  }}
-                >
-                  {captureContainerId === c.id ? 'Done' : 'Take Photos'}
-                </button>
-                <button className="add-photo-btn" onClick={() => setPrintContainer(c)}>
-                  Print QR
-                </button>
-              </>
+              <button className="add-photo-btn" onClick={() => setPrintContainer(c)}>
+                Print QR
+              </button>
             )}
             <button
               className="add-photo-btn"
@@ -1259,9 +1257,20 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     const compressed = await imageCompression(file, {
                       maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: false, maxSizeMB: 0.5,
                     });
-                    const storagePath = `users/${viewingOwnerUid}/containers/${captureContainerId}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
-                    await uploadBytes(ref(storage, storagePath), compressed);
-                    const photoUrl = await getDownloadURL(ref(storage, storagePath));
+                    let photoUrl: string;
+                    let storagePath: string;
+                    if (viewingOwnerUid !== user.uid) {
+                      const ab = await compressed.arrayBuffer();
+                      const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
+                      const fn = httpsCallable<{ ownerUid: string; containerId: string; imageBase64: string; contentType: string }, { downloadURL: string; storagePath: string }>(functions, 'uploadCollaboratorPhoto');
+                      const r = await fn({ ownerUid: viewingOwnerUid, containerId: captureContainerId, imageBase64: b64, contentType: 'image/jpeg' });
+                      photoUrl = r.data.downloadURL;
+                      storagePath = r.data.storagePath;
+                    } else {
+                      storagePath = `users/${viewingOwnerUid}/containers/${captureContainerId}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+                      await uploadBytes(ref(storage, storagePath), compressed);
+                      photoUrl = await getDownloadURL(ref(storage, storagePath));
+                    }
                     newPhotos.push({ id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' });
                   }
                   await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${captureContainerId}`), {
