@@ -153,16 +153,19 @@ export default function CollaboratorDashboard({ user }: Props) {
 
         <div className="collab-privacy-note">
           <span className="collab-privacy-note-icon">🔒</span>
-          <span>
-            Private locations and containers are hidden from collaborators.
-            A <strong>shared</strong> item stays visible even inside a private area.
-            Manage privacy in Locations.
-          </span>
+          <div>
+            <p className="collab-privacy-note-heading">Helpers only see what you've made visible.</p>
+            <p className="collab-privacy-note-body">
+              Before inviting a helper, go to <strong>Manage Locations</strong> and make the places or containers they need visible to helpers.
+              Hidden places and containers stay hidden — even after the helper joins.
+            </p>
+            <p className="collab-privacy-tip">💡 Want a helper to see something? Make it visible to helpers first.</p>
+          </div>
         </div>
 
         <div className="collab-invite-box">
           <p style={{ margin: '0 0 12px', fontSize: 14, color: '#555' }}>
-            Generate a link and send it to a collaborator. They can add photos and edit containers in your inventory.
+            Generate a link and send it to a helper. They can add photos and help with the places and containers you've made visible to them.
           </p>
           {inviteLink ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

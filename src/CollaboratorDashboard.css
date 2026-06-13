@@ -26,7 +26,25 @@
 .collab-privacy-note-icon {
   font-size: 15px;
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: 2px;
+}
+
+.collab-privacy-note p {
+  margin: 0;
+}
+
+.collab-privacy-note-heading {
+  font-weight: 600;
+  margin-bottom: 4px !important;
+}
+
+.collab-privacy-note-body {
+  margin-bottom: 8px !important;
+}
+
+.collab-privacy-tip {
+  color: #7a3b2e;
+  font-weight: 500;
 }
 
 .collab-search {
