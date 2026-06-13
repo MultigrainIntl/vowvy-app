@@ -764,6 +764,15 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               Recently Deleted ({trashCount})
             </button>
           )}
+          <button
+            onClick={() => navigate('/profile')}
+            style={{
+              padding: '6px 14px', borderRadius: 20, border: '1px solid #ddd',
+              background: '#fff', color: '#555', fontSize: 13, cursor: 'pointer',
+            }}
+          >
+            Profile
+          </button>
           <button className="sign-out-btn" onClick={() => signOut(auth)}>Sign out</button>
         </div>
       </header>
