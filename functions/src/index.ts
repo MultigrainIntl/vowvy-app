@@ -13,6 +13,56 @@ initializeApp();
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 
+// ---------------------------------------------------------------------------
+// TEMPORARY — backfill isPrivate: false on containers missing the field.
+// Remove this function after the backfill has been confirmed complete.
+// ---------------------------------------------------------------------------
+export const backfillIsPrivateOnce = onCall(
+  { timeoutSeconds: 540, memory: '512MiB' },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+    if (request.auth.token?.isAdmin !== true) {
+      throw new HttpsError('permission-denied', 'Admin access required.');
+    }
+
+    const { dryRun } = (request.data ?? {}) as { dryRun?: boolean };
+    const isDryRun = dryRun !== false; // default to dry run for safety
+
+    const db = getFirestore();
+    const snap = await db.collectionGroup('containers').get();
+
+    const missing = snap.docs.filter(d => d.data().isPrivate === undefined);
+
+    console.log(`backfillIsPrivateOnce: scanned=${snap.size} missing=${missing.length} dryRun=${isDryRun}`);
+
+    if (isDryRun || missing.length === 0) {
+      return { scanned: snap.size, missing: missing.length, patched: 0, remainingMissing: missing.length, dryRun: isDryRun };
+    }
+
+    // Batch-write in chunks of 400 (Firestore max per commit is 500)
+    const BATCH_SIZE = 400;
+    let patched = 0;
+    for (let i = 0; i < missing.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      for (const d of missing.slice(i, i + BATCH_SIZE)) {
+        batch.update(d.ref, { isPrivate: false });
+      }
+      await batch.commit();
+      patched += missing.slice(i, i + BATCH_SIZE).length;
+      console.log(`backfillIsPrivateOnce: patched ${patched}/${missing.length}`);
+    }
+
+    // Verification pass
+    const verify = await db.collectionGroup('containers').get();
+    const remainingMissing = verify.docs.filter(d => d.data().isPrivate === undefined).length;
+
+    console.log(`backfillIsPrivateOnce: complete patched=${patched} remainingMissing=${remainingMissing}`);
+    return { scanned: snap.size, missing: missing.length, patched, remainingMissing, dryRun: false };
+  }
+);
+
 export const proxyImage = onRequest(
   {
     cors: ['https://vowvy-1ba5f.web.app', 'https://app.vowvy.com'],
