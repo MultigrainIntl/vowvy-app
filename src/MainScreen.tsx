@@ -5,9 +5,10 @@ import {
   query, orderBy, where, arrayUnion, serverTimestamp, Timestamp,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { httpsCallable } from 'firebase/functions';
 import imageCompression from 'browser-image-compression';
 import QRCode from 'qrcode';
-import { auth, db, storage } from './firebase';
+import { auth, db, storage, functions } from './firebase';
 import { ThumbImage, ContainerNotes } from './shared';
 import type { ContainerNote, PhotoItem } from './shared';
 import { navigate } from './nav';
@@ -344,11 +345,22 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       const compressOpts = { maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: true, maxSizeMB: 0.5 };
       const allFiles = [await imageCompression(photo, compressOpts), ...await Promise.all(extraPhotos.map(f => imageCompression(f, compressOpts)))];
 
+      const uploadPhoto = async (containerId: string, file: File): Promise<{ url: string; storagePath: string }> => {
+        if (viewingOwnerUid !== user.uid) {
+          const ab = await file.arrayBuffer();
+          const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
+          const fn = httpsCallable<{ ownerUid: string; containerId: string; imageBase64: string; contentType: string }, { downloadURL: string; storagePath: string }>(functions, 'uploadCollaboratorPhoto');
+          const r = await fn({ ownerUid: viewingOwnerUid, containerId, imageBase64: b64, contentType: 'image/jpeg' });
+          return { url: r.data.downloadURL, storagePath: r.data.storagePath };
+        }
+        const storagePath = `users/${viewingOwnerUid}/containers/${containerId}/photos/${Date.now()}.jpg`;
+        await uploadBytes(ref(storage, storagePath), file);
+        return { url: await getDownloadURL(ref(storage, storagePath)), storagePath };
+      };
+
       if (selectedContainerId === 'new') {
         const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
-        const storagePath  = `users/${viewingOwnerUid}/containers/${containerRef.id}/photos/${Date.now()}.jpg`;
-        await uploadBytes(ref(storage, storagePath), allFiles[0]);
-        const photoUrl   = await getDownloadURL(ref(storage, storagePath));
+        const { url: photoUrl, storagePath } = await uploadPhoto(containerRef.id, allFiles[0]);
         const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' };
         await setDoc(containerRef, {
           location: resolvedLocationName,
@@ -364,9 +376,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
         });
       } else {
-        const storagePath = `users/${viewingOwnerUid}/containers/${selectedContainerId}/photos/${Date.now()}.jpg`;
-        await uploadBytes(ref(storage, storagePath), allFiles[0]);
-        const photoUrl  = await getDownloadURL(ref(storage, storagePath));
+        const { url: photoUrl, storagePath } = await uploadPhoto(selectedContainerId, allFiles[0]);
         const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' };
         const existing = containers.find(c => c.id === selectedContainerId);
         const updatedPhotos = [...(existing?.photos ?? []), photoItem];
@@ -384,7 +394,8 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       setPhoto(null); setExtraPhotos([]); setPreview(null);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {
+    } catch (err: any) {
+      console.error('[handleSave] code:', err?.code, '| message:', err?.message, '| full:', err);
       setSaveError('Save failed. Please try again.');
     } finally {
       setSaving(false);
