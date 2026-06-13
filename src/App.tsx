@@ -9,10 +9,11 @@ import TrashScreen from './TrashScreen';
 import ManageScreen from './ManageScreen';
 import CollaboratorDashboard from './CollaboratorDashboard';
 import ClaimBoxScreen from './ClaimBoxScreen';
+import ProfileScreen from './ProfileScreen';
 import './App.css';
 
 interface Route {
-  type: 'home' | 'container' | 'invite' | 'trash' | 'manage' | 'collaborators' | 'box';
+  type: 'home' | 'container' | 'invite' | 'trash' | 'manage' | 'collaborators' | 'box' | 'profile';
   id: string | null;
   owner: string | null;
 }
@@ -22,6 +23,7 @@ function parsePath(): Route {
   if (p === '/trash') return { type: 'trash', id: null, owner: null };
   if (p === '/manage') return { type: 'manage', id: null, owner: null };
   if (p === '/collaborators') return { type: 'collaborators', id: null, owner: null };
+  if (p === '/profile') return { type: 'profile', id: null, owner: null };
   const container = p.match(/^\/container\/([^/]+)$/);
   if (container) return { type: 'container', id: container[1], owner: null };
   const invite = p.match(/^\/invite\/([^/]+)$/);
@@ -77,6 +79,9 @@ export default function App() {
   }
   if (route.type === 'collaborators') {
     return <CollaboratorDashboard user={user} />;
+  }
+  if (route.type === 'profile') {
+    return <ProfileScreen user={user} />;
   }
   if (route.type === 'container' && route.id) {
     return <ContainerScreen user={user} containerId={route.id} />;
