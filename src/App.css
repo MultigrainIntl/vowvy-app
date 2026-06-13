@@ -66,6 +66,35 @@
   opacity: 0.6;
 }
 
+.auth-password-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.auth-password-wrap input {
+  /* leave room for the toggle button on the right */
+  padding-right: 64px;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--terracotta);
+  cursor: pointer;
+}
+
+.auth-password-toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .auth-error {
   font-size: 13px;
   color: var(--terracotta);

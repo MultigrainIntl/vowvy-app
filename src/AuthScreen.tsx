@@ -25,6 +25,7 @@ export default function AuthScreen() {
   const [error, setError]         = useState('');
   const [busy, setBusy]           = useState(false);
   const [resetMsg, setResetMsg]   = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const canSubmit = Boolean(email && password) && !busy;
 
@@ -83,15 +84,26 @@ export default function AuthScreen() {
             disabled={busy}
             onChange={e => { setEmail(e.target.value); setError(''); }}
           />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            autoComplete="current-password"
-            disabled={busy}
-            onChange={e => { setPassword(e.target.value); setError(''); }}
-            onKeyDown={e => e.key === 'Enter' && canSubmit && handleSignIn()}
-          />
+          <div className="auth-password-wrap">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Password"
+              value={password}
+              autoComplete="current-password"
+              disabled={busy}
+              onChange={e => { setPassword(e.target.value); setError(''); }}
+              onKeyDown={e => e.key === 'Enter' && canSubmit && handleSignIn()}
+            />
+            <button
+              type="button"
+              className="auth-password-toggle"
+              onClick={() => setShowPassword(v => !v)}
+              disabled={busy}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </div>
 
         {error && <p className="auth-error">{error}</p>}
