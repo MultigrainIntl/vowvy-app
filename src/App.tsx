@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import { getDoc, getDocs, doc, collection, query, limit, setDoc } from 'firebase/firestore';
 import { auth } from './firebase';
+import { db } from './firebase';
 import AuthScreen from './AuthScreen';
 import MainScreen from './MainScreen';
 import ContainerScreen from './ContainerScreen';
@@ -37,14 +39,29 @@ function parsePath(): Route {
 }
 
 export default function App() {
-  const [user, setUser]     = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [route, setRoute]   = useState<Route>(parsePath);
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [user, setUser]           = useState<User | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [route, setRoute]         = useState<Route>(parsePath);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (u) => {
+    return onAuthStateChanged(auth, async (u) => {
       setUser(u);
+      if (u) {
+        const [locSnap, userSnap] = await Promise.all([
+          getDocs(query(collection(db, `users/${u.uid}/locations`), limit(1))),
+          getDoc(doc(db, 'users', u.uid)),
+        ]);
+        const hasLocations = locSnap.size > 0;
+        const data = userSnap.data();
+        setShowOnboarding(
+          !hasLocations &&
+          data?.onboardingCompleted !== true &&
+          data?.onboardingSkipped !== true,
+        );
+      } else {
+        setShowOnboarding(false);
+      }
       setLoading(false);
     });
   }, []);
@@ -76,18 +93,22 @@ export default function App() {
     return <AcceptInviteScreen user={user} token={route.id} />;
   }
 
-  // New-user onboarding questionnaire — shown once after account creation.
-  // invite checks run first so invite-via-signup is never interrupted.
-  if (!onboardingComplete && route.type === 'home' && sessionStorage.getItem('vowvy_new_user') === '1') {
-    return (
-      <OnboardingScreen
-        user={user}
-        onDone={() => {
-          sessionStorage.removeItem('vowvy_new_user');
-          setOnboardingComplete(true);
-        }}
-      />
-    );
+  // Onboarding questionnaire — shown when the authenticated user has zero locations
+  // and has not previously completed or skipped onboarding.
+  // Invite checks run first so invite-via-signup flow is never interrupted.
+  async function handleOnboardingDone({ skipped }: { skipped: boolean }) {
+    if (user) {
+      await setDoc(
+        doc(db, 'users', user.uid),
+        skipped ? { onboardingSkipped: true } : { onboardingCompleted: true },
+        { merge: true },
+      );
+    }
+    setShowOnboarding(false);
+  }
+
+  if (showOnboarding && route.type === 'home') {
+    return <OnboardingScreen user={user} onDone={handleOnboardingDone} />;
   }
 
   if (route.type === 'trash') {

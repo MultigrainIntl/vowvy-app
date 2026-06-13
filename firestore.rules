@@ -8,6 +8,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(ownerUid)/collaborators/$(callerUid)).data.status == 'active';
     }
 
+    // Owner profile document — stores onboardingCompleted / onboardingSkipped.
+    // Not covered by the {document=**} wildcard below (which requires ≥1 segment after userId).
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     // Owner has full access to their own data tree.
     // Active collaborators can read/write containers (and their subcollections).
     match /users/{userId}/{document=**} {
