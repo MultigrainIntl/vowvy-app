@@ -313,7 +313,7 @@ export default function AdminScreen({ user }: Props) {
         </section>
 
         {/* Content Reset — Dry-Run Report */}
-        <section style={{ marginBottom: 40, padding: '20px 24px', border: '2px solid #b0c4de', borderRadius: 10, background: '#f4f8fc' }}>
+        <section id="content-reset-dryrun" style={{ marginBottom: 40, padding: '20px 24px', border: '2px solid #b0c4de', borderRadius: 10, background: '#f4f8fc' }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: '#1a3a5c', marginBottom: 4 }}>
             Content Reset — Dry-Run Report
           </p>
