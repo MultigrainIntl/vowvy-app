@@ -23,7 +23,8 @@ Prioritized. Each item should become a GitHub issue before work starts. Long-ter
 
 - Per-photo privacy
 - Per-note privacy
-- Per-collaborator permissions
+- Per-collaborator permissions (per-helper access controls for packing/unloading/moving workflows)
+  - Possible roles: Viewer, Packing helper, Unloading helper, Selected-place helper
 - Clearer onboarding for sign-up vs sign-in distinction
 
 ## Rules
