@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "containers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isPrivate", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
