@@ -184,3 +184,165 @@ export function getLocationHealthIssues(allLocations: Location[]): HealthIssue[]
 
   return issues;
 }
+
+// ---- Starter location templates (new-user onboarding) ----
+
+export interface StarterNode {
+  name: string;
+  children?: StarterNode[];
+}
+
+// Recursively writes a tree of StarterNodes as real Location documents.
+// Sequential writes preserve createdAt order for orderBy('createdAt','asc').
+export async function writeStarterTree(
+  userId: string,
+  nodes: StarterNode[],
+  parentId: string | null,
+): Promise<void> {
+  for (const node of nodes) {
+    const id = await createLocation(userId, node.name, parentId);
+    if (node.children?.length) {
+      await writeStarterTree(userId, node.children, id);
+    }
+  }
+}
+
+export interface HomeAnswers {
+  bedrooms: number;
+  bathrooms: number;
+  extras: string[];
+  storage: string[];
+}
+
+export interface MovingAnswers {
+  bedrooms: number;
+  includeGarage: boolean;
+}
+
+export type StorageSize = 'small' | 'medium' | 'large';
+
+const EXTRA_ORDER = [
+  'Kitchen', 'Living Room', 'Dining Room', 'Office',
+  'Garage', 'Basement', 'Attic', 'Laundry Room', 'Storage Room', 'Patio / Outdoor',
+];
+
+export function buildHomeTree(a: HomeAnswers): StarterNode[] {
+  const children: StarterNode[] = [];
+  const withClosets      = a.storage.includes('Bedroom closets');
+  const withPantry       = a.storage.includes('Pantry');
+  const withGarageShelves = a.storage.includes('Garage shelves');
+  const withLinenCloset  = a.storage.includes('Linen closet');
+  const withUtilityCloset = a.storage.includes('Utility closet');
+
+  for (let i = 1; i <= Math.min(a.bedrooms, 8); i++) {
+    const node: StarterNode = { name: a.bedrooms === 1 ? 'Bedroom' : `Bedroom ${i}` };
+    if (withClosets) node.children = [{ name: 'Closet' }];
+    children.push(node);
+  }
+  for (let i = 1; i <= Math.min(a.bathrooms, 6); i++) {
+    children.push({ name: a.bathrooms === 1 ? 'Bathroom' : `Bathroom ${i}` });
+  }
+  if (withLinenCloset) children.push({ name: 'Linen Closet' });
+
+  for (const name of EXTRA_ORDER) {
+    if (!a.extras.includes(name)) continue;
+    const node: StarterNode = { name };
+    if (name === 'Kitchen' && withPantry)       node.children = [{ name: 'Pantry' }];
+    if (name === 'Garage' && withGarageShelves) node.children = [{ name: 'Garage Shelves' }];
+    children.push(node);
+  }
+  if (withUtilityCloset) children.push({ name: 'Utility Closet' });
+
+  return [{ name: 'Home', children }];
+}
+
+export function buildMovingTree(a: MovingAnswers): StarterNode[] {
+  const oldChildren: StarterNode[] = [];
+  for (let i = 1; i <= Math.min(a.bedrooms, 8); i++) {
+    oldChildren.push({ name: a.bedrooms === 1 ? 'Bedroom' : `Bedroom ${i}` });
+  }
+  oldChildren.push({ name: 'Kitchen' }, { name: 'Bathroom' });
+  if (a.includeGarage) oldChildren.push({ name: 'Garage / Storage' });
+
+  return [{
+    name: 'Move',
+    children: [
+      { name: 'Old Place', children: oldChildren },
+      { name: 'New Place' },
+      { name: 'Keep With Me' },
+      { name: 'Donate' },
+      { name: 'Sell' },
+      { name: 'Trash' },
+    ],
+  }];
+}
+
+export function buildStorageTree(size: StorageSize): StarterNode[] {
+  const zones: Record<StorageSize, string[]> = {
+    small:  ['Front Area', 'Back Area', 'Shelves', 'Easy Access'],
+    medium: ['Front Area', 'Left Side', 'Right Side', 'Back Area', 'Shelves', 'Easy Access'],
+    large:  ['Front Area', 'Left Side', 'Right Side', 'Back Area', 'Shelves (Upper)', 'Shelves (Lower)', 'Easy Access'],
+  };
+  return [{ name: 'Storage Unit', children: zones[size].map(name => ({ name })) }];
+}
+
+export function buildCollectionTree(type: string): StarterNode[] {
+  return [{
+    name: type.trim() || 'Collection',
+    children: [
+      { name: 'Display' },
+      { name: 'Stored' },
+      { name: 'To Sell' },
+      { name: 'Documents' },
+      { name: 'Supplies' },
+    ],
+  }];
+}
+
+export const FIXED_TEMPLATES: Record<string, StarterNode[]> = {
+  estate: [{
+    name: 'Family / Estate',
+    children: [
+      { name: 'Documents' },
+      { name: 'Photos / Memories' },
+      { name: 'Furniture' },
+      { name: 'Kitchen' },
+      { name: 'Bedroom', children: [{ name: 'Closet' }] },
+      { name: 'Garage / Storage' },
+      { name: 'Donate / Sell / Give Away' },
+    ],
+  }],
+  business: [{
+    name: 'Business / Supplies',
+    children: [
+      { name: 'Inventory' },
+      { name: 'Tools' },
+      { name: 'Shipping / Packing' },
+      { name: 'Documents' },
+      { name: 'Supplies' },
+      { name: 'Storage' },
+    ],
+  }],
+  office: [{
+    name: 'Office',
+    children: [
+      { name: 'Desk' },
+      { name: 'Files' },
+      { name: 'Supplies' },
+      { name: 'Equipment' },
+      { name: 'Storage' },
+      { name: 'Shared Area' },
+    ],
+  }],
+  vehicle: [{
+    name: 'Vehicle / RV / Boat',
+    children: [
+      { name: 'Cabin / Interior' },
+      { name: 'Storage Compartments' },
+      { name: 'Tools' },
+      { name: 'Documents' },
+      { name: 'Maintenance' },
+      { name: 'Emergency Gear' },
+    ],
+  }],
+};
