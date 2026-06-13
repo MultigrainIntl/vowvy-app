@@ -11,6 +11,7 @@ import CollaboratorDashboard from './CollaboratorDashboard';
 import ClaimBoxScreen from './ClaimBoxScreen';
 import ProfileScreen from './ProfileScreen';
 import AdminScreen from './AdminScreen';
+import OnboardingScreen from './OnboardingScreen';
 import './App.css';
 
 interface Route {
@@ -39,6 +40,7 @@ export default function App() {
   const [user, setUser]     = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [route, setRoute]   = useState<Route>(parsePath);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => {
@@ -73,6 +75,21 @@ export default function App() {
   if (route.type === 'invite' && route.id) {
     return <AcceptInviteScreen user={user} token={route.id} />;
   }
+
+  // New-user onboarding questionnaire — shown once after account creation.
+  // invite checks run first so invite-via-signup is never interrupted.
+  if (!onboardingComplete && route.type === 'home' && sessionStorage.getItem('vowvy_new_user') === '1') {
+    return (
+      <OnboardingScreen
+        user={user}
+        onDone={() => {
+          sessionStorage.removeItem('vowvy_new_user');
+          setOnboardingComplete(true);
+        }}
+      />
+    );
+  }
+
   if (route.type === 'trash') {
     return <TrashScreen user={user} />;
   }

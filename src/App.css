@@ -165,3 +165,26 @@
   text-align: center;
   margin-top: 2px;
 }
+
+.auth-mode-heading {
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--muted-slate);
+  text-align: center;
+  margin-top: -8px;
+}
+
+.auth-mode-link {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--muted-slate);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 4px 0;
+  text-align: center;
+}
+
+.auth-mode-link:hover { color: var(--charcoal); }
