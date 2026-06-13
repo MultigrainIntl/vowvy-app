@@ -11,7 +11,7 @@ import { httpsCallable } from 'firebase/functions';
 import imageCompression from 'browser-image-compression';
 import QRCode from 'qrcode';
 import { auth, db, storage, functions } from './firebase';
-import { ThumbImage, ContainerNotes } from './shared';
+import { ThumbImage, LightboxImage, ContainerNotes } from './shared';
 import type { ContainerNote, PhotoItem } from './shared';
 import { navigate } from './nav';
 import logoMark from './assets/logo-mark.svg';
@@ -1245,7 +1245,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           >
             {lightboxItems.map((item, i) => (
               <div key={item.id} className="lightbox-slide">
-                <img src={item.url} alt={`Photo ${i + 1}`} className="lightbox-img" />
+                <LightboxImage storagePath={item.storagePath} alt={`Photo ${i + 1}`} />
               </div>
             ))}
           </div>

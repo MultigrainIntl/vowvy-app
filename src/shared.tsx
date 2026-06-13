@@ -70,6 +70,43 @@ export function ThumbImage({ storagePath, alt }: { storagePath: string; alt: str
   return <img src={blobUrl} alt={alt} className="container-thumb" />;
 }
 
+export function LightboxImage({ storagePath, alt }: { storagePath: string; alt: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [failed, setFailed]   = useState(false);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    const proxyUrl = `${PROXY_BASE}?path=${encodeURIComponent(storagePath)}`;
+    auth.currentUser?.getIdToken()
+      .then(token => {
+        if (cancelled) return Promise.reject(new Error('cancelled'));
+        return fetch(proxyUrl, { headers: { Authorization: `Bearer ${token}` } });
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.blob();
+      })
+      .then(blob => {
+        objectUrl = URL.createObjectURL(blob);
+        if (cancelled) { URL.revokeObjectURL(objectUrl); return; }
+        setBlobUrl(objectUrl);
+      })
+      .catch(e => {
+        if (cancelled || e.message === 'cancelled') return;
+        setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [storagePath]);
+
+  if (failed) return <div className="lightbox-img" style={{ background: '#fee', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />;
+  if (!blobUrl) return <div className="lightbox-img" style={{ background: '#f0ece8' }} />;
+  return <img src={blobUrl} alt={alt} className="lightbox-img" />;
+}
+
 export function formatNoteDate(ts: number): string {
   if (!ts) return '';
   const d = new Date(ts);
