@@ -1,0 +1,185 @@
+{
+  "auth": {
+    "tagline": "Capture first. Organize later.",
+    "emailPlaceholder": "Email",
+    "passwordPlaceholder": "Password",
+    "showPassword": "Show",
+    "hidePassword": "Hide",
+    "showPasswordAriaLabel": "Show password",
+    "hidePasswordAriaLabel": "Hide password",
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "forgotPassword": "Forgot password?",
+    "errors": {
+      "invalidEmail": "Invalid email address.",
+      "noAccount": "No account found — try signing up.",
+      "wrongPassword": "Wrong password.",
+      "wrongCredential": "Wrong email or password.",
+      "emailInUse": "Email already in use — try signing in.",
+      "weakPassword": "Password must be at least 6 characters.",
+      "generic": "Something went wrong. Please try again."
+    },
+    "reset": {
+      "enterEmail": "Enter your email above first.",
+      "sent": "Check your email for a reset link."
+    }
+  },
+  "shared": {
+    "addNote": "Add a note…",
+    "save": "Save"
+  },
+  "main": {
+    "header": {
+      "manage": "Manage",
+      "collaborators": "Collaborators",
+      "share": "Share",
+      "recentlyDeleted": "Recently Deleted ({{count}})",
+      "profile": "Profile",
+      "signOut": "Sign out",
+      "myInventory": "My inventory",
+      "othersInventory": "{{name}}'s inventory"
+    },
+    "menu": {
+      "inventoryLabel": "Inventory"
+    },
+    "collab": {
+      "banner": "Viewing {{name}}'s inventory"
+    },
+    "time": {
+      "justNow": "just now",
+      "minutesAgo": "{{count}}m ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
+    },
+    "onboarding": {
+      "title": "Welcome to Vowvy",
+      "tagline": "Take photos of your boxes, let AI identify and catalog what’s inside, organize everything by location and box or container, and share access with people you trust when you need to.",
+      "createFirstLocation": "Create your first location",
+      "locationInputLabel": "A location is where things live — a home, a garage, a storage unit.",
+      "locationPlaceholder": "e.g. My House, Storage Unit 3",
+      "creating": "Creating…",
+      "create": "Create",
+      "seeHowItWorks": "See how Vowvy works",
+      "hideHowItWorks": "Hide how Vowvy works",
+      "steps": {
+        "locationTitle": "Location",
+        "locationBody": "where things live: a home, garage, or storage unit.",
+        "containerTitle": "Box or container",
+        "containerBody": "name it, like “Box 12” or “Blue bin”.",
+        "photosTitle": "Photos",
+        "photosBody": "snap what’s inside. No typing needed.",
+        "aiTitle": "AI catalog",
+        "aiBody": "Vowvy identifies and tags your items so search can find them later.",
+        "qrTitle": "QR & share",
+        "qrBody": "print a QR label for any box, or share access with people you trust."
+      }
+    },
+    "firstBoxHint": "Location saved! Now add your first box or container below — give it a name and snap a photo of what’s inside.",
+    "capture": {
+      "selectLocation": "— Select location —",
+      "addNewLocation": "＋ Add new location",
+      "locationNamePlaceholder": "e.g. My House, Storage Unit 3, Mom’s Garage",
+      "topLevel": "Top level — e.g. a Property or building",
+      "insideLocation": "Inside: {{name}}",
+      "add": "Add",
+      "selectContainer": "— Select box or container —",
+      "createNewContainer": "＋ Create new box or container",
+      "addingTo": "Adding to: {{name}}",
+      "containerNamePlaceholder": "Box or container name — e.g. Box 12, Blue bin",
+      "photoPlaceholder": "Take photo or choose files",
+      "photoHint": "Tap to select one or more photos",
+      "photosSelected": "{{count}} photos selected",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Saved!",
+      "createNoPhoto": "Create box or container (no photo)",
+      "creating": "Creating…"
+    },
+    "search": {
+      "placeholder": "Search containers…",
+      "empty": "No boxes or containers yet. Add your first one above.",
+      "noResults": "No containers match “{{query}}”."
+    },
+    "card": {
+      "aiProcessing": "Analyzing…",
+      "addPhoto": "Add Photo",
+      "takePhotos": "Take Photos",
+      "done": "Done",
+      "printQR": "Print QR",
+      "move": "Move",
+      "privateLabel": "Private — tap to make visible to collaborators",
+      "visibleLabel": "Visible to collaborators — tap to make private"
+    },
+    "lightbox": {
+      "delete": "Delete",
+      "movePhoto": "Move photo",
+      "addPhoto": "Add Photo",
+      "moveBox": "Move box",
+      "descriptionPlaceholder": "Add a description…",
+      "save": "Save",
+      "photoFailed": "Photo failed to save."
+    },
+    "ios": {
+      "message": "Camera access requires Safari on iPhone. Tap below to open Vowvy in Safari.",
+      "instruction": "Paste this link into Safari for camera access.",
+      "copyLink": "Copy Link",
+      "copied": "Copied!",
+      "dismiss": "Dismiss"
+    },
+    "captureMode": {
+      "save_one": "Save {{count}} photo",
+      "save_other": "Save {{count}} photos",
+      "done": "Done",
+      "photosFailed": "Some photos failed to save. Please try again."
+    },
+    "move": {
+      "containerTitle": "Move to a different location",
+      "photoTitle": "Move to another container",
+      "containerSubtitle": "Select a destination location.",
+      "photoSubtitle": "Select a destination container.",
+      "noLocations": "No locations available. Create one in Manage first.",
+      "locationsHeading": "Locations",
+      "containersHeading": "Containers",
+      "noDestinations": "No destinations available. Create a container or location first.",
+      "cancel": "Cancel"
+    },
+    "invite": {
+      "title": "Share your inventory",
+      "description": "Generate a link and send it to a collaborator. They can add photos and edit containers in your inventory.",
+      "expiryLabel": "Link expires after",
+      "expiry24h": "24 hours",
+      "expiry7d": "7 days",
+      "expiry30d": "30 days",
+      "expiryNever": "No expiry",
+      "generating": "Generating…",
+      "generate": "Generate invite link",
+      "copyLink": "Copy link",
+      "copied": "✓ Copied!",
+      "newLink": "New link",
+      "peopleWithAccess": "People with access",
+      "revoke": "Revoke",
+      "close": "Close"
+    },
+    "qr": {
+      "print": "Print",
+      "close": "Close",
+      "defaultTagline": "What’s in your box?"
+    },
+    "errors": {
+      "locationRequired": "Please enter a location name.",
+      "createFailed": "Failed to create container. Please try again.",
+      "saveFailed": "Save failed. Please try again.",
+      "sessionExpired": "Session expired. Please sign in again.",
+      "saveTimeout": "Save timed out. Please try again.",
+      "addPhotoFailed": "Add photo failed: {{message}}",
+      "photoFailed": "Photo failed to save.",
+      "somePhotosFailed": "Some photos failed to save. Please try again."
+    }
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "es": "Español",
+    "ptBR": "Português"
+  }
+}

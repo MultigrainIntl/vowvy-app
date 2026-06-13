@@ -4,22 +4,24 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
 } from 'firebase/auth';
+import { useTranslation } from 'react-i18next';
 import { auth } from './firebase';
 import logoMark from './assets/logo-mark.svg';
 
-function friendlyError(code: string): string {
+function friendlyError(code: string, t: (key: string) => string): string {
   switch (code) {
-    case 'auth/invalid-email':        return 'Invalid email address.';
-    case 'auth/user-not-found':       return 'No account found — try signing up.';
-    case 'auth/wrong-password':       return 'Wrong password.';
-    case 'auth/invalid-credential':   return 'Wrong email or password.';
-    case 'auth/email-already-in-use': return 'Email already in use — try signing in.';
-    case 'auth/weak-password':        return 'Password must be at least 6 characters.';
-    default:                          return 'Something went wrong. Please try again.';
+    case 'auth/invalid-email':        return t('auth.errors.invalidEmail');
+    case 'auth/user-not-found':       return t('auth.errors.noAccount');
+    case 'auth/wrong-password':       return t('auth.errors.wrongPassword');
+    case 'auth/invalid-credential':   return t('auth.errors.wrongCredential');
+    case 'auth/email-already-in-use': return t('auth.errors.emailInUse');
+    case 'auth/weak-password':        return t('auth.errors.weakPassword');
+    default:                          return t('auth.errors.generic');
   }
 }
 
 export default function AuthScreen() {
+  const { t } = useTranslation();
   const [email, setEmail]         = useState('');
   const [password, setPassword]   = useState('');
   const [error, setError]         = useState('');
@@ -35,7 +37,7 @@ export default function AuthScreen() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (e: any) {
-      setError(friendlyError(e.code));
+      setError(friendlyError(e.code, t));
     } finally {
       setBusy(false);
     }
@@ -45,14 +47,14 @@ export default function AuthScreen() {
     setError('');
     setResetMsg('');
     if (!email.trim()) {
-      setResetMsg('Enter your email above first.');
+      setResetMsg(t('auth.reset.enterEmail'));
       return;
     }
     try {
       await sendPasswordResetEmail(auth, email.trim());
-      setResetMsg('Check your email for a reset link.');
+      setResetMsg(t('auth.reset.sent'));
     } catch {
-      setResetMsg('Check your email for a reset link.');
+      setResetMsg(t('auth.reset.sent'));
     }
   }
 
@@ -62,7 +64,7 @@ export default function AuthScreen() {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
     } catch (e: any) {
-      setError(friendlyError(e.code));
+      setError(friendlyError(e.code, t));
     } finally {
       setBusy(false);
     }
@@ -73,12 +75,12 @@ export default function AuthScreen() {
       <div className="auth-card">
         <img src={logoMark} alt="" className="auth-logo-mark" />
         <h1 className="auth-logo">Vowvy</h1>
-        <p className="auth-tagline">Capture first. Organize later.</p>
+        <p className="auth-tagline">{t('auth.tagline')}</p>
 
         <div className="auth-fields">
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t('auth.emailPlaceholder')}
             value={email}
             autoComplete="email"
             disabled={busy}
@@ -87,7 +89,7 @@ export default function AuthScreen() {
           <div className="auth-password-wrap">
             <input
               type={showPassword ? 'text' : 'password'}
-              placeholder="Password"
+              placeholder={t('auth.passwordPlaceholder')}
               value={password}
               autoComplete="current-password"
               disabled={busy}
@@ -99,9 +101,9 @@ export default function AuthScreen() {
               className="auth-password-toggle"
               onClick={() => setShowPassword(v => !v)}
               disabled={busy}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? t('auth.hidePasswordAriaLabel') : t('auth.showPasswordAriaLabel')}
             >
-              {showPassword ? 'Hide' : 'Show'}
+              {showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
             </button>
           </div>
         </div>
@@ -110,15 +112,15 @@ export default function AuthScreen() {
 
         <div className="auth-buttons">
           <button onClick={handleSignIn} disabled={!canSubmit}>
-            Sign In
+            {t('auth.signIn')}
           </button>
           <button className="secondary" onClick={handleSignUp} disabled={!canSubmit}>
-            Sign Up
+            {t('auth.signUp')}
           </button>
         </div>
 
         <button className="auth-forgot" onClick={handleResetPassword} disabled={busy}>
-          Forgot password?
+          {t('auth.forgotPassword')}
         </button>
         {resetMsg && <p className="auth-reset-msg">{resetMsg}</p>}
       </div>

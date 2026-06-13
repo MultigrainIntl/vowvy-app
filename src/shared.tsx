@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18next from 'i18next';
 import { auth } from './firebase';
 
 export const PROXY_BASE = 'https://us-central1-vowvy-1ba5f.cloudfunctions.net/proxyImage';
@@ -73,7 +75,7 @@ export function formatNoteDate(ts: number): string {
   const d = new Date(ts);
   const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
   if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
-  return d.toLocaleDateString('en-US', opts);
+  return d.toLocaleDateString(i18next.language || 'en', opts);
 }
 
 // Pure presentational component — parent is responsible for filtering deleted notes
@@ -84,6 +86,7 @@ export function ContainerNotes({ containerId, notes, onAdd, onDelete }: {
   onAdd: (containerId: string, text: string) => Promise<void>;
   onDelete: (containerId: string, noteId: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState('');
   const canSave = draft.trim().length > 0;
 
@@ -109,11 +112,11 @@ export function ContainerNotes({ containerId, notes, onAdd, onDelete }: {
           type="text"
           className="notes-input"
           value={draft}
-          placeholder="Add a note…"
+          placeholder={t('shared.addNote')}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && canSave && handleSave()}
         />
-        {canSave && <button className="notes-save-btn" onClick={handleSave}>Save</button>}
+        {canSave && <button className="notes-save-btn" onClick={handleSave}>{t('shared.save')}</button>}
       </div>
     </div>
   );
