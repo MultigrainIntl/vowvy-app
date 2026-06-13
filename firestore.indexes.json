@@ -7,6 +7,14 @@
         { "fieldPath": "isPrivate", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "containers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "effectiveIsPrivate", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

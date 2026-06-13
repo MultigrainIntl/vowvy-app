@@ -223,7 +223,7 @@ export const proxyImage = onRequest(
           .collection('users').doc(pathOwnerUid)
           .collection('containers').doc(containerId)
           .get();
-        if (containerDoc.data()?.isPrivate === true) {
+        if (containerDoc.data()?.effectiveIsPrivate === true) {
           res.status(403).send('Forbidden');
           return;
         }
@@ -392,7 +392,7 @@ export const uploadCollaboratorPhoto = onCall(
       .collection('users').doc(ownerUid)
       .collection('containers').doc(containerId)
       .get();
-    if (containerDoc.data()?.isPrivate === true) {
+    if (containerDoc.data()?.effectiveIsPrivate === true) {
       throw new HttpsError('permission-denied', 'Cannot upload to a private container.');
     }
 

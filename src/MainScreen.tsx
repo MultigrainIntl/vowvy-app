@@ -35,6 +35,7 @@ interface Container {
   notes: ContainerNote[];
   deletedAt: number | null;
   isPrivate: boolean;
+  effectiveIsPrivate: boolean;
   lastModifiedAt: Timestamp | null;
   lastModifiedBy: string | null;
   lastModifiedByName: string | null;
@@ -118,6 +119,7 @@ function mapContainer(d: any): Container {
         : [],
     deletedAt: data.deletedAt ?? null,
     isPrivate: data.isPrivate ?? false,
+    effectiveIsPrivate: data.effectiveIsPrivate ?? data.isPrivate ?? false,
     lastModifiedAt: data.lastModifiedAt ?? null,
     lastModifiedBy: data.lastModifiedBy ?? null,
     lastModifiedByName: data.lastModifiedByName ?? null,
@@ -229,7 +231,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   useEffect(() => {
     const col = collection(db, `users/${viewingOwnerUid}/containers`);
     const q = viewingOwnerUid !== user.uid
-      ? query(col, where('isPrivate', '==', false), orderBy('createdAt', 'desc'))
+      ? query(col, where('effectiveIsPrivate', '==', false), orderBy('createdAt', 'desc'))
       : query(col, orderBy('createdAt', 'desc'));
     return onSnapshot(q, snap => {
       setContainers(snap.docs.map(mapContainer));
@@ -583,7 +585,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     : activeContainers
   ).filter(c => {
     // Hide private containers from collaborators
-    if (viewingOwnerUid !== user.uid && c.isPrivate) return false;
+    if (viewingOwnerUid !== user.uid && c.effectiveIsPrivate) return false;
     return true;
   });
 
