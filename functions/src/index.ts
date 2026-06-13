@@ -173,6 +173,146 @@ export const backfillContainersVisibility = onCall(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Dry-run content reset report.
+// Admin-only. Reads only — no writes, no deletes.
+// Reports every Auth user with their Firestore content counts, onboarding
+// status, and Storage file count. Categorises KEEP (admin/master) vs UNKNOWN.
+// ---------------------------------------------------------------------------
+export const dryRunContentReset = onCall(
+  { timeoutSeconds: 300, memory: '512MiB' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in.');
+    if (request.auth.token?.isAdmin !== true) throw new HttpsError('permission-denied', 'Admin access required.');
+
+    const db      = getFirestore();
+    const auth    = getAuth();
+    const bucket  = getStorage().bucket('vowvy-1ba5f.firebasestorage.app');
+
+    // --- Load all Auth users and Firestore collection-group data in parallel ---
+    const [listResult, locSnap, containerSnap, collabSnap, inviteSnap] = await Promise.all([
+      auth.listUsers(1000),
+      db.collectionGroup('locations').get(),
+      db.collectionGroup('containers').get(),
+      db.collectionGroup('collaborators').get(),
+      db.collection('invites').get(),
+    ]);
+
+    // Build per-uid count maps from collection-group snapshots
+    const locationCountByUid: Record<string, number> = {};
+    for (const d of locSnap.docs) {
+      const uid = d.ref.path.split('/')[1];
+      locationCountByUid[uid] = (locationCountByUid[uid] ?? 0) + 1;
+    }
+
+    const containerCountByUid: Record<string, number> = {};
+    const photoRefCountByUid: Record<string, number> = {};
+    for (const d of containerSnap.docs) {
+      const uid = d.ref.path.split('/')[1];
+      containerCountByUid[uid] = (containerCountByUid[uid] ?? 0) + 1; // includes soft-deleted
+      const photos: unknown[] = d.data().photos ?? [];
+      photoRefCountByUid[uid] = (photoRefCountByUid[uid] ?? 0) + photos.length;
+    }
+
+    const collabCountByUid: Record<string, number> = {};
+    for (const d of collabSnap.docs) {
+      if (d.data().status !== 'active') continue;
+      const ownerUid = d.ref.path.split('/')[1];
+      collabCountByUid[ownerUid] = (collabCountByUid[ownerUid] ?? 0) + 1;
+    }
+
+    const inviteCountByUid: Record<string, number> = {};
+    for (const d of inviteSnap.docs) {
+      const ownerUid = d.data().ownerUid as string | undefined;
+      if (!ownerUid) continue;
+      inviteCountByUid[ownerUid] = (inviteCountByUid[ownerUid] ?? 0) + 1;
+    }
+
+    // --- Per-user: read profile doc + Storage listing concurrently ---
+    const users = await Promise.all(
+      listResult.users.map(async (authUser) => {
+        const uid = authUser.uid;
+
+        // Profile doc (onboarding status from Part A)
+        let onboardingCompleted = false;
+        let onboardingSkipped = false;
+        try {
+          const profileDoc = await db.collection('users').doc(uid).get();
+          const data = profileDoc.data();
+          onboardingCompleted = data?.onboardingCompleted === true;
+          onboardingSkipped   = data?.onboardingSkipped   === true;
+        } catch { /* not present is fine */ }
+
+        // Storage file count under users/{uid}/
+        let storageFileCount: number | null = null;
+        try {
+          const [files] = await bucket.getFiles({ prefix: `users/${uid}/` });
+          storageFileCount = files.length;
+        } catch { /* storage listing unavailable */ }
+
+        const isAdminUser =
+          authUser.customClaims?.['isAdmin'] === true ||
+          uid === BOOTSTRAP_UID;
+        const category: 'KEEP' | 'UNKNOWN' = isAdminUser ? 'KEEP' : 'UNKNOWN';
+
+        const locationCount         = locationCountByUid[uid]  ?? 0;
+        const containerCount        = containerCountByUid[uid]  ?? 0;
+        const photoReferenceCount   = photoRefCountByUid[uid]   ?? 0;
+        const collaboratorRecordCount = collabCountByUid[uid]   ?? 0;
+        const inviteCount           = inviteCountByUid[uid]     ?? 0;
+
+        // Describe what a reset would clear for this account
+        const wouldClear: string[] = [];
+        if (locationCount > 0)            wouldClear.push(`locations (${locationCount})`);
+        if (containerCount > 0)           wouldClear.push(`containers (${containerCount}, incl. soft-deleted)`);
+        if (photoReferenceCount > 0)      wouldClear.push(`photo references (${photoReferenceCount})`);
+        if (collaboratorRecordCount > 0)  wouldClear.push(`collaborator records (${collaboratorRecordCount})`);
+        if (inviteCount > 0)              wouldClear.push(`invites (${inviteCount})`);
+        if (onboardingCompleted)          wouldClear.push('onboardingCompleted flag');
+        if (onboardingSkipped)            wouldClear.push('onboardingSkipped flag');
+        if (storageFileCount !== null && storageFileCount > 0)
+          wouldClear.push(`storage files (${storageFileCount})`);
+
+        return {
+          uid,
+          email:                authUser.email ?? null,
+          displayName:          authUser.displayName ?? null,
+          createdAt:            authUser.metadata.creationTime ?? '',
+          lastSignInAt:         authUser.metadata.lastSignInTime ?? '',
+          isAdmin:              isAdminUser,
+          onboardingCompleted,
+          onboardingSkipped,
+          locationCount,
+          containerCount,
+          photoReferenceCount,
+          collaboratorRecordCount,
+          inviteCount,
+          storageFileCount,
+          category,
+          wouldClear,
+        };
+      })
+    );
+
+    const totals = {
+      total:               users.length,
+      keep:                users.filter(u => u.category === 'KEEP').length,
+      unknown:             users.filter(u => u.category === 'UNKNOWN').length,
+      locations:           users.reduce((s, u) => s + u.locationCount, 0),
+      containers:          users.reduce((s, u) => s + u.containerCount, 0),
+      photoReferences:     users.reduce((s, u) => s + u.photoReferenceCount, 0),
+      storageFiles:        users.some(u => u.storageFileCount === null)
+                             ? null
+                             : users.reduce((s, u) => s + (u.storageFileCount ?? 0), 0),
+      invites:             users.reduce((s, u) => s + u.inviteCount, 0),
+      collaboratorRecords: users.reduce((s, u) => s + u.collaboratorRecordCount, 0),
+    };
+
+    console.log(`dryRunContentReset: total=${users.length} keep=${totals.keep} unknown=${totals.unknown}`);
+    return { users, totals };
+  }
+);
+
 export const proxyImage = onRequest(
   {
     cors: ['https://vowvy-1ba5f.web.app', 'https://app.vowvy.com'],
