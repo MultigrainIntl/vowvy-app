@@ -232,6 +232,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   // Derived state
   const activeContainers = containers.filter(c => !c.deletedAt);
 
+  // Current display path for a container: derive from locationId so renames in the
+  // locations collection show immediately; fall back to the stored legacy text for
+  // containers without a locationId (or whose location was deleted).
+  const displayLocation = (c: Container) =>
+    c.locationId ? (getLocationPath(c.locationId, locations) || c.location) : c.location;
+
   // Brand-new user: own inventory, both snapshots loaded, and nothing exists yet
   // (containers.length includes trash on purpose — someone with trashed data is not new).
   const isBrandNewUser =
@@ -493,7 +499,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     if (!window.confirm(`Delete "${loc}"? All containers will go to Recently Deleted.`)) return;
     if (!auth.currentUser) return;
     await auth.currentUser.getIdToken(true);
-    const toDelete = activeContainers.filter(c => c.location === loc);
+    const toDelete = activeContainers.filter(c => displayLocation(c) === loc);
     await Promise.all(toDelete.map(c =>
       updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${c.id}`), { deletedAt: Date.now() })
     ));
@@ -534,7 +540,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const trimmedQuery = searchQuery.trim().toLowerCase();
   const filteredContainers = (trimmedQuery
     ? activeContainers.filter(c =>
-        c.location.toLowerCase().includes(trimmedQuery) ||
+        displayLocation(c).toLowerCase().includes(trimmedQuery) ||
         c.name.toLowerCase().includes(trimmedQuery) ||
         c.aiTags.some(t => t.toLowerCase().includes(trimmedQuery)) ||
         c.aiDescription.toLowerCase().includes(trimmedQuery) ||
@@ -550,8 +556,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   });
 
   const grouped = filteredContainers.reduce<Record<string, Container[]>>((acc, c) => {
-    if (!acc[c.location]) acc[c.location] = [];
-    acc[c.location].push(c);
+    const locKey = displayLocation(c);
+    if (!acc[locKey]) acc[locKey] = [];
+    acc[locKey].push(c);
     return acc;
   }, {});
   const locationKeys = Object.keys(grouped);
@@ -595,7 +602,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               </button>
             )}
           </div>
-          {showLocation && <div className="container-location">{c.location}</div>}
+          {showLocation && <div className="container-location">{displayLocation(c)}</div>}
           <div className="container-time">{relativeTime(c.createdAt)}</div>
           {c.aiStatus === 'processing' && <div className="ai-processing">Analyzing…</div>}
           {c.aiStatus === 'done' && c.aiTags.length > 0 && (
