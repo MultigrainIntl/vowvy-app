@@ -117,3 +117,65 @@
   font-size: 14px;
   flex-shrink: 0;
 }
+
+/* ---- Location Health Check panel (read-only) ---- */
+
+.health-panel {
+  border: 1px solid #e4cdbf;
+  border-radius: 8px;
+  background: #f9f3ee;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.health-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: #5a4338;
+  text-align: left;
+}
+
+.health-chevron {
+  color: var(--muted-slate);
+  flex-shrink: 0;
+}
+
+.health-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.health-item {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+}
+
+.health-warning {
+  background: #fdeee6;
+  border-left-color: var(--terracotta);
+  color: var(--charcoal);
+}
+
+.health-info {
+  background: #eef1f3;
+  border-left-color: var(--muted-slate);
+  color: var(--muted-slate);
+}

@@ -9,7 +9,8 @@ import { useEffect } from 'react';
 import { navigate } from './nav';
 import {
   subscribeToLocations, createLocation,
-  getLocationChildren, getLocationPath, getDescendantIds, type Location,
+  getLocationChildren, getLocationPath, getDescendantIds,
+  getLocationHealthIssues, type Location,
 } from './locations';
 import logoMark from './assets/logo-mark.svg';
 import './ManageScreen.css';
@@ -37,6 +38,7 @@ export default function ManageScreen({ user }: Props) {
   const [addingTopLevel, setAddingTopLevel]             = useState(false);
   const [newTopLevelName, setNewTopLevelName]           = useState('');
   const [movingId, setMovingId]                         = useState<string | null>(null);
+  const [healthOpen, setHealthOpen]                     = useState(false);
 
   useEffect(() => subscribeToLocations(user.uid, setLocations), [user.uid]);
 
@@ -289,6 +291,7 @@ export default function ManageScreen({ user }: Props) {
 
   const topLevel = getLocationChildren(null, locations);
   const unassigned = containers.filter(c => !c.locationId && !c.location);
+  const healthIssues = getLocationHealthIssues(locations);
 
   return (
     <div className="manage-screen">
@@ -304,6 +307,28 @@ export default function ManageScreen({ user }: Props) {
 
       <div className="manage-content">
         <h2 className="manage-title">Manage Locations</h2>
+
+        {healthIssues.length > 0 && (
+          <div className="health-panel">
+            <button
+              className="health-header"
+              onClick={() => setHealthOpen(v => !v)}
+              aria-expanded={healthOpen}
+            >
+              <span>⚠️ Location Health Check — {healthIssues.length} {healthIssues.length === 1 ? 'item' : 'items'} found</span>
+              <span className="health-chevron">{healthOpen ? '▾' : '▸'}</span>
+            </button>
+            {healthOpen && (
+              <ul className="health-list">
+                {healthIssues.map((issue, i) => (
+                  <li key={i} className={`health-item health-${issue.severity}`}>
+                    {issue.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {topLevel.length === 0 && !addingTopLevel && (
           <div className="manage-empty">
