@@ -64,7 +64,7 @@ function TreeNode({ node, depth }: { node: StarterNode; depth: number }) {
 
 interface Props {
   user: User;
-  onDone: () => void;
+  onDone: (result: { skipped: boolean }) => void;
 }
 
 export default function OnboardingScreen({ user, onDone }: Props) {
@@ -102,7 +102,7 @@ export default function OnboardingScreen({ user, onDone }: Props) {
 
   function selectTemplate(id: TemplateId) {
     setTemplateId(id);
-    if (id === 'custom')     { onDone(); return; }
+    if (id === 'custom')     { onDone({ skipped: true }); return; }
     if (id === 'home')       { setStep('home-q');       return; }
     if (id === 'moving')     { setStep('moving-q');     return; }
     if (id === 'storage')    { setStep('storage-q');    return; }
@@ -139,7 +139,7 @@ export default function OnboardingScreen({ user, onDone }: Props) {
       setStep('preview');
       return;
     }
-    onDone();
+    onDone({ skipped: false });
   }
 
   function backFromQ() {

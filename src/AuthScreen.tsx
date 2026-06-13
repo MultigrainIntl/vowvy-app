@@ -57,7 +57,6 @@ export default function AuthScreen() {
     setBusy(true);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      sessionStorage.setItem('vowvy_new_user', '1');
     } catch (e: any) {
       setError(friendlyError(e.code, t));
     } finally {
