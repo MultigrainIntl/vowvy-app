@@ -1,5 +1,5 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { onRequest } from 'firebase-functions/v2/https';
+import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -69,6 +69,27 @@ export const proxyImage = onRequest(
     }
   }
 );
+
+const BOOTSTRAP_UID = 'tn4kJIuUuQPjGZaufTMb65O5Gin2';
+
+export const setAdminClaim = onCall(async (request) => {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) throw new HttpsError('unauthenticated', 'Must be signed in.');
+
+  const isBootstrap = callerUid === BOOTSTRAP_UID;
+  const isAdmin = request.auth?.token?.isAdmin === true;
+  if (!isBootstrap && !isAdmin) {
+    throw new HttpsError('permission-denied', 'Not authorised to grant admin claims.');
+  }
+
+  const { uid } = request.data as { uid: string };
+  if (!uid || typeof uid !== 'string') {
+    throw new HttpsError('invalid-argument', 'A valid uid is required.');
+  }
+
+  await getAuth().setCustomUserClaims(uid, { isAdmin: true });
+  return { success: true };
+});
 
 export const analyzeContainerPhoto = onDocumentWritten(
   {
