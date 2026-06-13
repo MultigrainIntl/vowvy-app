@@ -15,11 +15,18 @@ service cloud.firestore {
     }
 
     match /users/{userId}/containers/{containerId} {
-      allow read, write: if request.auth != null && isActiveCollaborator(userId, request.auth.uid);
+      allow read: if request.auth != null
+        && isActiveCollaborator(userId, request.auth.uid)
+        && resource.data.isPrivate != true;
+      allow write: if request.auth != null
+        && isActiveCollaborator(userId, request.auth.uid)
+        && resource.data.isPrivate != true;
     }
 
     match /users/{userId}/containers/{containerId}/{sub=**} {
-      allow read, write: if request.auth != null && isActiveCollaborator(userId, request.auth.uid);
+      allow read, write: if request.auth != null
+        && isActiveCollaborator(userId, request.auth.uid)
+        && get(/databases/$(database)/documents/users/$(userId)/containers/$(containerId)).data.isPrivate != true;
     }
 
     // Active collaborators can read owner locations (read-only — they cannot create or delete locations).

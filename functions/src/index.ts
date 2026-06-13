@@ -45,8 +45,8 @@ export const proxyImage = onRequest(
         res.status(403).send('Forbidden');
         return;
       }
-      // Check if caller is an active collaborator of the path owner
       const db = getFirestore();
+      // Check if caller is an active collaborator of the path owner
       const collabDoc = await db
         .collection('users').doc(pathOwnerUid)
         .collection('collaborators').doc(uid)
@@ -54,6 +54,19 @@ export const proxyImage = onRequest(
       if (!collabDoc.exists || collabDoc.data()?.status !== 'active') {
         res.status(403).send('Forbidden');
         return;
+      }
+      // Block collaborator access to photos inside private containers
+      const containerIdMatch = path.match(/^users\/[^/]+\/containers\/([^/]+)\//);
+      const containerId = containerIdMatch?.[1];
+      if (containerId) {
+        const containerDoc = await db
+          .collection('users').doc(pathOwnerUid)
+          .collection('containers').doc(containerId)
+          .get();
+        if (containerDoc.data()?.isPrivate === true) {
+          res.status(403).send('Forbidden');
+          return;
+        }
       }
     }
 
@@ -212,6 +225,15 @@ export const uploadCollaboratorPhoto = onCall(
       .get();
     if (!collabDoc.exists || collabDoc.data()?.status !== 'active') {
       throw new HttpsError('permission-denied', 'Not an active collaborator.');
+    }
+
+    // Block collaborator uploads to private containers
+    const containerDoc = await db
+      .collection('users').doc(ownerUid)
+      .collection('containers').doc(containerId)
+      .get();
+    if (containerDoc.data()?.isPrivate === true) {
+      throw new HttpsError('permission-denied', 'Cannot upload to a private container.');
     }
 
     const imageBuffer = Buffer.from(imageBase64, 'base64');

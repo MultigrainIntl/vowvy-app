@@ -225,17 +225,17 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     }
   }, [sharedInventories, viewingOwnerUid, user.uid]);
 
-  // Container snapshot
+  // Container snapshot — owner sees all; collaborators only see non-private containers
   useEffect(() => {
-    const q = query(
-      collection(db, `users/${viewingOwnerUid}/containers`),
-      orderBy('createdAt', 'desc'),
-    );
+    const col = collection(db, `users/${viewingOwnerUid}/containers`);
+    const q = viewingOwnerUid !== user.uid
+      ? query(col, where('isPrivate', '==', false), orderBy('createdAt', 'desc'))
+      : query(col, orderBy('createdAt', 'desc'));
     return onSnapshot(q, snap => {
       setContainers(snap.docs.map(mapContainer));
       setContainersLoaded(true);
     });
-  }, [viewingOwnerUid]);
+  }, [viewingOwnerUid, user.uid]);
 
   // Derived state
   const activeContainers = containers.filter(c => !c.deletedAt);
@@ -318,6 +318,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         photoStoragePaths: [],
         createdAt: serverTimestamp(),
         deletedAt: null,
+        isPrivate: false,
       });
       setSelectedLocationId(''); setNewLocationName(''); setSelectedContainerId('');
       setNewContainerName(''); setPhoto(null); setExtraPhotos([]); setPreview(null);
@@ -377,6 +378,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           photoStoragePaths: [storagePath],
           createdAt: serverTimestamp(),
           deletedAt: null,
+          isPrivate: false,
           lastModifiedAt: serverTimestamp(),
           lastModifiedBy: user.uid,
           lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
