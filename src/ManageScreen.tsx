@@ -214,9 +214,17 @@ export default function ManageScreen({ user }: Props) {
             <button className="manage-btn edit" onClick={() => {
               setMovingId(movingId === loc.id ? null : loc.id);
             }}>Move</button>
+            <button className="manage-btn delete" onClick={() => deleteLocation(loc.id)}>Delete</button>
+          </div>
+        </div>
+
+        <div className={`loc-sub-row${loc.effectiveIsPrivate ? ' loc-sub-row--private' : ''}`}>
+          <div className="loc-privacy-control">
+            <span className="loc-privacy-icon" aria-hidden="true">{loc.effectiveIsPrivate ? '🔒' : '🔓'}</span>
+            <span className="loc-privacy-label">Privacy</span>
             <select
+              className="loc-privacy-select"
               value={loc.visibility}
-              title={`Privacy: ${loc.effectiveIsPrivate ? 'Private' : 'Visible'}`}
               onChange={async e => {
                 const newVis = e.target.value as Visibility;
                 if (newVis === loc.visibility) return;
@@ -224,17 +232,13 @@ export default function ManageScreen({ user }: Props) {
                 if (!ok) return;
                 await applyLocationVisibility(loc.id, newVis);
               }}
-              style={{
-                fontSize: 12, padding: '2px 6px', borderRadius: 6,
-                border: `1px solid ${loc.effectiveIsPrivate ? '#c8a090' : 'var(--warm-gray)'}`,
-                background: loc.effectiveIsPrivate ? '#fff5f0' : 'white',
-                color: 'var(--charcoal)', fontFamily: 'var(--font-body)', cursor: 'pointer',
-              }}
             >
               <option value="inherit">Inherit</option>
               <option value="private">Private</option>
               <option value="shared">Shared</option>
             </select>
+          </div>
+          <div className="loc-add-actions">
             <button className="manage-btn add" onClick={() => {
               setAddingUnder(loc.id);
               setNewSubName('');
@@ -245,7 +249,6 @@ export default function ManageScreen({ user }: Props) {
               setNewContainerName('');
               setExpandedIds(prev => new Set([...prev, loc.id]));
             }}>+ Container</button>
-            <button className="manage-btn delete" onClick={() => deleteLocation(loc.id)}>Delete</button>
           </div>
         </div>
 

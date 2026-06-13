@@ -7,7 +7,27 @@
   font-size: 36px; color: #7a3b2e; margin: 0 0 4px; font-weight: 600;
 }
 
-.collab-subtitle { font-size: 14px; color: #888; margin: 0 0 20px; }
+.collab-subtitle { font-size: 14px; color: #888; margin: 0 0 16px; }
+
+.collab-privacy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #f5f0eb;
+  border: 1px solid #e0d4c8;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: #5a4338;
+  line-height: 1.5;
+}
+
+.collab-privacy-note-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
 
 .collab-search {
   width: 100%; padding: 10px 14px; border-radius: 10px;

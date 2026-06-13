@@ -151,6 +151,15 @@ export default function CollaboratorDashboard({ user }: Props) {
         <h2 className="collab-title">Collaborators</h2>
         <p className="collab-subtitle">People who have access to your inventory</p>
 
+        <div className="collab-privacy-note">
+          <span className="collab-privacy-note-icon">🔒</span>
+          <span>
+            Private locations and containers are hidden from collaborators.
+            A <strong>shared</strong> item stays visible even inside a private area.
+            Manage privacy in Locations.
+          </span>
+        </div>
+
         <div className="collab-invite-box">
           <p style={{ margin: '0 0 12px', fontSize: 14, color: '#555' }}>
             Generate a link and send it to a collaborator. They can add photos and edit containers in your inventory.
