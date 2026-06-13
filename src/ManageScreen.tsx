@@ -10,7 +10,7 @@ import { navigate } from './nav';
 import {
   subscribeToLocations, createLocation,
   getLocationChildren, getLocationPath, getDescendantIds,
-  getLocationHealthIssues, type Location,
+  getLocationHealthIssues, type Location, type Visibility,
 } from './locations';
 import logoMark from './assets/logo-mark.svg';
 import './ManageScreen.css';
@@ -21,6 +21,8 @@ interface Container {
   locationId: string | null;
   location: string;
   deletedAt: number | null;
+  visibility: Visibility;
+  effectiveIsPrivate: boolean;
 }
 
 interface Props { user: User; }
@@ -56,6 +58,8 @@ export default function ManageScreen({ user }: Props) {
           locationId: d.data().locationId ?? null,
           location: d.data().location ?? '',
           deletedAt: d.data().deletedAt ?? null,
+          visibility: (d.data().visibility ?? 'inherit') as Visibility,
+          effectiveIsPrivate: d.data().effectiveIsPrivate ?? false,
         }))
       );
     });
@@ -122,6 +126,59 @@ export default function ManageScreen({ user }: Props) {
     await updateDoc(doc(db, `users/${user.uid}/locations/${id}`), { parentId: null });
   }
 
+  async function applyLocationVisibility(locId: string, newVisibility: Visibility) {
+    // Compute effectiveIsPrivate for a location given its visibility and its parent's already-resolved value.
+    function resolveEffective(id: string, vis: Visibility, resolvedMap: Map<string, boolean>): boolean {
+      if (vis === 'private') return true;
+      if (vis === 'shared') return false;
+      const loc = locations.find(l => l.id === id);
+      if (!loc || !loc.parentId) return false;
+      if (resolvedMap.has(loc.parentId)) return resolvedMap.get(loc.parentId)!;
+      const parent = locations.find(l => l.id === loc.parentId);
+      return parent?.effectiveIsPrivate ?? false;
+    }
+
+    // BFS through the target location and all descendants, collecting updates.
+    const locUpdates = new Map<string, { visibility: Visibility; effectiveIsPrivate: boolean }>();
+    const effectiveMap = new Map<string, boolean>();
+
+    const targetEffective = resolveEffective(locId, newVisibility, effectiveMap);
+    locUpdates.set(locId, { visibility: newVisibility, effectiveIsPrivate: targetEffective });
+    effectiveMap.set(locId, targetEffective);
+
+    const queue: string[] = getLocationChildren(locId, locations).map(c => c.id);
+    while (queue.length > 0) {
+      const childId = queue.shift()!;
+      const child = locations.find(l => l.id === childId);
+      if (!child) continue;
+      const childEffective = resolveEffective(childId, child.visibility, effectiveMap);
+      locUpdates.set(childId, { visibility: child.visibility, effectiveIsPrivate: childEffective });
+      effectiveMap.set(childId, childEffective);
+      queue.push(...getLocationChildren(childId, locations).map(c => c.id));
+    }
+
+    // Containers in affected locations — recompute effectiveIsPrivate from their own visibility.
+    const allWrites: [string, Record<string, unknown>][] = [];
+    for (const [id, upd] of locUpdates) {
+      allWrites.push([`users/${user.uid}/locations/${id}`, { visibility: upd.visibility, effectiveIsPrivate: upd.effectiveIsPrivate }]);
+    }
+    for (const c of containers) {
+      if (!c.locationId || !locUpdates.has(c.locationId)) continue;
+      const locEffective = locUpdates.get(c.locationId)!.effectiveIsPrivate;
+      const conEffective = c.visibility === 'private' ? true : c.visibility === 'shared' ? false : locEffective;
+      allWrites.push([`users/${user.uid}/containers/${c.id}`, { effectiveIsPrivate: conEffective }]);
+    }
+
+    const BATCH_SIZE = 400;
+    for (let i = 0; i < allWrites.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      for (const [path, data] of allWrites.slice(i, i + BATCH_SIZE)) {
+        batch.update(doc(db, path), data);
+      }
+      await batch.commit();
+    }
+  }
+
   function renderLocation(loc: Location, depth = 0) {
     const children = getLocationChildren(loc.id, locations);
     const containersHere = containers.filter(c => c.locationId === loc.id);
@@ -157,6 +214,27 @@ export default function ManageScreen({ user }: Props) {
             <button className="manage-btn edit" onClick={() => {
               setMovingId(movingId === loc.id ? null : loc.id);
             }}>Move</button>
+            <select
+              value={loc.visibility}
+              title={`Privacy: ${loc.effectiveIsPrivate ? 'Private' : 'Visible'}`}
+              onChange={async e => {
+                const newVis = e.target.value as Visibility;
+                if (newVis === loc.visibility) return;
+                const ok = window.confirm('This will update privacy for this location, child locations, and containers inside it. Continue?');
+                if (!ok) return;
+                await applyLocationVisibility(loc.id, newVis);
+              }}
+              style={{
+                fontSize: 12, padding: '2px 6px', borderRadius: 6,
+                border: `1px solid ${loc.effectiveIsPrivate ? '#c8a090' : 'var(--warm-gray)'}`,
+                background: loc.effectiveIsPrivate ? '#fff5f0' : 'white',
+                color: 'var(--charcoal)', fontFamily: 'var(--font-body)', cursor: 'pointer',
+              }}
+            >
+              <option value="inherit">Inherit</option>
+              <option value="private">Private</option>
+              <option value="shared">Shared</option>
+            </select>
             <button className="manage-btn add" onClick={() => {
               setAddingUnder(loc.id);
               setNewSubName('');
@@ -240,7 +318,9 @@ export default function ManageScreen({ user }: Props) {
                         photoStoragePaths: [],
                         createdAt: serverTimestamp(),
                         deletedAt: null,
-                        isPrivate: false,
+                        isPrivate: loc.effectiveIsPrivate,
+                        visibility: 'inherit',
+                        effectiveIsPrivate: loc.effectiveIsPrivate,
                       });
                       setAddingContainerUnder(null);
                       setNewContainerName('');
