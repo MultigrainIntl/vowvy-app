@@ -311,6 +311,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         resolvedLocationName = getLocationPath(selectedLocationId, locations);
       }
       const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
+      const locEffective0 = resolvedLocationId
+        ? (locations.find(l => l.id === resolvedLocationId)?.effectiveIsPrivate ?? false)
+        : false;
       await setDoc(containerRef, {
         location: resolvedLocationName,
         locationId: resolvedLocationId,
@@ -320,7 +323,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         photoStoragePaths: [],
         createdAt: serverTimestamp(),
         deletedAt: null,
-        isPrivate: false,
+        isPrivate: locEffective0,
+        visibility: 'inherit',
+        effectiveIsPrivate: locEffective0,
       });
       setSelectedLocationId(''); setNewLocationName(''); setSelectedContainerId('');
       setNewContainerName(''); setPhoto(null); setExtraPhotos([]); setPreview(null);
@@ -371,6 +376,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
         const { url: photoUrl, storagePath } = await uploadPhoto(containerRef.id, allFiles[0]);
         const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' };
+        const locEffective1 = resolvedLocationId
+          ? (locations.find(l => l.id === resolvedLocationId)?.effectiveIsPrivate ?? false)
+          : false;
         await setDoc(containerRef, {
           location: resolvedLocationName,
           locationId: resolvedLocationId,
@@ -380,7 +388,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           photoStoragePaths: [storagePath],
           createdAt: serverTimestamp(),
           deletedAt: null,
-          isPrivate: false,
+          isPrivate: locEffective1,
+          visibility: 'inherit',
+          effectiveIsPrivate: locEffective1,
           lastModifiedAt: serverTimestamp(),
           lastModifiedBy: user.uid,
           lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
@@ -622,14 +632,20 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             {viewingOwnerUid === user.uid && (
               <button
                 onClick={async () => {
-                  await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${c.id}`), {
-                    isPrivate: !c.isPrivate,
-                  });
+                  if (c.effectiveIsPrivate) {
+                    await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${c.id}`), {
+                      visibility: 'shared', effectiveIsPrivate: false, isPrivate: false,
+                    });
+                  } else {
+                    await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${c.id}`), {
+                      visibility: 'private', effectiveIsPrivate: true, isPrivate: true,
+                    });
+                  }
                 }}
-                title={c.isPrivate ? t('main.card.privateLabel') : t('main.card.visibleLabel')}
+                title={c.effectiveIsPrivate ? t('main.card.privateLabel') : t('main.card.visibleLabel')}
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 15, padding: '0 4px', opacity: c.isPrivate ? 1 : 0.3,
+                  fontSize: 15, padding: '0 4px', opacity: c.effectiveIsPrivate ? 1 : 0.3,
                 }}
               >
                 🔒
@@ -1484,7 +1500,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                                   photoStoragePaths: [photo.storagePath],
                                   createdAt: serverTimestamp(),
                                   deletedAt: null,
-                                  isPrivate: false,
+                                  isPrivate: loc.effectiveIsPrivate,
+                                  visibility: 'inherit',
+                                  effectiveIsPrivate: loc.effectiveIsPrivate,
                                 });
                                 targetContainerId = containerRef.id;
                               }

@@ -4,11 +4,15 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
+export type Visibility = "inherit" | "private" | "shared";
+
 export interface Location {
   id: string;
   name: string;
   parentId: string | null;
   createdAt: Timestamp | null;
+  visibility: Visibility;
+  effectiveIsPrivate: boolean;
 }
 
 export function subscribeToLocations(
@@ -25,6 +29,8 @@ export function subscribeToLocations(
       name: d.data().name ?? '',
       parentId: d.data().parentId ?? null,
       createdAt: d.data().createdAt ?? null,
+      visibility: (d.data().visibility ?? 'inherit') as Visibility,
+      effectiveIsPrivate: d.data().effectiveIsPrivate ?? false,
     })));
   });
 }
@@ -38,6 +44,8 @@ export async function createLocation(
     name: name.trim(),
     parentId,
     createdAt: serverTimestamp(),
+    visibility: 'inherit',
+    effectiveIsPrivate: false,
   });
   return ref.id;
 }
