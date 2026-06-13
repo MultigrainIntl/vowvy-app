@@ -5,6 +5,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
 import { getFirestore } from 'firebase-admin/firestore';
+import { randomUUID } from 'crypto';
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -178,6 +179,61 @@ export const getAdminUserData = onCall(
     }));
 
     return { users };
+  }
+);
+
+export const uploadCollaboratorPhoto = onCall(
+  { timeoutSeconds: 60, memory: '256MiB' },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+    const { ownerUid, containerId, imageBase64, contentType } = request.data as {
+      ownerUid?: string;
+      containerId?: string;
+      imageBase64?: string;
+      contentType?: string;
+    };
+    if (!ownerUid || typeof ownerUid !== 'string') {
+      throw new HttpsError('invalid-argument', 'ownerUid is required.');
+    }
+    if (!containerId || typeof containerId !== 'string') {
+      throw new HttpsError('invalid-argument', 'containerId is required.');
+    }
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
+      throw new HttpsError('invalid-argument', 'imageBase64 is required.');
+    }
+    const resolvedContentType = typeof contentType === 'string' && contentType ? contentType : 'image/jpeg';
+
+    const db = getFirestore();
+    const collabDoc = await db
+      .collection('users').doc(ownerUid)
+      .collection('collaborators').doc(request.auth.uid)
+      .get();
+    if (!collabDoc.exists || collabDoc.data()?.status !== 'active') {
+      throw new HttpsError('permission-denied', 'Not an active collaborator.');
+    }
+
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+    if (imageBuffer.byteLength > 5 * 1024 * 1024) {
+      throw new HttpsError('invalid-argument', 'Image exceeds 5 MB limit.');
+    }
+
+    const bucket = getStorage().bucket('vowvy-1ba5f.firebasestorage.app');
+    const storagePath = `users/${ownerUid}/containers/${containerId}/photos/${Date.now()}.jpg`;
+    const file = bucket.file(storagePath);
+    const downloadToken = randomUUID();
+
+    await file.save(imageBuffer, {
+      metadata: {
+        contentType: resolvedContentType,
+        metadata: { firebaseStorageDownloadTokens: downloadToken },
+      },
+      resumable: false,
+    });
+
+    const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${downloadToken}`;
+    return { downloadURL, storagePath };
   }
 );
 
