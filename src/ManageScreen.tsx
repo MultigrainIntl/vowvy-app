@@ -215,30 +215,19 @@ export default function ManageScreen({ user }: Props) {
               setMovingId(movingId === loc.id ? null : loc.id);
             }}>Move</button>
             <button className="manage-btn delete" onClick={() => deleteLocation(loc.id)}>Delete</button>
-          </div>
-        </div>
-
-        <div className={`loc-sub-row${loc.effectiveIsPrivate ? ' loc-sub-row--private' : ''}`}>
-          <div className="loc-privacy-control">
-            <span className="loc-privacy-icon" aria-hidden="true">{loc.effectiveIsPrivate ? '🔒' : '🔓'}</span>
-            <span className="loc-privacy-label">Privacy</span>
-            <select
-              className="loc-privacy-select"
-              value={loc.visibility}
-              onChange={async e => {
-                const newVis = e.target.value as Visibility;
-                if (newVis === loc.visibility) return;
+            <button
+              className="loc-lock-btn"
+              aria-label={loc.effectiveIsPrivate ? 'Helpers cannot see this place' : 'Helpers can see this place'}
+              title={loc.effectiveIsPrivate ? 'Helpers cannot see this place' : 'Helpers can see this place'}
+              onClick={async () => {
+                const newVis: Visibility = loc.effectiveIsPrivate ? 'shared' : 'private';
                 const ok = window.confirm('This will update privacy for this location, child locations, and containers inside it. Continue?');
                 if (!ok) return;
                 await applyLocationVisibility(loc.id, newVis);
               }}
             >
-              <option value="inherit">Inherit</option>
-              <option value="private">Private</option>
-              <option value="shared">Shared</option>
-            </select>
-          </div>
-          <div className="loc-add-actions">
+              {loc.effectiveIsPrivate ? '🔒' : '🔓'}
+            </button>
             <button className="manage-btn add" onClick={() => {
               setAddingUnder(loc.id);
               setNewSubName('');
