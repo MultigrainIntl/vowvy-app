@@ -96,37 +96,93 @@ export default function AuthScreen() {
   if (mode === 'welcome') {
     return (
       <div className="auth-landing">
+
+        {/* Hero */}
         <div className="auth-card auth-landing-hero">
           <img src={logoMark} alt="" className="auth-logo-mark" />
           <h1 className="auth-logo">Vowvy</h1>
-          <p className="auth-tagline">{t('auth.tagline')}</p>
+          <p className="landing-headline">Finally know what you have, where it is, and what you're ready to let go.</p>
+          <p className="landing-subheadline">VOWVY gives you a searchable memory of your things — so you can organize what's scattered, find what matters, and prepare items to sell when you're ready.</p>
+          <p className="landing-micro">Take photos now. Find things later.</p>
           <div className="auth-buttons" style={{ marginTop: 8 }}>
             <button onClick={() => switchMode('signup')}>Create your free account</button>
             <button className="secondary" onClick={() => switchMode('signin')}>Sign in</button>
           </div>
         </div>
 
+        {/* How VOWVY works */}
+        <section className="landing-how">
+          <h2 className="landing-section-heading">How VOWVY works</h2>
+          <p className="landing-section-intro">Simple enough to understand at a glance.</p>
+          <ol className="landing-how-steps">
+            {[
+              { icon: '📷', title: 'Take a photo', desc: 'Snap photos of items, boxes, rooms, or collections.' },
+              { icon: '✨', title: 'VOWVY helps label it', desc: 'AI descriptions and tags make things easier to find.' },
+              { icon: '🔍', title: 'Find it later', desc: 'Search by item, note, tag, room, box, or location.' },
+              { icon: '🏷️', title: 'Sell it when ready', desc: 'Select items and export photos and listing text for easier posting.' },
+            ].map(({ icon, title, desc }, i) => (
+              <li key={i} className="landing-how-step">
+                <span className="landing-how-icon">{icon}</span>
+                <strong className="landing-how-title">{title}</strong>
+                <p className="landing-how-desc">{desc}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        {/* What VOWVY helps you do */}
         <section className="landing-benefits">
-          <h2 className="landing-benefits-heading">What VOWVY helps you do</h2>
-          <p className="landing-benefits-intro">
-            VOWVY helps you photograph, organize, find, and sell the things you own — without trying to remember everything yourself.
+          <h2 className="landing-section-heading">What VOWVY helps you do</h2>
+          <p className="landing-section-intro">
+            VOWVY helps you photograph, organize, find, share, move, and sell the things you own — without trying to remember everything yourself.
           </p>
           <ul className="landing-benefits-list">
             {[
               "Remember what's in your boxes — take photos before storing things away.",
-              'Find things later — search by item, description, tag, room, or location.',
-              'Organize a move or cleanup — group items by room, container, or storage area.',
-              "Track valuables and keepsakes — add photos and notes you don't want to forget.",
+              'Find things later — search by item, description, note, tag, room, box, or location.',
+              'Organize a move or cleanup — group items by room, container, collection, or storage area.',
+              "Keep track of valuables and keepsakes — add photos, notes, and details you don't want to forget.",
               "Let AI do the labeling — VOWVY describes and tags photos so you don't have to type everything yourself.",
               'Work with helpers — let family, assistants, or collaborators help organize while controlling what they can see.',
-              'Pick items to sell — select photos from your inventory and collect them in one place.',
-              'Create listing copy — draft a title and description for Facebook Marketplace, Craigslist, eBay, and similar sites.',
-              'Export photos and text for posting — save listing files and copy so uploading is faster and easier.',
+              'Pick items to sell — choose items from your inventory and collect them in one place.',
+              'Create marketplace listing copy — draft a title and description for Facebook Marketplace, Craigslist, eBay, or similar sites.',
+              'Export photos and text for posting — save the listing photos, title, and description so posting is faster and easier.',
             ].map((text, i) => (
               <li key={i}>{text}</li>
             ))}
           </ul>
         </section>
+
+        {/* Useful for all kinds of organizing */}
+        <section className="landing-audience">
+          <h2 className="landing-section-heading">Useful for all kinds of organizing</h2>
+          <p className="landing-section-intro">The same simple idea works in many real-life situations.</p>
+          <ul className="landing-audience-list">
+            {[
+              { title: 'Moving & storage', desc: "Know what's inside every box before and after a move." },
+              { title: 'Families & estates', desc: 'Sort keepsakes, valuables, donations, and items to sell.' },
+              { title: 'Students & dorms', desc: 'Track belongings across dorms, apartments, storage, and move-outs.' },
+              { title: 'Real estate & cleanouts', desc: 'Help prepare homes, organize contents, and manage cleanout projects.' },
+              { title: 'Collections & valuables', desc: 'Document books, art, memorabilia, antiques, and personal collections.' },
+              { title: 'Helpers & small teams', desc: 'Let family, assistants, or collaborators help while controlling visibility.' },
+            ].map(({ title, desc }, i) => (
+              <li key={i}>
+                <strong>{title}</strong>
+                <span>{desc}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Closing CTA */}
+        <section className="landing-cta">
+          <h2 className="landing-cta-heading">Ready to stop guessing where things are?</h2>
+          <div className="auth-buttons landing-cta-buttons">
+            <button onClick={() => switchMode('signup')}>Get started</button>
+            <button className="secondary" onClick={() => switchMode('signin')}>Sign in</button>
+          </div>
+        </section>
+
       </div>
     );
   }

@@ -226,19 +226,36 @@
 
 .auth-landing-hero {
   padding: 48px 24px 32px;
+  max-width: 480px;
 }
 
-.landing-benefits {
-  width: 100%;
-  max-width: 760px;
-  padding: 32px 24px 64px;
-  border-top: 1px solid var(--warm-gray);
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+.landing-headline {
+  font-family: var(--font-heading);
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--charcoal);
+  text-align: center;
+  line-height: 1.35;
+  margin-top: -4px;
 }
 
-.landing-benefits-heading {
+.landing-subheadline {
+  font-size: 14px;
+  color: var(--muted-slate);
+  text-align: center;
+  line-height: 1.65;
+  margin-top: -4px;
+}
+
+.landing-micro {
+  font-size: 13px;
+  color: var(--terracotta);
+  text-align: center;
+  font-style: italic;
+  margin-top: -4px;
+}
+
+.landing-section-heading {
   font-family: var(--font-heading);
   font-size: 24px;
   font-weight: 600;
@@ -246,7 +263,7 @@
   text-align: center;
 }
 
-.landing-benefits-intro {
+.landing-section-intro {
   font-size: 15px;
   color: var(--muted-slate);
   text-align: center;
@@ -255,9 +272,90 @@
   margin: 0 auto;
 }
 
+/* How VOWVY works */
+
+.landing-how {
+  width: 100%;
+  max-width: 760px;
+  padding: 40px 24px;
+  border-top: 1px solid var(--warm-gray);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.landing-how-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.landing-how-step {
+  background: #fff;
+  border: 1px solid var(--warm-gray);
+  border-radius: 12px;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  position: relative;
+}
+
+.landing-how-step:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  right: -13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--terracotta);
+  font-size: 16px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.landing-how-icon { font-size: 30px; line-height: 1; }
+
+.landing-how-title {
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--charcoal);
+}
+
+.landing-how-desc {
+  font-size: 13px;
+  color: var(--muted-slate);
+  line-height: 1.5;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .landing-how-steps { grid-template-columns: 1fr 1fr; }
+  .landing-how-step:not(:last-child)::after { display: none; }
+}
+
+/* What VOWVY helps you do */
+
+.landing-benefits {
+  width: 100%;
+  max-width: 760px;
+  padding: 40px 24px;
+  border-top: 1px solid var(--warm-gray);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .landing-benefits-list {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -276,7 +374,79 @@
 }
 
 @media (max-width: 540px) {
-  .landing-benefits-list {
-    grid-template-columns: 1fr;
-  }
+  .landing-benefits-list { grid-template-columns: 1fr; }
 }
+
+/* Useful for all kinds of organizing */
+
+.landing-audience {
+  width: 100%;
+  max-width: 760px;
+  padding: 40px 24px;
+  border-top: 1px solid var(--warm-gray);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.landing-audience-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+}
+
+.landing-audience-list li {
+  background: #fff;
+  border: 1px solid var(--warm-gray);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.landing-audience-list li strong {
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--charcoal);
+}
+
+.landing-audience-list li span {
+  font-size: 13px;
+  color: var(--muted-slate);
+  line-height: 1.5;
+}
+
+@media (max-width: 540px) {
+  .landing-audience-list { grid-template-columns: 1fr; }
+}
+
+/* Closing CTA */
+
+.landing-cta {
+  width: 100%;
+  max-width: 400px;
+  padding: 40px 24px 72px;
+  border-top: 1px solid var(--warm-gray);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  text-align: center;
+}
+
+.landing-cta-heading {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--charcoal);
+  line-height: 1.35;
+}
+
+.landing-cta-buttons { width: 100%; }
