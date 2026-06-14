@@ -76,6 +76,7 @@
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .manage-btn {
@@ -92,59 +93,14 @@
 .manage-btn.delete { color: #a04030; border-color: #e0b0a0; }
 .manage-btn.add   { color: #7a3b2e; border-color: #c8a090; }
 
-.loc-sub-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 12px 8px 38px;
-  flex-wrap: wrap;
-}
-
-.loc-privacy-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: #f5f0eb;
-  border: 1px solid #e0d4c8;
-  border-radius: 8px;
-  padding: 5px 10px;
-  min-height: 32px;
-}
-
-.loc-sub-row--private .loc-privacy-control {
-  background: #fff0eb;
-  border-color: #d0a090;
-}
-
-.loc-privacy-icon {
-  font-size: 14px;
+.loc-lock-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
   line-height: 1;
-}
-
-.loc-privacy-label {
-  font-size: 12px;
-  color: #888;
-  font-family: var(--font-body);
-  white-space: nowrap;
-  font-weight: 500;
-}
-
-.loc-privacy-select {
-  font-size: 12px;
-  padding: 3px 6px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-  background: white;
-  color: #444;
-  font-family: var(--font-body);
   cursor: pointer;
-  min-width: 82px;
-}
-
-.loc-add-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  padding: 2px 4px;
+  flex-shrink: 0;
 }
 
 .manage-children {
