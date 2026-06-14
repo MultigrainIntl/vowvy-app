@@ -20,6 +20,16 @@ import { subscribeToLocations, createLocation, getLocationPath, type Location } 
 import SellThisFlow from './SellThisFlow';
 
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+
+const GENERIC_DISPLAY_TAGS = new Set([
+  'art', 'graphics', 'decorations', 'food', 'packaging', 'logistics',
+  'sports', 'apparel', 'warehouse supplies', 'spirituality', 'religious decor',
+]);
+
+function filterDisplayTags(tags: string[], max: number): string[] {
+  const specific = tags.filter(t => !GENERIC_DISPLAY_TAGS.has(t.toLowerCase()));
+  return (specific.length > 0 ? specific : tags).slice(0, max);
+}
 function isRecent(ts: number) { return Date.now() - ts < THIRTY_DAYS; }
 
 interface Container {
@@ -150,6 +160,8 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [lightboxContainerId, setLightboxContainerId] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex]             = useState(0);
   const [lightboxDescDraft, setLightboxDescDraft]     = useState('');
+  const [lightboxAllPhotos, setLightboxAllPhotos]     = useState<PhotoItem[] | null>(null);
+  const [lightboxFilterQuery, setLightboxFilterQuery] = useState('');
   const [updatingContainerId, setUpdatingContainerId] = useState<string | null>(null);
   const [continuousCapture, setContinuousCapture] = useState(false);
   const [captureContainerId, setCaptureContainerId] = useState<string | null>(null);
@@ -506,8 +518,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
     const remaining = lightboxItems.filter((_, i) => i !== lightboxIndex);
     if (remaining.length === 0) {
-      setLightboxItems(null);
-      setLightboxContainerId(null);
+      closeLightbox();
     } else {
       const newIndex = Math.min(lightboxIndex, remaining.length - 1);
       setLightboxItems(remaining);
@@ -593,7 +604,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         c.aiDescription.toLowerCase().includes(trimmedQuery) ||
         c.aiSearchTerms.join(' ').toLowerCase().includes(trimmedQuery) ||
         c.notes.filter(n => !n.deletedAt).some(n => n.text.toLowerCase().includes(trimmedQuery)) ||
-        c.photos.filter(p => !p.deletedAt).some(p => p.description.toLowerCase().includes(trimmedQuery))
+        c.photos.filter(p => !p.deletedAt).some(p =>
+          p.description.toLowerCase().includes(trimmedQuery) ||
+          (p.aiDescription?.toLowerCase().includes(trimmedQuery) ?? false) ||
+          (p.aiTags?.some(t => t.toLowerCase().includes(trimmedQuery)) ?? false) ||
+          (p.aiObjects?.some(o => o.toLowerCase().includes(trimmedQuery)) ?? false)
+        )
       )
     : activeContainers
   ).filter(c => {
@@ -601,6 +617,19 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     if (viewingOwnerUid !== user.uid && c.effectiveIsPrivate) return false;
     return true;
   });
+
+  const photoMatchMap = new Map<string, PhotoItem[]>();
+  if (trimmedQuery) {
+    filteredContainers.forEach(c => {
+      const matches = c.photos.filter(p => !p.deletedAt && (
+        p.description.toLowerCase().includes(trimmedQuery) ||
+        (p.aiDescription?.toLowerCase().includes(trimmedQuery) ?? false) ||
+        (p.aiTags?.some(t => t.toLowerCase().includes(trimmedQuery)) ?? false) ||
+        (p.aiObjects?.some(o => o.toLowerCase().includes(trimmedQuery)) ?? false)
+      ));
+      if (matches.length > 0) photoMatchMap.set(c.id, matches);
+    });
+  }
 
   const grouped = filteredContainers.reduce<Record<string, Container[]>>((acc, c) => {
     const locKey = displayLocation(c);
@@ -613,10 +642,21 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   function openLightbox(c: Container) {
     const activePhotos = c.photos.filter(p => !p.deletedAt).reverse();
     if (activePhotos.length === 0) return;
-    setLightboxItems(activePhotos);
+    const filtered = photoMatchMap.get(c.id);
+    const photosToShow = filtered ?? activePhotos;
+    setLightboxItems(photosToShow);
     setLightboxContainerId(c.id);
     setLightboxIndex(0);
-    setLightboxDescDraft(activePhotos[0].description ?? '');
+    setLightboxDescDraft(photosToShow[0].description ?? '');
+    setLightboxAllPhotos(filtered ? activePhotos : null);
+    setLightboxFilterQuery(filtered ? trimmedQuery : '');
+  }
+
+  function closeLightbox() {
+    setLightboxItems(null);
+    setLightboxContainerId(null);
+    setLightboxAllPhotos(null);
+    setLightboxFilterQuery('');
   }
 
   function renderContainerRow(c: Container, showLocation = false) {
@@ -659,7 +699,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           {c.aiStatus === 'processing' && <div className="ai-processing">{t('main.card.aiProcessing')}</div>}
           {c.aiStatus === 'done' && c.aiTags.length > 0 && (
             <div className="ai-tags">
-              {c.aiTags.map(tag => (
+              {filterDisplayTags(c.aiTags, 5).map(tag => (
                 <span key={tag} className="ai-tag">
                   {tag}
                   <button className="tag-delete-btn" onClick={e => { e.stopPropagation(); handleDeleteTag(c.id, tag); }}>✕</button>
@@ -1181,7 +1221,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       <input type="file" ref={updatePhotoInputRef} className="photo-input-hidden" onChange={handleUpdatePhoto} />
 
       {lightboxItems && (
-        <div className="lightbox-backdrop" onClick={() => setLightboxItems(null)}>
+        <div className="lightbox-backdrop" onClick={closeLightbox}>
           <div className="lightbox-toolbar" onClick={e => e.stopPropagation()}>
             <button className="lightbox-delete" onClick={handleDeletePhoto}>{t('main.lightbox.delete')}</button>
             <button className="lightbox-action" onClick={() => {
@@ -1259,7 +1299,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 {t('main.lightbox.moveBox')}
               </button>
             )}
-            <button className="lightbox-close" onClick={() => setLightboxItems(null)} aria-label="Close">✕</button>
+            <button className="lightbox-close" onClick={closeLightbox} aria-label="Close">✕</button>
           </div>
 
           <div
@@ -1285,6 +1325,27 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             </div>
           )}
 
+          {lightboxAllPhotos && (
+            <div className="lightbox-filter-banner" onClick={e => e.stopPropagation()}>
+              <span className="lightbox-filter-label">
+                {lightboxItems.length === 1 ? '1 matching photo' : `${lightboxItems.length} matching photos`}
+                {' · '}Showing photos matching '{lightboxFilterQuery}'
+              </span>
+              <button
+                className="lightbox-show-all-btn"
+                onClick={() => {
+                  setLightboxItems(lightboxAllPhotos);
+                  setLightboxAllPhotos(null);
+                  setLightboxFilterQuery('');
+                  setLightboxIndex(0);
+                  setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollLeft = 0; }, 0);
+                }}
+              >
+                Show all photos
+              </button>
+            </div>
+          )}
+
           {(() => {
             const photo = lightboxItems[lightboxIndex];
             if (!photo) return null;
@@ -1301,7 +1362,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 {photo.aiDescription && <p className="lightbox-ai-desc">{photo.aiDescription}</p>}
                 {photo.aiTags && photo.aiTags.length > 0 && (
                   <div className="lightbox-ai-tags">
-                    {photo.aiTags.map((tag, i) => <span key={i} className="lightbox-ai-tag">{tag}</span>)}
+                    {filterDisplayTags(photo.aiTags, 6).map((tag, i) => <span key={i} className="lightbox-ai-tag">{tag}</span>)}
                   </div>
                 )}
               </div>
@@ -1588,7 +1649,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                                 aiStatus: null,
                               });
                               void targetContainerId;
-                              setLightboxItems(null);
+                              closeLightbox();
                               setMoveSource(null);
                             }}
                             style={{
@@ -1646,7 +1707,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                                 }
                                 await batch.commit();
                                 await updateDoc(srcRef, { aiDescription: '', aiTags: [], aiObjects: [], aiStatus: null });
-                                setLightboxItems(null);
+                                closeLightbox();
                                 setMoveSource(null);
                               }}
                               style={{
