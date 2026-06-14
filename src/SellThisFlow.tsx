@@ -194,20 +194,31 @@ function slugify(s: string, maxLen = 30): string {
     .replace(/-$/, '');
 }
 
+function extFromMimeType(mimeType: string): string {
+  const map: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png':  'png',
+    'image/webp': 'webp',
+    'image/heic': 'heic',
+    'image/heif': 'heic',
+    'image/gif':  'gif',
+  };
+  return map[mimeType.toLowerCase()] ?? 'jpg';
+}
+
 // Builds a descriptive filename for a listing photo.
 // Priority: aiObjects[0] > aiTags[0] > user description > title slug.
-// Future: accept a `cleaned?: boolean` param to prefix with "clean-" when
-// cleaned listing photos are introduced, so originals and cleaned copies
-// stay distinguishable inside the same export folder.
-function buildPhotoFilename(photo: PhotoItem, index: number, titleSlug: string): string {
+// ext defaults to 'jpg' for button labels before the blob is fetched;
+// callers that have the blob should pass extFromMimeType(blob.type).
+function buildPhotoFilename(photo: PhotoItem, index: number, titleSlug: string, ext = 'jpg'): string {
   const prefix = String(index + 1).padStart(2, '0');
   const descriptor =
     photo.aiObjects?.[0] ||
     photo.aiTags?.[0] ||
     photo.description?.trim() ||
     titleSlug;
-  const slug = slugify(descriptor || 'photo', 30) || 'photo';
-  return `${prefix}-${slug}.jpg`;
+  const slug = slugify(descriptor || 'photo', 20) || 'photo';
+  return `${prefix}-${slug}.${ext}`;
 }
 
 // File System Access API — Chrome/Edge 88+ only; Firefox and Safari return false.
@@ -241,10 +252,11 @@ function DownloadPhotoBtn({ photo, index, titleSlug }: { photo: PhotoItem; index
       const res = await fetch(proxyUrl, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return;
       const blob = await res.blob();
+      const ext = extFromMimeType(blob.type);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = buildPhotoFilename(photo, index, titleSlug);
+      a.download = buildPhotoFilename(photo, index, titleSlug, ext);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -427,11 +439,12 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
       // Write photo files
       for (let i = 0; i < exportPhotos.length; i++) {
         const photo = exportPhotos[i];
-        const filename = buildPhotoFilename(photo, i, titleSlug);
         const proxyUrl = `${PROXY_BASE}?path=${encodeURIComponent(photo.storagePath)}`;
         const res = await fetch(proxyUrl, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) continue;
         const blob = await res.blob();
+        const ext = extFromMimeType(blob.type);
+        const filename = buildPhotoFilename(photo, i, titleSlug, ext);
         const fileHandle = await listingDir.getFileHandle(filename, { create: true });
         const writable = await (fileHandle as any).createWritable();
         await writable.write(blob);
