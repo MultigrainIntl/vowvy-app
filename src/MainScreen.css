@@ -1550,24 +1550,29 @@
 
 .lightbox-add-tray-btn {
   font-family: var(--font-body);
-  font-size: 12px;
-  padding: 5px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(180, 180, 180, 0.5);
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(220, 210, 200, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: #7a3b2e;
+  color: #f5efe9;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 
-.lightbox-add-tray-btn:hover:not([data-added]) {
-  background: rgba(255, 255, 255, 0.22);
+.lightbox-add-tray-btn:hover:not(.lightbox-add-tray-btn--added) {
+  background: #6a3226;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
 }
 
 .lightbox-add-tray-btn--added {
-  border-color: rgba(100, 180, 100, 0.55);
-  color: rgba(150, 220, 150, 0.9);
+  background: rgba(40, 120, 40, 0.65);
+  border-color: rgba(80, 160, 80, 0.5);
+  color: #c8f0c8;
   cursor: default;
+  box-shadow: none;
 }
 
 /* ---- Items to sell tray panel ---- */

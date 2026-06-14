@@ -315,7 +315,7 @@ export const dryRunContentReset = onCall(
 
 export const proxyImage = onRequest(
   {
-    cors: ['https://vowvy-1ba5f.web.app', 'https://app.vowvy.com'],
+    cors: ['https://vowvy-1ba5f.web.app', 'https://app.vowvy.com', 'http://localhost:5173', 'http://localhost:5174'],
     timeoutSeconds: 30,
     memory: '256MiB',
   },

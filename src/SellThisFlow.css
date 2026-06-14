@@ -565,6 +565,96 @@
   text-decoration: underline;
 }
 
+/* ---- Prepare listing folder ---- */
+
+.sell-folder-hint {
+  font-size: 13px;
+  color: #666;
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.sell-setup-steps {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: #555;
+  line-height: 1.7;
+}
+
+.sell-folder-ready {
+  background: #f0f8f0;
+  border: 1px solid #a8d0a8;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sell-folder-name {
+  font-size: 13px;
+  color: #2a622a;
+  margin: 0;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.sell-folder-instruction {
+  font-size: 13px;
+  color: #555;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.sell-folder-again-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 12px;
+  font-family: 'Lora', serif;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-align: left;
+}
+
+.sell-folder-again-btn:hover { color: #555; }
+
+.sell-folder-change-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 12px;
+  font-family: 'Lora', serif;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-align: left;
+}
+
+.sell-folder-change-btn:hover:not(:disabled) { color: #555; }
+.sell-folder-change-btn:disabled { opacity: 0.55; cursor: default; }
+
+.sell-folder-error {
+  font-size: 12px;
+  color: #b03030;
+  margin: 4px 0 0;
+}
+
+.sell-folder-warn {
+  font-size: 12px;
+  color: #b06000;
+  margin: 4px 0 0;
+}
+
+.sell-fallback-note {
+  font-size: 12px;
+  color: #999;
+  margin: 6px 0 0;
+  font-family: 'Lora', serif;
+}
+
 /* ---- Photo downloads ---- */
 
 .sell-download-row {

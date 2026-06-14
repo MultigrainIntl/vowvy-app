@@ -104,10 +104,10 @@ function buildDraft(
     sellingScope === 'one'   ? `${title}. One item, pictured.` :
                                `${title}. A few items — see photos for details.`;
 
-  // Prefer source photo AI description; fall back to container-level
-  const photoAiDesc = sourcePhotos?.find(p => p.aiDescription?.trim())?.aiDescription?.trim() ?? '';
-  const aiText = photoAiDesc || container.aiDescription?.trim() || '';
-  const aiPart = aiText ? `\n\n${aiText}` : '';
+  // AI captions are shown in inventory/lightbox (per-photo aiDescription).
+  // Not included in listing copy — avoids image-caption language ("rests on a napkin…").
+  // Future workstream: generate a separate buyer-friendly AI summary for listings.
+  const aiPart = '';
 
   const conditionPart = userNotes.trim()
     ? `\n\nCondition notes: ${userNotes.trim()}`
@@ -181,9 +181,54 @@ const PLATFORM_URLS: Record<string, string> = {
 
 const ALL_PLATFORMS = ['Facebook Marketplace', 'Craigslist', 'Etsy', 'eBay', 'Other'];
 
+// ---- Photo filename helpers -----------------------------------------------
+
+function slugify(s: string, maxLen = 30): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, maxLen)
+    .replace(/-$/, '');
+}
+
+// Builds a descriptive filename for a listing photo.
+// Priority: aiObjects[0] > aiTags[0] > user description > title slug.
+// Future: accept a `cleaned?: boolean` param to prefix with "clean-" when
+// cleaned listing photos are introduced, so originals and cleaned copies
+// stay distinguishable inside the same export folder.
+function buildPhotoFilename(photo: PhotoItem, index: number, titleSlug: string): string {
+  const prefix = String(index + 1).padStart(2, '0');
+  const descriptor =
+    photo.aiObjects?.[0] ||
+    photo.aiTags?.[0] ||
+    photo.description?.trim() ||
+    titleSlug;
+  const slug = slugify(descriptor || 'photo', 30) || 'photo';
+  return `${prefix}-${slug}.jpg`;
+}
+
+// File System Access API — Chrome/Edge 88+ only; Firefox and Safari return false.
+const FILE_SYSTEM_ACCESS_SUPPORTED =
+  typeof window !== 'undefined' && 'showDirectoryPicker' in window;
+
+// Blocks auto-generated listing folders ("VOWVY - Title - YYYY-MM-DD HHmm") to prevent
+// nesting. Allows plain parent folders like "VOWVY Exports".
+function looksLikeListingFolder(name: string): boolean {
+  if (/^VOWVY - .+ - \d{4}-\d{2}-\d{2} \d{4}$/.test(name)) return true;
+  const lower = name.toLowerCase();
+  return lower.includes('listing') || lower.includes('marketplace');
+}
+
+// Parent export directory chosen by the user — persists for the current page session.
+// Survives modal close/reopen. Cleared on page refresh.
+let savedParentDir: any = null;
+
 // ---- Download button (fetch-blob approach) --------------------------------
 
-function DownloadPhotoBtn({ photo, index }: { photo: PhotoItem; index: number }) {
+function DownloadPhotoBtn({ photo, index, titleSlug }: { photo: PhotoItem; index: number; titleSlug: string }) {
   const [loading, setLoading] = useState(false);
 
   async function handleDownload() {
@@ -199,7 +244,7 @@ function DownloadPhotoBtn({ photo, index }: { photo: PhotoItem; index: number })
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `photo-${index + 1}.jpg`;
+      a.download = buildPhotoFilename(photo, index, titleSlug);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -211,7 +256,7 @@ function DownloadPhotoBtn({ photo, index }: { photo: PhotoItem; index: number })
 
   return (
     <button className="sell-download-btn" onClick={handleDownload} disabled={loading}>
-      {loading ? '…' : `Photo ${index + 1}`}
+      {loading ? '…' : buildPhotoFilename(photo, index, titleSlug)}
     </button>
   );
 }
@@ -232,7 +277,11 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
   const [descCopied, setDescCopied]       = useState(false);
   const [urlSaved, setUrlSaved]           = useState(false);
   const [saving, setSaving]               = useState(false);
-  const [brandingNote, setBrandingNote]   = useState(false);
+  const [brandingNote, setBrandingNote]   = useState(true);
+  const [folderState, setFolderState]     = useState<'idle' | 'working' | 'done' | 'error'>('idle');
+  const [folderName, setFolderName]       = useState('');
+  const [folderWarn, setFolderWarn]       = useState(false);
+  const [savedLocationName, setSavedLocationName] = useState<string>(() => savedParentDir?.name ?? '');
 
   // Check one-time confirmation on mount
   useEffect(() => {
@@ -328,6 +377,126 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
     await navigator.clipboard.writeText(text);
     onCopied(true);
     setTimeout(() => onCopied(false), 2000);
+  }
+
+  async function handlePrepareFolder() {
+    if (!draft || folderState === 'working') return;
+    setFolderState('working');
+    setFolderWarn(false);
+    try {
+      // Build folder name: "VOWVY - {title} - YYYY-MM-DD HHmm"
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}${pad(now.getMinutes())}`;
+      const titlePart = draft.title.replace(/[^a-zA-Z0-9\s]/g, '').trim().slice(0, 40);
+      const name = `VOWVY - ${titlePart} - ${dateStr}`;
+
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) { setFolderState('error'); return; }
+
+      // Use saved parent location or prompt the user to pick one.
+      let parentDir = savedParentDir;
+      if (!parentDir) {
+        parentDir = await (window as any).showDirectoryPicker({
+          mode: 'readwrite',
+          startIn: 'downloads',
+        });
+        // Guard against nesting inside an existing listing/export folder.
+        if (looksLikeListingFolder(parentDir.name)) {
+          setFolderState('idle');
+          setFolderWarn(true);
+          return;
+        }
+        savedParentDir = parentDir;
+        setSavedLocationName(parentDir.name);
+      }
+
+      // Create listing subfolder inside the chosen parent.
+      // Future "Clean listing photos": swap in a listing-photos/ subdirectory here
+      // and write originals to an originals/ subdirectory. The fetch+write loop
+      // below is identical regardless of target directory handle.
+      const listingDir = await parentDir.getDirectoryHandle(name, { create: true });
+
+      // Determine listing photos.
+      // Future: replace exportPhotos with cleaned versions when that feature ships.
+      // The write loop below does not need to change — only this array changes.
+      const exportPhotos = (sourcePhotos ?? container.photos.filter(p => !p.deletedAt))
+        .filter(p => !p.deletedAt);
+      const titleSlug = slugify(draft.title, 30);
+
+      // Write photo files
+      for (let i = 0; i < exportPhotos.length; i++) {
+        const photo = exportPhotos[i];
+        const filename = buildPhotoFilename(photo, i, titleSlug);
+        const proxyUrl = `${PROXY_BASE}?path=${encodeURIComponent(photo.storagePath)}`;
+        const res = await fetch(proxyUrl, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) continue;
+        const blob = await res.blob();
+        const fileHandle = await listingDir.getFileHandle(filename, { create: true });
+        const writable = await (fileHandle as any).createWritable();
+        await writable.write(blob);
+        await writable.close();
+      }
+
+      // Write text files
+      const descText = brandingNote
+        ? draft.description + '\n\nListing drafted with VOWVY — vowvy.com'
+        : draft.description;
+
+      const checklist =
+        `Listing checklist: ${draft.title}\n` +
+        `Created with VOWVY — vowvy.com\n\n` +
+        `Steps:\n` +
+        `1. Go to Facebook Marketplace and click "Create new listing"\n` +
+        `2. Paste the title from listing-title.txt\n` +
+        `3. Paste the description from listing-description.txt\n` +
+        `4. Click "Add photos" and open this folder — select the photos\n` +
+        `5. Review everything carefully before posting\n\n` +
+        `VOWVY creates drafts — you post them.\n` +
+        `vowvy.com`;
+
+      const textFiles: [string, string][] = [
+        ['listing-title.txt',       draft.title],
+        ['listing-description.txt', descText],
+        ['posting-checklist.txt',   checklist],
+      ];
+
+      for (const [filename, content] of textFiles) {
+        const fileHandle = await listingDir.getFileHandle(filename, { create: true });
+        const writable = await (fileHandle as any).createWritable();
+        await writable.write(content);
+        await writable.close();
+      }
+
+      setFolderName(name);
+      setFolderState('done');
+    } catch (err: any) {
+      // AbortError = user cancelled the picker dialog — go back to idle
+      if (err?.name === 'AbortError') {
+        setFolderState('idle');
+      } else {
+        console.error('[handlePrepareFolder]', err);
+        setFolderState('error');
+      }
+    }
+  }
+
+  async function handleChangeLocation() {
+    setFolderWarn(false);
+    try {
+      const dir = await (window as any).showDirectoryPicker({ mode: 'readwrite', startIn: 'downloads' });
+      if (looksLikeListingFolder(dir.name)) {
+        setFolderWarn(true);
+        return;
+      }
+      savedParentDir = dir;
+      setSavedLocationName(dir.name);
+      setFolderState('idle');
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.error('[handleChangeLocation]', err);
+      }
+    }
   }
 
   const platformUrl = selectedPlatform && selectedPlatform !== 'Other'
@@ -590,12 +759,88 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
             {(() => {
               const photos = (sourcePhotos ?? container.photos.filter(p => !p.deletedAt)).filter(p => !p.deletedAt);
               if (photos.length === 0) return null;
+              const titleSlug = slugify(draft.title, 30);
               return (
                 <div className="sell-field">
-                  <span className="sell-label">Download photos for your listing</span>
+                  <span className="sell-label">Photos for your listing</span>
+
+                  {FILE_SYSTEM_ACCESS_SUPPORTED ? (
+                    <>
+                      {folderState === 'done' ? (
+                        <div className="sell-folder-ready">
+                          <p className="sell-folder-name">VOWVY created this folder: <strong>{folderName}</strong></p>
+                          <p className="sell-folder-instruction">
+                            Use this folder when Facebook asks you to add photos.
+                          </p>
+                          <button className="sell-folder-change-btn" onClick={handleChangeLocation}>
+                            Change VOWVY export folder
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          {savedLocationName ? (
+                            <>
+                              <p className="sell-folder-hint">
+                                VOWVY will save to: <strong>{savedLocationName}</strong>. Click <strong>Create listing folder</strong> and VOWVY will create a named folder automatically.
+                              </p>
+                              <button
+                                className="sell-primary-btn"
+                                onClick={handlePrepareFolder}
+                                disabled={folderState === 'working'}
+                              >
+                                {folderState === 'working' ? 'Creating folder…' : 'Create listing folder'}
+                              </button>
+                              <button
+                                className="sell-folder-change-btn"
+                                onClick={handleChangeLocation}
+                                disabled={folderState === 'working'}
+                              >
+                                Change save location
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <div className="sell-disclaimer">
+                                <p className="sell-label">First-time setup</p>
+                                <ol className="sell-setup-steps">
+                                  <li>Click <strong>Set VOWVY export folder</strong>.</li>
+                                  <li>In the window that opens, go to Downloads.</li>
+                                  <li>Click <strong>New Folder</strong>.</li>
+                                  <li>Name it <strong>VOWVY Exports</strong>.</li>
+                                  <li>Select VOWVY Exports.</li>
+                                  <li>VOWVY will create the listing folder automatically.</li>
+                                </ol>
+                              </div>
+                              <button
+                                className="sell-primary-btn"
+                                onClick={handlePrepareFolder}
+                                disabled={folderState === 'working'}
+                              >
+                                {folderState === 'working' ? 'Setting location…' : 'Set VOWVY export folder'}
+                              </button>
+                            </>
+                          )}
+                        </>
+                      )}
+                      {folderWarn && (
+                        <p className="sell-folder-warn">
+                          Choose a plain parent folder like "VOWVY Exports" — not an auto-generated listing folder.
+                        </p>
+                      )}
+                      {folderState === 'error' && (
+                        <p className="sell-folder-error">Something went wrong. Try again or download photos below.</p>
+                      )}
+                      <p className="sell-fallback-note">Or download individually:</p>
+                    </>
+                  ) : (
+                    <p className="sell-fallback-note">
+                      This browser doesn't support folder export. Download the photos below with listing-ready filenames.
+                    </p>
+                  )}
+
                   <div className="sell-download-row">
                     {photos.map((p, i) => (
-                      <DownloadPhotoBtn key={p.id} photo={p} index={i} />
+                      <DownloadPhotoBtn key={p.id} photo={p} index={i} titleSlug={titleSlug} />
                     ))}
                   </div>
                 </div>
