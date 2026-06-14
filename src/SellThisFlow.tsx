@@ -44,26 +44,43 @@ interface Props {
 
 // ---- Category & platform helpers ------------------------------------------
 
+const LISTING_CATEGORIES = [
+  'Home goods',
+  'Furniture',
+  'Electronics',
+  'Clothing',
+  'Collectibles',
+  'Sports / memorabilia',
+  'Toys / games',
+  'Books / media',
+  'Tools',
+  'Kitchen',
+  'Other',
+];
+
+// Collectibles checked first so memorabilia/vintage items win before Home goods.
 const CATEGORY_KEYWORDS: [string[], string][] = [
-  [['lamp', 'light', 'bulb', 'chandelier', 'lantern', 'sconce'],                   'Lighting'],
+  [['coin', 'stamp', 'card', 'collectible', 'antique', 'memorabilia',
+    'signed', 'jersey', 'figurine', 'vintage'],                                     'Collectibles'],
+  [['bike', 'bicycle', 'scooter', 'skateboard', 'skis', 'sport', 'gym',
+    'fitness', 'ball', 'racket', 'tent', 'hiking', 'kayak'],                        'Sports / memorabilia'],
   [['table', 'chair', 'sofa', 'couch', 'dresser', 'desk', 'shelf', 'bookcase',
     'furniture', 'cabinet', 'wardrobe', 'bench', 'ottoman', 'stool'],               'Furniture'],
-  [['bike', 'bicycle', 'scooter', 'skateboard', 'skis', 'sport', 'gym',
-    'fitness', 'ball', 'racket', 'tent', 'hiking', 'kayak'],                        'Sports & Outdoors'],
   [['phone', 'laptop', 'computer', 'tablet', 'camera', 'speaker', 'headphone',
     'electronic', 'monitor', 'keyboard', 'remote', 'console', 'printer'],           'Electronics'],
   [['shirt', 'pants', 'coat', 'jacket', 'dress', 'shoes', 'boots', 'clothing',
-    'clothes', 'hat', 'bag', 'purse', 'belt', 'scarf', 'gloves'],                  'Clothing & Accessories'],
+    'clothes', 'hat', 'bag', 'purse', 'belt', 'scarf', 'gloves'],                  'Clothing'],
   [['tool', 'drill', 'wrench', 'saw', 'hammer', 'screwdriver', 'toolbox',
     'level', 'clamp', 'chisel'],                                                    'Tools'],
-  [['book', 'novel', 'textbook', 'magazine', 'manual', 'dvd', 'cd', 'vinyl'],      'Books & Media'],
-  [['toy', 'game', 'lego', 'doll', 'puzzle', 'kids', 'children', 'board game'],   'Toys & Games'],
+  [['book', 'novel', 'textbook', 'magazine', 'manual', 'dvd', 'cd', 'vinyl'],      'Books / media'],
+  [['toy', 'game', 'lego', 'doll', 'puzzle', 'kids', 'children', 'board game'],   'Toys / games'],
   [['pot', 'pan', 'dish', 'plate', 'cup', 'mug', 'kitchen', 'appliance',
-    'blender', 'mixer', 'toaster', 'cutlery'],                                      'Kitchen & Dining'],
-  [['plant', 'garden', 'outdoor', 'patio', 'lawn', 'flower', 'planter', 'hose'],  'Garden & Outdoor'],
-  [['art', 'painting', 'print', 'frame', 'mirror', 'decor', 'vase', 'candle',
-    'vintage', 'ceramic', 'figurine', 'rug', 'curtain'],                            'Home Décor'],
-  [['stroller', 'crib', 'highchair', 'baby', 'infant', 'toddler'],                 'Baby & Kids'],
+    'blender', 'mixer', 'toaster', 'cutlery'],                                      'Kitchen'],
+  [['lamp', 'light', 'bulb', 'chandelier', 'lantern', 'sconce',
+    'plant', 'garden', 'patio', 'lawn', 'flower', 'planter', 'hose',
+    'art', 'painting', 'print', 'frame', 'mirror', 'decor', 'vase', 'candle',
+    'ceramic', 'rug', 'curtain',
+    'stroller', 'crib', 'highchair', 'baby', 'infant', 'toddler'],                 'Home goods'],
 ];
 
 function guessCategory(itemHint: string, aiTags: string[]): string {
@@ -71,11 +88,11 @@ function guessCategory(itemHint: string, aiTags: string[]): string {
   for (const [keywords, category] of CATEGORY_KEYWORDS) {
     if (keywords.some(k => text.includes(k))) return category;
   }
-  return 'General';
+  return 'Other';
 }
 
 function guessPlatforms(shippingIntent: ShippingIntent, category: string): string[] {
-  const vintageCategories = ['Home Décor', 'Clothing & Accessories', 'Books & Media'];
+  const vintageCategories = ['Home goods', 'Clothing', 'Books / media', 'Collectibles'];
   if (shippingIntent === 'local') return ['Facebook Marketplace', 'Craigslist'];
   if (shippingIntent === 'ship')  return vintageCategories.includes(category)
     ? ['Etsy', 'eBay', 'Facebook Marketplace']
@@ -277,7 +294,11 @@ function DownloadPhotoBtn({ photo, index, titleSlug }: { photo: PhotoItem; index
 
 export default function SellThisFlow({ user, container, sourcePhotos, sourceContainerIds, isFromTray, onClose }: Props) {
   const [step, setStep]                   = useState<Step>('loading');
-  const [sellingScope, setSellingScope]   = useState<SellingScope>('whole');
+  const [sellingScope, setSellingScope]   = useState<SellingScope>(() => {
+    if (isFromTray) return 'few';
+    if (sourcePhotos) return sourcePhotos.length === 1 ? 'one' : 'few';
+    return 'whole';
+  });
   const [itemHint, setItemHint]           = useState('');
   const [shippingIntent, setShippingIntent] = useState<ShippingIntent>('local');
   const [userNotes, setUserNotes]         = useState('');
@@ -290,6 +311,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
   const [urlSaved, setUrlSaved]           = useState(false);
   const [saving, setSaving]               = useState(false);
   const [brandingNote, setBrandingNote]   = useState(true);
+  const [editedCategory, setEditedCategory] = useState('');
   const [folderState, setFolderState]     = useState<'idle' | 'working' | 'done' | 'error'>('idle');
   const [folderName, setFolderName]       = useState('');
   const [folderWarn, setFolderWarn]       = useState(false);
@@ -345,6 +367,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
       );
       setListingId(ref.id);
       setDraft(d);
+      setEditedCategory(d.category);
       setStep('review');
     } finally {
       setSaving(false);
@@ -565,6 +588,11 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
 
             <div className="sell-field">
               <label className="sell-label">What are you selling?</label>
+              {(isFromTray || sourcePhotos) && (
+                <p className="sell-body sell-body--small">
+                  You're creating a listing from selected photos — not the whole container.
+                </p>
+              )}
               {([ ['whole', 'The whole container'],
                   ['one',   'Just one item in these photos'],
                   ['few',   "A few items — I'll describe them"],
@@ -672,7 +700,15 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
             <div className="sell-draft-row">
               <div className="sell-draft-field sell-draft-half">
                 <span className="sell-draft-label">Category</span>
-                <p className="sell-draft-value">{draft.category}</p>
+                <select
+                  className="sell-input"
+                  value={editedCategory}
+                  onChange={e => setEditedCategory(e.target.value)}
+                >
+                  {LISTING_CATEGORIES.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </div>
               <div className="sell-draft-field sell-draft-half">
                 <span className="sell-draft-label">Suggested platforms</span>
