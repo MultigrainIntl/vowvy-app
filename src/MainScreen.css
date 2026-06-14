@@ -983,16 +983,6 @@
   border-bottom-color: var(--terracotta);
 }
 
-.qr-url {
-  font-size: 10px;
-  color: var(--muted-slate);
-  font-family: monospace;
-  text-align: center;
-  margin-top: 8px;
-  opacity: 0.7;
-  word-break: break-all;
-}
-
 /* ---- Print media ---- */
 
 @media print {
@@ -1016,10 +1006,6 @@
     border-radius: 0;
     box-shadow: none;
     padding: 48px 28px;
-  }
-
-  .qr-url {
-    display: none;
   }
 }
 
