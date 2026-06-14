@@ -155,7 +155,6 @@ export default function AuthScreen() {
           <h1 className="auth-logo">Vowvy</h1>
           <p className="landing-headline">Finally know what you have, where it is, and what you're ready to let go.</p>
           <p className="landing-subheadline">VOWVY gives you a searchable memory of your things — at home, at school, or at work. Organize what you have, find it later, share it with helpers, or prepare items to sell.</p>
-          <p className="landing-micro">Take photos now. Find things later.</p>
           <div className="auth-buttons" style={{ marginTop: 8 }}>
             <button onClick={() => switchMode('signup')}>Create your free account</button>
             <button className="secondary" onClick={() => switchMode('signin')}>Sign in</button>
@@ -194,9 +193,7 @@ export default function AuthScreen() {
               "Keep track of valuables and keepsakes — add photos, notes, and details you don't want to forget.",
               "Let AI do the labeling — VOWVY describes and tags photos so you don't have to type everything yourself.",
               'Work with helpers — let family, assistants, or collaborators help organize while controlling what they can see.',
-              'Pick items to sell — choose items from your inventory and collect them in one place.',
-              'Create marketplace listing copy — draft a title and description for Facebook Marketplace, Craigslist, eBay, or similar sites.',
-              'Export photos and text for posting — save the listing photos, title, and description so posting is faster and easier.',
+              'Prepare items to sell — select photos, generate a title and description, and export everything for easier posting on marketplaces or similar sites.',
             ].map((text, i) => (
               <li key={i}>{text}</li>
             ))}
