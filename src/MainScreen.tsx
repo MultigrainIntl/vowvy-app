@@ -72,7 +72,6 @@ function QRPrintModal({ container, onClose }: { container: Container; onClose: (
           value={tagline}
           onChange={e => setTagline(e.target.value)}
         />
-        <div className="qr-url">app.vowvy.com/container/{container.id}</div>
       </div>
     </div>
   );
