@@ -4,9 +4,12 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
 } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
 import logoMark from './assets/logo-mark.svg';
+
+const CURRENT_POLICY_VERSION = '2026-06-13';
 
 type AuthMode = 'welcome' | 'signin' | 'signup';
 
@@ -31,6 +34,7 @@ export default function AuthScreen() {
   const [busy, setBusy]           = useState(false);
   const [resetMsg, setResetMsg]   = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [policyChecked, setPolicyChecked] = useState(false);
 
   const canSubmit = Boolean(email && password) && !busy;
 
@@ -56,7 +60,17 @@ export default function AuthScreen() {
     setError('');
     setBusy(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      // Set sessionStorage synchronously so onAuthStateChanged reads it before firing
+      sessionStorage.setItem('vowvy_policy_version_accepted', CURRENT_POLICY_VERSION);
+      // Write acceptance record to Firestore (async, non-blocking for UX)
+      setDoc(doc(db, 'users', result.user.uid), {
+        acceptedTermsVersion: CURRENT_POLICY_VERSION,
+        acceptedPrivacyVersion: CURRENT_POLICY_VERSION,
+        acceptedAupVersion: CURRENT_POLICY_VERSION,
+        acceptedPoliciesAt: serverTimestamp(),
+        acceptedPoliciesUserAgent: navigator.userAgent,
+      }, { merge: true }).catch(() => {});
     } catch (e: any) {
       setError(friendlyError(e.code, t));
     } finally {
@@ -136,8 +150,23 @@ export default function AuthScreen() {
 
           {error && <p className="auth-error">{error}</p>}
 
+          <label className="auth-policy-check">
+            <input
+              type="checkbox"
+              checked={policyChecked}
+              disabled={busy}
+              onChange={e => setPolicyChecked(e.target.checked)}
+            />
+            <span>
+              I agree to Vowvy's{' '}
+              <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Use</a>,{' '}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>, and{' '}
+              <a href="/acceptable-use" target="_blank" rel="noopener noreferrer">Acceptable Use Policy</a>.
+            </span>
+          </label>
+
           <div className="auth-buttons">
-            <button onClick={handleSignUp} disabled={!canSubmit}>
+            <button onClick={handleSignUp} disabled={!canSubmit || !policyChecked}>
               {busy ? 'Creating account…' : 'Create Account'}
             </button>
           </div>

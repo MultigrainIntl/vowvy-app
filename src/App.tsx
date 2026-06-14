@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getDoc, getDocs, doc, collection, query, limit, setDoc } from 'firebase/firestore';
+import { getDoc, getDocs, doc, collection, query, limit, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth } from './firebase';
 import { db } from './firebase';
 import AuthScreen from './AuthScreen';
@@ -14,7 +14,10 @@ import ClaimBoxScreen from './ClaimBoxScreen';
 import ProfileScreen from './ProfileScreen';
 import AdminScreen from './AdminScreen';
 import OnboardingScreen from './OnboardingScreen';
+import PolicyAcceptanceScreen from './PolicyAcceptanceScreen';
 import './App.css';
+
+const CURRENT_POLICY_VERSION = '2026-06-13';
 
 interface Route {
   type: 'home' | 'container' | 'invite' | 'trash' | 'manage' | 'collaborators' | 'box' | 'profile' | 'admin';
@@ -43,6 +46,7 @@ export default function App() {
   const [loading, setLoading]     = useState(true);
   const [route, setRoute]         = useState<Route>(parsePath);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [needsPolicyAcceptance, setNeedsPolicyAcceptance] = useState(false);
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
@@ -54,12 +58,20 @@ export default function App() {
         ]);
         const hasLocations = locSnap.size > 0;
         const data = userSnap.data();
+        const sessionVersion = sessionStorage.getItem('vowvy_policy_version_accepted');
+        const policiesAccepted =
+          sessionVersion === CURRENT_POLICY_VERSION ||
+          (data?.acceptedTermsVersion === CURRENT_POLICY_VERSION &&
+           data?.acceptedPrivacyVersion === CURRENT_POLICY_VERSION &&
+           data?.acceptedAupVersion === CURRENT_POLICY_VERSION);
+        setNeedsPolicyAcceptance(!policiesAccepted);
         setShowOnboarding(
           !hasLocations &&
           data?.onboardingCompleted !== true &&
           data?.onboardingSkipped !== true,
         );
       } else {
+        setNeedsPolicyAcceptance(false);
         setShowOnboarding(false);
       }
       setLoading(false);
@@ -91,6 +103,29 @@ export default function App() {
 
   if (route.type === 'invite' && route.id) {
     return <AcceptInviteScreen user={user} token={route.id} />;
+  }
+
+  // Policy acceptance — shown when the user has not yet accepted the current policy version.
+  // Runs before onboarding so the policy gate applies to all routes except the invite flow.
+  async function handlePolicyAccept() {
+    if (user) {
+      await setDoc(
+        doc(db, 'users', user.uid),
+        {
+          acceptedTermsVersion: CURRENT_POLICY_VERSION,
+          acceptedPrivacyVersion: CURRENT_POLICY_VERSION,
+          acceptedAupVersion: CURRENT_POLICY_VERSION,
+          acceptedPoliciesAt: serverTimestamp(),
+          acceptedPoliciesUserAgent: navigator.userAgent,
+        },
+        { merge: true },
+      );
+    }
+    setNeedsPolicyAcceptance(false);
+  }
+
+  if (needsPolicyAcceptance) {
+    return <PolicyAcceptanceScreen user={user} onAccept={handlePolicyAccept} />;
   }
 
   // Onboarding questionnaire — shown when the authenticated user has zero locations

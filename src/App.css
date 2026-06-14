@@ -188,3 +188,28 @@
 }
 
 .auth-mode-link:hover { color: var(--charcoal); }
+
+.auth-policy-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--muted-slate);
+  line-height: 1.5;
+  cursor: pointer;
+  margin-top: -4px;
+}
+
+.auth-policy-check input[type="checkbox"] {
+  accent-color: var(--terracotta);
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.auth-policy-check a {
+  color: var(--terracotta);
+  text-underline-offset: 2px;
+}
