@@ -95,8 +95,8 @@ export default function AuthScreen() {
 
   if (mode === 'welcome') {
     return (
-      <div className="auth-screen">
-        <div className="auth-card">
+      <div className="auth-landing">
+        <div className="auth-card auth-landing-hero">
           <img src={logoMark} alt="" className="auth-logo-mark" />
           <h1 className="auth-logo">Vowvy</h1>
           <p className="auth-tagline">{t('auth.tagline')}</p>
@@ -105,6 +105,28 @@ export default function AuthScreen() {
             <button className="secondary" onClick={() => switchMode('signin')}>Sign in</button>
           </div>
         </div>
+
+        <section className="landing-benefits">
+          <h2 className="landing-benefits-heading">What VOWVY helps you do</h2>
+          <p className="landing-benefits-intro">
+            VOWVY helps you photograph, organize, find, and sell the things you own — without trying to remember everything yourself.
+          </p>
+          <ul className="landing-benefits-list">
+            {[
+              "Remember what's in your boxes — take photos before storing things away.",
+              'Find things later — search by item, description, tag, room, or location.',
+              'Organize a move or cleanup — group items by room, container, or storage area.',
+              "Track valuables and keepsakes — add photos and notes you don't want to forget.",
+              "Let AI do the labeling — VOWVY describes and tags photos so you don't have to type everything yourself.",
+              'Work with helpers — let family, assistants, or collaborators help organize while controlling what they can see.',
+              'Pick items to sell — select photos from your inventory and collect them in one place.',
+              'Create listing copy — draft a title and description for Facebook Marketplace, Craigslist, eBay, and similar sites.',
+              'Export photos and text for posting — save listing files and copy so uploading is faster and easier.',
+            ].map((text, i) => (
+              <li key={i}>{text}</li>
+            ))}
+          </ul>
+        </section>
       </div>
     );
   }

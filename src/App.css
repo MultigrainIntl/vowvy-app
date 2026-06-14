@@ -213,3 +213,70 @@
   color: var(--terracotta);
   text-underline-offset: 2px;
 }
+
+/* ---- Landing page (welcome mode) ---- */
+
+.auth-landing {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+}
+
+.auth-landing-hero {
+  padding: 48px 24px 32px;
+}
+
+.landing-benefits {
+  width: 100%;
+  max-width: 760px;
+  padding: 32px 24px 64px;
+  border-top: 1px solid var(--warm-gray);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.landing-benefits-heading {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--charcoal);
+  text-align: center;
+}
+
+.landing-benefits-intro {
+  font-size: 15px;
+  color: var(--muted-slate);
+  text-align: center;
+  line-height: 1.65;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.landing-benefits-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.landing-benefits-list li {
+  background: #fff;
+  border: 1px solid var(--warm-gray);
+  border-left: 3px solid var(--terracotta);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--charcoal);
+  line-height: 1.55;
+}
+
+@media (max-width: 540px) {
+  .landing-benefits-list {
+    grid-template-columns: 1fr;
+  }
+}
