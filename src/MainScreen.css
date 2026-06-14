@@ -1228,24 +1228,6 @@
   justify-content: flex-end;
 }
 
-.lightbox-sell-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-family: var(--font-body);
-  font-size: 12px;
-  padding: 5px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(199, 100, 60, 0.55);
-  background: rgba(122, 59, 46, 0.25);
-  color: rgba(255, 200, 180, 0.9);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.lightbox-sell-btn:hover {
-  background: rgba(122, 59, 46, 0.45);
-}
 
 .lightbox-desc {
   display: flex;
