@@ -38,14 +38,15 @@ export function subscribeToLocations(
 export async function createLocation(
   userId: string,
   name: string,
-  parentId: string | null = null
+  parentId: string | null = null,
+  parentEffectiveIsPrivate = false,
 ): Promise<string> {
   const ref = await addDoc(collection(db, `users/${userId}/locations`), {
     name: name.trim(),
     parentId,
     createdAt: serverTimestamp(),
     visibility: 'inherit',
-    effectiveIsPrivate: false,
+    effectiveIsPrivate: parentEffectiveIsPrivate,
   });
   return ref.id;
 }
