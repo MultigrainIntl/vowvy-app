@@ -479,6 +479,10 @@
   pointer-events: none;
 }
 
+.photo-count--match {
+  background: rgba(122, 59, 46, 0.82);
+}
+
 .container-thumb {
   display: block;
   width: 100%;
@@ -1215,6 +1219,32 @@
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: rgba(255, 255, 255, 0.65);
+}
+
+.lightbox-sell {
+  padding: 8px 16px 0;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.lightbox-sell-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(199, 100, 60, 0.55);
+  background: rgba(122, 59, 46, 0.25);
+  color: rgba(255, 200, 180, 0.9);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lightbox-sell-btn:hover {
+  background: rgba(122, 59, 46, 0.45);
 }
 
 .lightbox-desc {

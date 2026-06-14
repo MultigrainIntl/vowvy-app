@@ -658,12 +658,21 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   function renderContainerRow(c: Container, showLocation = false) {
     const activePhotos = c.photos.filter(p => !p.deletedAt);
     const lastPhoto    = activePhotos[activePhotos.length - 1];
+    const matchedPhotos = photoMatchMap.get(c.id);
+    // When search is active, show the newest matching photo (array is oldest-first)
+    const thumbPhoto = matchedPhotos ? matchedPhotos[matchedPhotos.length - 1] : lastPhoto;
     return (
       <div key={c.id} className="container-row">
         <button className="delete-container-btn" onClick={() => handleDeleteContainer(c)}>✕</button>
         <div className="thumb-wrap" onClick={() => openLightbox(c)}>
-          {lastPhoto && <ThumbImage storagePath={lastPhoto.storagePath} alt={c.name} />}
-          {activePhotos.length > 1 && <span className="photo-count">{activePhotos.length}</span>}
+          {thumbPhoto && <ThumbImage storagePath={thumbPhoto.storagePath} alt={c.name} />}
+          {matchedPhotos ? (
+            <span className="photo-count photo-count--match">
+              {matchedPhotos.length === 1 ? '1 match' : `${matchedPhotos.length} matches`}
+            </span>
+          ) : activePhotos.length > 1 ? (
+            <span className="photo-count">{activePhotos.length}</span>
+          ) : null}
         </div>
         <div className="container-meta">
           <div className="container-name">
@@ -1357,6 +1366,25 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               </div>
             );
           })()}
+
+          {viewingOwnerUid === user.uid && lightboxContainerId && (
+            <div className="lightbox-sell" onClick={e => e.stopPropagation()}>
+              <button
+                className="lightbox-sell-btn"
+                onClick={() => {
+                  const photo = lightboxItems?.[lightboxIndex];
+                  const lbContainer = containers.find(c => c.id === lightboxContainerId);
+                  if (!photo || !lbContainer) return;
+                  closeLightbox();
+                  setSellContainer(lbContainer);
+                  setSellSourcePhotos([photo]);
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
+                Sell this photo
+              </button>
+            </div>
+          )}
 
           <div className="lightbox-desc" onClick={e => e.stopPropagation()}>
             <input

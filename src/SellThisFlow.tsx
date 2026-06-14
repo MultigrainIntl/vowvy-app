@@ -399,7 +399,9 @@ export default function SellThisFlow({ user, container, sourcePhotos, onClose }:
               <span className="sell-label">Photos for this listing</span>
               <p className="sell-photos-hint">
                 {sourcePhotos
-                  ? 'Using photos that matched your search'
+                  ? sourcePhotos.length === 1
+                    ? 'Using this photo'
+                    : 'Using photos that matched your search'
                   : 'Using photos from this container'}
               </p>
               <div className="sell-photo-thumbs">
