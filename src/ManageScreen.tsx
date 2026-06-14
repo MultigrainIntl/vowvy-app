@@ -45,6 +45,18 @@ function UnlockedIcon() {
   );
 }
 
+const VIS_LABELS: Record<Visibility, string> = {
+  inherit: 'Follow parent',
+  private: 'Hidden',
+  shared:  'Visible',
+};
+
+const MENU_OPTIONS: Array<{ vis: Visibility; label: string; sub: string }> = [
+  { vis: 'inherit', label: 'Follow parent', sub: 'Same as the place above it' },
+  { vis: 'private', label: 'Hidden',        sub: 'Helpers cannot see this'    },
+  { vis: 'shared',  label: 'Visible',       sub: 'Helpers can see this'       },
+];
+
 export default function ManageScreen({ user }: Props) {
   const [locations, setLocations]     = useState<Location[]>([]);
   const [containers, setContainers]   = useState<Container[]>([]);
@@ -276,28 +288,32 @@ export default function ManageScreen({ user }: Props) {
             </button>
             <div style={{ position: 'relative' }}>
               <button
-                className="loc-menu-btn"
-                aria-label="Privacy options"
-                title="Privacy options"
+                className={`loc-vis-pill${loc.visibility === 'private' ? ' vis-private' : loc.visibility === 'shared' ? ' vis-shared' : ''}`}
+                aria-label={`Privacy: ${VIS_LABELS[loc.visibility]}`}
                 onClick={e => {
                   e.stopPropagation();
                   setMenuOpenId(menuOpenId === loc.id ? null : loc.id);
                 }}
-              >⋯</button>
+              >
+                {VIS_LABELS[loc.visibility]}<span className="loc-vis-arrow"> ▾</span>
+              </button>
               {menuOpenId === loc.id && (
                 <div className="loc-menu-dropdown" role="menu">
-                  {(['inherit', 'private', 'shared'] as Visibility[]).map(v => (
+                  {MENU_OPTIONS.map(opt => (
                     <button
-                      key={v}
-                      className={`loc-menu-item${loc.visibility === v ? ' active' : ''}`}
+                      key={opt.vis}
+                      className={`loc-menu-item${loc.visibility === opt.vis ? ' active' : ''}`}
                       role="menuitem"
                       onClick={async () => {
                         setMenuOpenId(null);
-                        await applyLocationVisibility(loc.id, v);
+                        await applyLocationVisibility(loc.id, opt.vis);
                       }}
                     >
-                      <span className="loc-menu-check">{loc.visibility === v ? '✓' : ''}</span>
-                      {v === 'inherit' ? 'Follow parent' : v === 'private' ? 'Hide from helpers' : 'Show to helpers'}
+                      <span className="loc-menu-check">{loc.visibility === opt.vis ? '✓' : ''}</span>
+                      <span>
+                        {opt.label}
+                        <span className="loc-menu-sub">{opt.sub}</span>
+                      </span>
                     </button>
                   ))}
                 </div>
