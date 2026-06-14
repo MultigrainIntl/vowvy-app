@@ -237,6 +237,27 @@ export default function ContainerScreen({ user, containerId }: Props) {
               >›</button>
             </div>
           )}
+          {(() => {
+            const photo = activePhotos[lbIndex];
+            if (photo.aiStatus === 'processing') {
+              return (
+                <div className="cs-lb-ai" onClick={e => e.stopPropagation()}>
+                  <span className="cs-lb-ai-analyzing">Analyzing…</span>
+                </div>
+              );
+            }
+            if (!photo.aiDescription && (!photo.aiTags || photo.aiTags.length === 0)) return null;
+            return (
+              <div className="cs-lb-ai" onClick={e => e.stopPropagation()}>
+                {photo.aiDescription && <p className="cs-lb-ai-desc">{photo.aiDescription}</p>}
+                {photo.aiTags && photo.aiTags.length > 0 && (
+                  <div className="cs-lb-ai-tags">
+                    {photo.aiTags.map((tag, i) => <span key={i} className="cs-lb-ai-tag">{tag}</span>)}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

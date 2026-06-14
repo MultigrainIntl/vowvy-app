@@ -559,6 +559,14 @@ export const uploadCollaboratorPhoto = onCall(
   }
 );
 
+const PHOTO_ANALYSIS_PROMPT = `Analyze this image of a storage container and its contents.
+Return a JSON object with exactly these four fields:
+- "description": a short 1-2 sentence description of what is stored
+- "tags": a flat array where specific item names come first, followed by broad categories. Specific items should be concrete and descriptive (e.g. "remote control", "singing bowl", "kalimba", "sunflower", "tablet"). Broad categories should be title-cased (e.g. "Electronics", "Music", "Home Decor", "Clothing", "Tools"). Aim for 3-6 specific items then 2-4 broad categories.
+- "objects": an array of all specific visible items (can overlap with tags)
+- "searchTerms": an array of additional search-friendly terms a person might use to find these items later. Include common synonyms (e.g. "cord" for "cable", "xmas" for "Christmas"), informal names, related concepts, and plurals. Think about what words someone would type when trying to find these items months later. Aim for 8-15 terms.
+Return only valid JSON with no markdown formatting or code fences.`;
+
 export const analyzeContainerPhoto = onDocumentWritten(
   {
     document: 'users/{uid}/containers/{containerId}',
@@ -570,9 +578,8 @@ export const analyzeContainerPhoto = onDocumentWritten(
     const before = event.data?.before?.data();
     const after  = event.data?.after?.data();
 
-    if (!after) return; // document deleted
+    if (!after) return;
 
-    // Support both new photos[] array and legacy photoUrls[]
     const beforePhotos: any[] = before?.photos  ?? [];
     const afterPhotos:  any[] = after?.photos   ?? [];
     const beforeUrls: string[] = before?.photoUrls ?? [];
@@ -581,23 +588,90 @@ export const analyzeContainerPhoto = onDocumentWritten(
     const beforeCount = beforePhotos.length || beforeUrls.length;
     const afterCount  = afterPhotos.length  || afterUrls.length;
 
-    // Fire whenever a new photo is added (count increased)
     if (afterCount <= beforeCount) return;
-
-    // Get the newest non-deleted photo URL
-    let photoUrl: string;
-    if (afterPhotos.length > 0) {
-      const active = afterPhotos.filter((p: any) => !p.deletedAt);
-      if (active.length === 0) return;
-      photoUrl = active[active.length - 1].url;
-    } else {
-      photoUrl = afterUrls[afterUrls.length - 1];
-    }
 
     const docRef = event.data!.after.ref;
 
-    await docRef.update({ aiStatus: 'processing' });
+    // Per-photo AI path: find the specific new photo and patch only its entry
+    if (afterPhotos.length > 0) {
+      const beforePhotoIds = new Set(beforePhotos.map((p: any) => p.id));
+      const newPhoto = afterPhotos.find((p: any) => !beforePhotoIds.has(p.id) && !p.deletedAt);
+      if (!newPhoto) return;
 
+      // Mark only this photo as processing
+      const processingPhotos = afterPhotos.map((p: any) =>
+        p.id === newPhoto.id ? { ...p, aiStatus: 'processing' } : p
+      );
+      await docRef.update({ photos: processingPhotos, aiStatus: 'processing' });
+
+      try {
+        const fetchRes = await fetch(newPhoto.url);
+        if (!fetchRes.ok) throw new Error(`Failed to fetch photo: ${fetchRes.status}`);
+        const buffer = await fetchRes.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString('base64');
+
+        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+        const result = await model.generateContent([
+          PHOTO_ANALYSIS_PROMPT,
+          { inlineData: { data: base64, mimeType: 'image/jpeg' } },
+        ]);
+
+        const text = result.response.text().trim();
+        const clean = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+        const parsed = JSON.parse(clean) as {
+          description?: string;
+          tags?: string[];
+          objects?: string[];
+          searchTerms?: string[];
+        };
+
+        const tags = Array.isArray(parsed.tags) ? parsed.tags : [];
+        const objects = Array.isArray(parsed.objects) ? parsed.objects : [];
+
+        // Re-read for freshness so concurrent photo additions are not overwritten
+        const freshSnap = await docRef.get();
+        const freshPhotos: any[] = freshSnap.data()?.photos ?? [];
+
+        const updatedPhotos = freshPhotos.map((p: any) =>
+          p.id === newPhoto.id
+            ? { ...p, aiStatus: 'done', aiDescription: parsed.description ?? '', aiTags: tags, aiObjects: objects }
+            : p
+        );
+
+        // Merge tags and objects from all non-deleted photos for container-level search
+        const allTagsSet = new Set<string>();
+        const allSearchSet = new Set<string>();
+        updatedPhotos.filter((p: any) => !p.deletedAt).forEach((p: any) => {
+          (p.aiTags ?? []).forEach((t: string) => { allTagsSet.add(t); allSearchSet.add(t); });
+          (p.aiObjects ?? []).forEach((t: string) => allSearchSet.add(t));
+        });
+
+        console.log('analyzeContainerPhoto success, tags:', tags);
+        await docRef.update({
+          photos:        updatedPhotos,
+          aiStatus:      'done',
+          aiDescription: parsed.description ?? '',
+          aiTags:        [...allTagsSet],
+          aiObjects:     objects,
+          aiSearchTerms: [...allSearchSet],
+        });
+      } catch (err) {
+        console.error('analyzeContainerPhoto error:', err);
+        const freshSnap = await docRef.get();
+        const freshPhotos: any[] = freshSnap.data()?.photos ?? [];
+        const errorPhotos = freshPhotos.map((p: any) =>
+          p.id === newPhoto.id ? { ...p, aiStatus: 'error' } : p
+        );
+        await docRef.update({ photos: errorPhotos, aiStatus: 'error' });
+      }
+      return;
+    }
+
+    // Legacy photoUrls[] path — keep original container-root behavior
+    const photoUrl = afterUrls[afterUrls.length - 1];
+    await docRef.update({ aiStatus: 'processing' });
     try {
       const fetchRes = await fetch(photoUrl);
       if (!fetchRes.ok) throw new Error(`Failed to fetch photo: ${fetchRes.status}`);
@@ -607,21 +681,12 @@ export const analyzeContainerPhoto = onDocumentWritten(
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-      const prompt = `Analyze this image of a storage container and its contents.
-Return a JSON object with exactly these four fields:
-- "description": a short 1-2 sentence description of what is stored
-- "tags": a flat array where specific item names come first, followed by broad categories. Specific items should be concrete and descriptive (e.g. "remote control", "singing bowl", "kalimba", "sunflower", "tablet"). Broad categories should be title-cased (e.g. "Electronics", "Music", "Home Decor", "Clothing", "Tools"). Aim for 3-6 specific items then 2-4 broad categories.
-- "objects": an array of all specific visible items (can overlap with tags)
-- "searchTerms": an array of additional search-friendly terms a person might use to find these items later. Include common synonyms (e.g. "cord" for "cable", "xmas" for "Christmas"), informal names, related concepts, and plurals. Think about what words someone would type when trying to find these items months later. Aim for 8-15 terms.
-Return only valid JSON with no markdown formatting or code fences.`;
-
       const result = await model.generateContent([
-        prompt,
+        PHOTO_ANALYSIS_PROMPT,
         { inlineData: { data: base64, mimeType: 'image/jpeg' } },
       ]);
 
       const text = result.response.text().trim();
-      // Strip any accidental markdown fences
       const clean = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
       const parsed = JSON.parse(clean) as {
         description?: string;
@@ -631,16 +696,16 @@ Return only valid JSON with no markdown formatting or code fences.`;
       };
 
       const tags = Array.isArray(parsed.tags) ? parsed.tags : [];
-      console.log('analyzeContainerPhoto success, tags:', tags);
+      console.log('analyzeContainerPhoto success (legacy), tags:', tags);
       await docRef.update({
-        aiStatus:       'done',
-        aiDescription:  parsed.description ?? '',
-        aiTags:         tags,
-        aiObjects:      Array.isArray(parsed.objects) ? parsed.objects : [],
-        aiSearchTerms:  Array.isArray(parsed.searchTerms) ? parsed.searchTerms : [],
+        aiStatus:      'done',
+        aiDescription: parsed.description ?? '',
+        aiTags:        tags,
+        aiObjects:     Array.isArray(parsed.objects) ? parsed.objects : [],
+        aiSearchTerms: Array.isArray(parsed.searchTerms) ? parsed.searchTerms : [],
       });
     } catch (err) {
-      console.error('analyzeContainerPhoto error:', err);
+      console.error('analyzeContainerPhoto error (legacy):', err);
       await docRef.update({ aiStatus: 'error' });
     }
   }

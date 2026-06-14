@@ -18,6 +18,10 @@ export interface PhotoItem {
   moderationCheckedAt?: number | null;
   moderationProvider?: string | null;
   moderationReason?: string | null;
+  aiDescription?: string;
+  aiTags?: string[];
+  aiObjects?: string[];
+  aiStatus?: 'processing' | 'done' | 'error';
 }
 
 export interface ContainerNote {

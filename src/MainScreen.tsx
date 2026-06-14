@@ -1285,6 +1285,29 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             </div>
           )}
 
+          {(() => {
+            const photo = lightboxItems[lightboxIndex];
+            if (!photo) return null;
+            if (photo.aiStatus === 'processing') {
+              return (
+                <div className="lightbox-ai" onClick={e => e.stopPropagation()}>
+                  <span className="lightbox-ai-analyzing">Analyzing…</span>
+                </div>
+              );
+            }
+            if (!photo.aiDescription && (!photo.aiTags || photo.aiTags.length === 0)) return null;
+            return (
+              <div className="lightbox-ai" onClick={e => e.stopPropagation()}>
+                {photo.aiDescription && <p className="lightbox-ai-desc">{photo.aiDescription}</p>}
+                {photo.aiTags && photo.aiTags.length > 0 && (
+                  <div className="lightbox-ai-tags">
+                    {photo.aiTags.map((tag, i) => <span key={i} className="lightbox-ai-tag">{tag}</span>)}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="lightbox-desc" onClick={e => e.stopPropagation()}>
             <input
               type="text"

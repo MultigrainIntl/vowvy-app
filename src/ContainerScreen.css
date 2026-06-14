@@ -137,6 +137,52 @@
   margin-bottom: 20px;
 }
 
+/* Lightbox AI */
+.cs-lb-ai {
+  padding: 8px 20px 0;
+  width: 100%;
+  max-width: 480px;
+  box-sizing: border-box;
+}
+
+.cs-lb-ai-analyzing {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.cs-lb-ai-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.5;
+  margin: 0 0 6px;
+}
+
+.cs-lb-ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cs-lb-ai-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Also add chip style for non-lightbox ai-tags in ContainerScreen */
+.cs-ai-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f5f0ec;
+  border: 1px solid #d8ccc4;
+  color: #6a5048;
+}
+
 /* Lightbox */
 .cs-lb-backdrop {
   position: fixed;
