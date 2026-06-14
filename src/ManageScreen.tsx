@@ -25,7 +25,7 @@ interface Container {
   effectiveIsPrivate: boolean;
 }
 
-interface Props { user: User; }
+interface Props { user: User; onStartGuidedAdd?: () => void; }
 
 function LockedIcon() {
   return (
@@ -45,7 +45,7 @@ function UnlockedIcon() {
   );
 }
 
-export default function ManageScreen({ user }: Props) {
+export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
   const [locations, setLocations]     = useState<Location[]>([]);
   const [containers, setContainers]   = useState<Container[]>([]);
   const [editingId, setEditingId]     = useState<string | null>(null);
@@ -478,6 +478,11 @@ export default function ManageScreen({ user }: Props) {
 
       <div className="manage-content">
         <h2 className="manage-title">Manage Locations</h2>
+        {onStartGuidedAdd && (
+          <button className="manage-guided-add-btn" onClick={onStartGuidedAdd}>
+            + Set up a new space
+          </button>
+        )}
 
         {healthIssues.length > 0 && (
           <div className="health-panel">

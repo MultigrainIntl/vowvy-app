@@ -46,6 +46,7 @@ export default function App() {
   const [loading, setLoading]     = useState(true);
   const [route, setRoute]         = useState<Route>(parsePath);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showGuidedAdd, setShowGuidedAdd]   = useState(false);
   const [needsPolicyAcceptance, setNeedsPolicyAcceptance] = useState(false);
 
   useEffect(() => {
@@ -146,11 +147,19 @@ export default function App() {
     return <OnboardingScreen user={user} onDone={handleOnboardingDone} />;
   }
 
+  if (showGuidedAdd) {
+    return <OnboardingScreen user={user} onDone={() => {
+      setShowGuidedAdd(false);
+      window.history.pushState({}, '', '/');
+      setRoute({ type: 'home', id: null, owner: null });
+    }} />;
+  }
+
   if (route.type === 'trash') {
     return <TrashScreen user={user} />;
   }
   if (route.type === 'manage') {
-    return <ManageScreen user={user} />;
+    return <ManageScreen user={user} onStartGuidedAdd={() => setShowGuidedAdd(true)} />;
   }
   if (route.type === 'collaborators') {
     return <CollaboratorDashboard user={user} />;

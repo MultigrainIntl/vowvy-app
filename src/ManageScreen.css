@@ -18,6 +18,19 @@
   font-weight: 600;
 }
 
+.manage-guided-add-btn {
+  font-family: 'Lora', serif;
+  font-size: 14px;
+  color: #7a3b2e;
+  background: none;
+  border: 1px solid #c8a090;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+.manage-guided-add-btn:hover { background: #f5ede8; }
+
 .manage-subtitle {
   font-family: 'Cormorant Garamond', serif;
   font-size: 18px;
