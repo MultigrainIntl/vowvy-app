@@ -165,14 +165,16 @@ export default function AuthScreen() {
         {/* How VOWVY works */}
         <section className="landing-how">
           <h2 className="landing-section-heading">How VOWVY works</h2>
-          <p className="landing-section-intro">Simple enough to understand at a glance.</p>
+          <p className="landing-how-aha">Take a photo. VOWVY remembers.<br />Find it whenever you need it.</p>
           <ol className="landing-how-steps">
             {howSteps.map(({ num, title, desc, icon }, i) => (
               <li key={i} className="landing-how-step">
-                <span className="landing-how-step-num">Step {num}</span>
                 <span className="landing-how-icon-wrap">{icon}</span>
-                <strong className="landing-how-title">{title}</strong>
-                <p className="landing-how-desc">{desc}</p>
+                <div className="landing-how-step-content">
+                  <span className="landing-how-step-num">Step {num}</span>
+                  <strong className="landing-how-title">{title}</strong>
+                  <p className="landing-how-desc">{desc}</p>
+                </div>
               </li>
             ))}
           </ol>

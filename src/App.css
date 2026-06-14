@@ -283,82 +283,78 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 28px;
+  gap: 36px;
   box-sizing: border-box;
+}
+
+.landing-how-aha {
+  font-family: var(--font-heading);
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--charcoal);
+  text-align: center;
+  line-height: 1.45;
+  max-width: 440px;
+  margin: 0 auto;
 }
 
 .landing-how-steps {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  max-width: 760px;
+  max-width: 560px;
 }
 
 .landing-how-step {
-  background: #fff;
-  border: 1px solid var(--warm-gray);
-  border-top: 3px solid var(--terracotta);
-  border-radius: 10px;
-  padding: 20px 14px 22px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 8px;
-  position: relative;
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 0 24px;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--warm-gray);
+  align-items: start;
 }
 
-.landing-how-step:not(:last-child)::after {
-  content: '→';
-  position: absolute;
-  right: -13px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--terracotta);
-  font-size: 14px;
-  opacity: 0.45;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.landing-how-step-num {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--terracotta);
-  opacity: 0.65;
-  margin-bottom: -2px;
+.landing-how-steps li:first-child {
+  border-top: 1px solid var(--warm-gray);
 }
 
 .landing-how-icon-wrap {
   color: var(--terracotta);
   display: flex;
-  align-items: center;
   justify-content: center;
+  padding-top: 4px;
+}
+
+.landing-how-step-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.landing-how-step-num {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--terracotta);
+  opacity: 0.7;
 }
 
 .landing-how-title {
   font-family: var(--font-heading);
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--charcoal);
 }
 
 .landing-how-desc {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted-slate);
-  line-height: 1.5;
+  line-height: 1.6;
   margin: 0;
-}
-
-@media (max-width: 640px) {
-  .landing-how-steps { grid-template-columns: 1fr 1fr; }
-  .landing-how-step:not(:last-child)::after { display: none; }
 }
 
 /* What VOWVY helps you do */
