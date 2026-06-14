@@ -1512,6 +1512,273 @@
   }
 }
 
+/* ---- Items to sell tray indicator (header) ---- */
+
+.tray-indicator-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(199, 100, 60, 0.6);
+  background: rgba(122, 59, 46, 0.08);
+  color: #7a3b2e;
+  font-size: 13px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.tray-indicator-btn:hover {
+  background: rgba(122, 59, 46, 0.15);
+}
+
+/* ---- Sell button in search row ---- */
+
+.search-sell-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-sell-row .search-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.sell-from-search-btn {
+  flex-shrink: 0;
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(199, 100, 60, 0.55);
+  background: #7a3b2e;
+  color: #fff;
+  font-size: 14px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.sell-from-search-btn:hover {
+  background: #6a3226;
+}
+
+/* ---- Lightbox: Add to Items to sell button ---- */
+
+.lightbox-add-tray-btn {
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(180, 180, 180, 0.5);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(220, 210, 200, 0.9);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lightbox-add-tray-btn:hover:not([data-added]) {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.lightbox-add-tray-btn--added {
+  border-color: rgba(100, 180, 100, 0.55);
+  color: rgba(150, 220, 150, 0.9);
+  cursor: default;
+}
+
+/* ---- Items to sell tray panel ---- */
+
+.tray-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 600px) {
+  .tray-overlay {
+    align-items: center;
+  }
+}
+
+.tray-sheet {
+  position: relative;
+  background: #fff;
+  width: 100%;
+  max-width: 540px;
+  max-height: 85vh;
+  overflow-y: auto;
+  border-radius: 18px 18px 0 0;
+  padding: 24px 20px 40px;
+  font-family: var(--font-body);
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 600px) {
+  .tray-sheet {
+    border-radius: 18px;
+    max-height: 80vh;
+  }
+}
+
+.tray-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tray-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: #7a3b2e;
+}
+
+.tray-close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #aaa;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.tray-close-btn:hover {
+  color: #555;
+  background: #f5f0ec;
+}
+
+.tray-empty {
+  font-size: 14px;
+  color: #888;
+  line-height: 1.6;
+  margin: 8px 0;
+}
+
+.tray-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tray-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid #e8e0d8;
+  border-radius: 10px;
+  background: #faf8f6;
+}
+
+.tray-item-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 7px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #f0ece8;
+}
+
+.tray-item-thumb .container-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+.tray-item-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tray-item-container {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tray-item-desc {
+  font-size: 12px;
+  color: #777;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tray-item-remove {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid #d0c0b8;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #888;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.tray-item-remove:hover {
+  color: #7a3b2e;
+  border-color: #c8a090;
+}
+
+.tray-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.tray-clear-btn {
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: #888;
+  cursor: pointer;
+  font-family: var(--font-body);
+  padding: 4px 0;
+}
+
+.tray-clear-btn:hover {
+  color: #555;
+}
+
+.tray-create-btn {
+  background: #7a3b2e;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tray-create-btn:hover {
+  background: #6a3226;
+}
+
 /* ---- Mobile-only overrides (≤767px) ---- */
 
 @media (max-width: 767px) {
