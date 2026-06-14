@@ -870,8 +870,10 @@
 
 .container-actions {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
+  margin-top: 8px;
 }
 
 /* ---- QR Print Modal ---- */
@@ -1425,12 +1427,6 @@
 
   .header-actions {
     display: none;
-  }
-
-  /* Container actions: allow wrapping on very narrow screens */
-  .container-actions {
-    flex-wrap: wrap;
-    gap: 8px;
   }
 
   /* Collaborator banner fills width cleanly */
