@@ -96,7 +96,7 @@ export default function AuthScreen() {
   if (mode === 'welcome') {
     const howSteps = [
       {
-        num: '01', title: 'Take a photo', desc: 'Snap photos of items, boxes, rooms, or collections.',
+        num: '01', title: 'Take a photo', desc: 'Snap photos of items, boxes, rooms, offices, supplies, samples, or collections.',
         icon: (
           <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="4" y="11" width="32" height="22" rx="3" />
@@ -123,7 +123,7 @@ export default function AuthScreen() {
         ),
       },
       {
-        num: '03', title: 'Find it later', desc: 'Search by item, note, tag, room, box, or location.',
+        num: '03', title: 'Find or share it later', desc: 'Search by item, note, tag, room, box, or location — or share with a helper.',
         icon: (
           <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="17" cy="17" r="11" />
@@ -134,7 +134,7 @@ export default function AuthScreen() {
         ),
       },
       {
-        num: '04', title: 'Sell it when ready', desc: 'Select items and export photos and listing text for easier posting.',
+        num: '04', title: 'Use it when needed', desc: 'Prepare items to sell, share with helpers, support a move, or document belongings.',
         icon: (
           <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="6" y="3" width="28" height="35" rx="3" />
@@ -154,7 +154,7 @@ export default function AuthScreen() {
           <img src={logoMark} alt="" className="auth-logo-mark" />
           <h1 className="auth-logo">Vowvy</h1>
           <p className="landing-headline">Finally know what you have, where it is, and what you're ready to let go.</p>
-          <p className="landing-subheadline">VOWVY gives you a searchable memory of your things — so you can organize what's scattered, find what matters, and prepare items to sell when you're ready.</p>
+          <p className="landing-subheadline">VOWVY gives you a searchable memory of your things — at home, at school, or at work. Organize what you have, find it later, share it with helpers, or prepare items to sell.</p>
           <p className="landing-micro">Take photos now. Find things later.</p>
           <div className="auth-buttons" style={{ marginTop: 8 }}>
             <button onClick={() => switchMode('signup')}>Create your free account</button>
@@ -201,18 +201,18 @@ export default function AuthScreen() {
           </ul>
         </section>
 
-        {/* Useful for all kinds of organizing */}
+        {/* Useful at home, at school, and at work */}
         <section className="landing-audience">
-          <h2 className="landing-section-heading">Useful for all kinds of organizing</h2>
-          <p className="landing-section-intro">The same simple idea works in many real-life situations.</p>
+          <h2 className="landing-section-heading">Useful at home, at school, and at work</h2>
+          <p className="landing-section-intro">The same simple idea works across many real-life situations.</p>
           <ul className="landing-audience-list">
             {[
-              { title: 'Moving & storage', desc: "Know what's inside every box before and after a move." },
-              { title: 'Families & estates', desc: 'Sort keepsakes, valuables, donations, and items to sell.' },
-              { title: 'Students & dorms', desc: 'Track belongings across dorms, apartments, storage, and move-outs.' },
-              { title: 'Real estate & cleanouts', desc: 'Help prepare homes, organize contents, and manage cleanout projects.' },
-              { title: 'Collections & valuables', desc: 'Document books, art, memorabilia, antiques, and personal collections.' },
-              { title: 'Helpers & small teams', desc: 'Let family, assistants, or collaborators help while controlling visibility.' },
+              { title: 'Home & storage', desc: "Remember what's in boxes, closets, garages, basements, and storage areas." },
+              { title: 'Moving & dorms', desc: 'Track belongings before, during, and after a move.' },
+              { title: 'Families & estates', desc: 'Organize keepsakes, valuables, donations, and items to sell.' },
+              { title: 'Office & workspaces', desc: 'Keep track of supplies, equipment, samples, and shared storage.' },
+              { title: 'Real estate & cleanouts', desc: 'Document rooms, contents, staging items, and cleanout projects.' },
+              { title: 'Insurance documentation', desc: 'Create a photo-based record of belongings — useful when preparing documentation for insurance purposes.' },
             ].map(({ title, desc }, i) => (
               <li key={i}>
                 <strong>{title}</strong>
