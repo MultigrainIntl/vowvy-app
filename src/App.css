@@ -276,13 +276,15 @@
 
 .landing-how {
   width: 100%;
-  max-width: 760px;
-  padding: 40px 24px;
+  background: #f8f5f1;
+  padding: 48px 24px;
   border-top: 1px solid var(--warm-gray);
+  border-bottom: 1px solid var(--warm-gray);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 28px;
+  box-sizing: border-box;
 }
 
 .landing-how-steps {
@@ -293,13 +295,15 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   width: 100%;
+  max-width: 760px;
 }
 
 .landing-how-step {
   background: #fff;
   border: 1px solid var(--warm-gray);
-  border-radius: 12px;
-  padding: 20px 14px;
+  border-top: 3px solid var(--terracotta);
+  border-radius: 10px;
+  padding: 20px 14px 22px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -315,12 +319,28 @@
   top: 50%;
   transform: translateY(-50%);
   color: var(--terracotta);
-  font-size: 16px;
+  font-size: 14px;
+  opacity: 0.45;
   z-index: 1;
   pointer-events: none;
 }
 
-.landing-how-icon { font-size: 30px; line-height: 1; }
+.landing-how-step-num {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--terracotta);
+  opacity: 0.65;
+  margin-bottom: -2px;
+}
+
+.landing-how-icon-wrap {
+  color: var(--terracotta);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .landing-how-title {
   font-family: var(--font-heading);

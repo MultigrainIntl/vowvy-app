@@ -94,6 +94,58 @@ export default function AuthScreen() {
   }
 
   if (mode === 'welcome') {
+    const howSteps = [
+      {
+        num: '01', title: 'Take a photo', desc: 'Snap photos of items, boxes, rooms, or collections.',
+        icon: (
+          <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="11" width="32" height="22" rx="3" />
+            <path d="M14 11V8h6l3 3" />
+            <circle cx="20" cy="22" r="6" />
+            <circle cx="20" cy="22" r="2.5" fill="currentColor" stroke="none" opacity="0.25" />
+            <circle cx="31" cy="16" r="1.5" fill="currentColor" stroke="none" />
+          </svg>
+        ),
+      },
+      {
+        num: '02', title: 'VOWVY helps label it', desc: 'AI descriptions and tags make things easier to find.',
+        icon: (
+          <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="5" y="4" width="30" height="22" rx="3" />
+            <rect x="9" y="8" width="10" height="9" rx="1.5" fill="currentColor" stroke="none" opacity="0.12" />
+            <rect x="21" y="9" width="10" height="1.5" rx="0.75" fill="currentColor" stroke="none" opacity="0.4" />
+            <rect x="21" y="12.5" width="7" height="1.5" rx="0.75" fill="currentColor" stroke="none" opacity="0.4" />
+            <rect x="5" y="30" width="13" height="7" rx="3.5" />
+            <rect x="22" y="30" width="13" height="7" rx="3.5" />
+            <rect x="8.5" y="33" width="6" height="1" rx="0.5" fill="currentColor" stroke="none" opacity="0.5" />
+            <rect x="25.5" y="33" width="6" height="1" rx="0.5" fill="currentColor" stroke="none" opacity="0.5" />
+          </svg>
+        ),
+      },
+      {
+        num: '03', title: 'Find it later', desc: 'Search by item, note, tag, room, box, or location.',
+        icon: (
+          <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="17" cy="17" r="11" />
+            <line x1="25.5" y1="25.5" x2="35" y2="35" strokeWidth="2" />
+            <rect x="12" y="14" width="10" height="1.5" rx="0.75" fill="currentColor" stroke="none" opacity="0.4" />
+            <rect x="12" y="17.5" width="7" height="1.5" rx="0.75" fill="currentColor" stroke="none" opacity="0.4" />
+          </svg>
+        ),
+      },
+      {
+        num: '04', title: 'Sell it when ready', desc: 'Select items and export photos and listing text for easier posting.',
+        icon: (
+          <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="6" y="3" width="28" height="35" rx="3" />
+            <rect x="9" y="6" width="22" height="14" rx="1.5" fill="currentColor" stroke="none" opacity="0.1" />
+            <rect x="9" y="24" width="18" height="1.5" rx="0.75" fill="currentColor" stroke="none" opacity="0.5" />
+            <rect x="9" y="27.5" width="13" height="1.5" rx="0.75" fill="currentColor" stroke="none" opacity="0.35" />
+            <rect x="9" y="31" width="16" height="1.5" rx="0.75" fill="currentColor" stroke="none" opacity="0.35" />
+          </svg>
+        ),
+      },
+    ];
     return (
       <div className="auth-landing">
 
@@ -115,14 +167,10 @@ export default function AuthScreen() {
           <h2 className="landing-section-heading">How VOWVY works</h2>
           <p className="landing-section-intro">Simple enough to understand at a glance.</p>
           <ol className="landing-how-steps">
-            {[
-              { icon: '📷', title: 'Take a photo', desc: 'Snap photos of items, boxes, rooms, or collections.' },
-              { icon: '✨', title: 'VOWVY helps label it', desc: 'AI descriptions and tags make things easier to find.' },
-              { icon: '🔍', title: 'Find it later', desc: 'Search by item, note, tag, room, box, or location.' },
-              { icon: '🏷️', title: 'Sell it when ready', desc: 'Select items and export photos and listing text for easier posting.' },
-            ].map(({ icon, title, desc }, i) => (
+            {howSteps.map(({ num, title, desc, icon }, i) => (
               <li key={i} className="landing-how-step">
-                <span className="landing-how-icon">{icon}</span>
+                <span className="landing-how-step-num">Step {num}</span>
+                <span className="landing-how-icon-wrap">{icon}</span>
                 <strong className="landing-how-title">{title}</strong>
                 <p className="landing-how-desc">{desc}</p>
               </li>
