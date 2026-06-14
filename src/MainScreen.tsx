@@ -18,6 +18,7 @@ import logoMark from './assets/logo-mark.svg';
 import './MainScreen.css';
 import { subscribeToLocations, createLocation, getLocationPath, type Location } from './locations';
 import SellThisFlow from './SellThisFlow';
+import type { ContainerForListing } from './SellThisFlow';
 
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
@@ -51,6 +52,12 @@ interface Container {
   lastModifiedAt: Timestamp | null;
   lastModifiedBy: string | null;
   lastModifiedByName: string | null;
+}
+
+interface TrayPhoto {
+  photo: PhotoItem;
+  containerId: string;
+  containerName: string;
 }
 
 function QRPrintModal({ container, onClose }: { container: Container; onClose: () => void }) {
@@ -169,8 +176,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [searchQuery, setSearchQuery]                 = useState('');
   const [printContainer, setPrintContainer]           = useState<Container | null>(null);
   const [moveSource, setMoveSource] = useState<{ containerId: string; mode: 'container' | 'photo'; photoId?: string } | null>(null);
-  const [sellContainer, setSellContainer] = useState<Container | null>(null);
+  const [sellContainer, setSellContainer] = useState<ContainerForListing | null>(null);
   const [sellSourcePhotos, setSellSourcePhotos] = useState<PhotoItem[] | null>(null);
+  const [sellSourceContainerIds, setSellSourceContainerIds] = useState<string[] | null>(null);
+  const [sellIsFromTray, setSellIsFromTray] = useState(false);
+  const [trayPhotos, setTrayPhotos] = useState<TrayPhoto[]>([]);
+  const [showTray, setShowTray] = useState(false);
   const [viewingOwnerUid, setViewingOwnerUid]         = useState(initialOwnerUid ?? user.uid);
   const [sharedInventories, setSharedInventories]     = useState<{ ownerUid: string; ownerName: string }[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -756,6 +767,8 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 onClick={() => {
                   setSellContainer(c);
                   setSellSourcePhotos(photoMatchMap.get(c.id) ?? null);
+                  setSellSourceContainerIds(null);
+                  setSellIsFromTray(false);
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
@@ -820,6 +833,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         </button>
 
         <div className="header-actions">
+          {viewingOwnerUid === user.uid && trayPhotos.length > 0 && (
+            <button className="tray-indicator-btn" onClick={() => setShowTray(true)}>
+              Items to sell ({trayPhotos.length})
+            </button>
+          )}
           {sharedInventories.length > 0 && (
             <select
               value={viewingOwnerUid}
@@ -1182,15 +1200,22 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           )}
         </section>
 
-        <div className="search-wrap">
-          <input
-            type="text"
-            className="search-input"
-            placeholder={t('main.search.placeholder')}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && <button className="search-clear" onClick={() => setSearchQuery('')}>✕</button>}
+        <div className="search-sell-row">
+          <div className="search-wrap">
+            <input
+              type="text"
+              className="search-input"
+              placeholder={t('main.search.placeholder')}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && <button className="search-clear" onClick={() => setSearchQuery('')}>✕</button>}
+          </div>
+          {viewingOwnerUid === user.uid && (
+            <button className="sell-from-search-btn" onClick={() => setShowTray(true)}>
+              {trayPhotos.length > 0 ? `Sell (${trayPhotos.length})` : 'Sell'}
+            </button>
+          )}
         </div>
 
         <section className="container-list">
@@ -1367,24 +1392,38 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             );
           })()}
 
-          {viewingOwnerUid === user.uid && lightboxContainerId && (
-            <div className="lightbox-sell" onClick={e => e.stopPropagation()}>
-              <button
-                className="lightbox-sell-btn"
-                onClick={() => {
-                  const photo = lightboxItems?.[lightboxIndex];
-                  const lbContainer = containers.find(c => c.id === lightboxContainerId);
-                  if (!photo || !lbContainer) return;
-                  closeLightbox();
-                  setSellContainer(lbContainer);
-                  setSellSourcePhotos([photo]);
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
-                Sell this photo
-              </button>
-            </div>
-          )}
+          {viewingOwnerUid === user.uid && lightboxContainerId && (() => {
+            const photo = lightboxItems?.[lightboxIndex];
+            const lbContainer = containers.find(c => c.id === lightboxContainerId);
+            const alreadyAdded = photo ? trayPhotos.some(t => t.photo.id === photo.id) : false;
+            return (
+              <div className="lightbox-sell" onClick={e => e.stopPropagation()}>
+                <button
+                  className={`lightbox-add-tray-btn${alreadyAdded ? ' lightbox-add-tray-btn--added' : ''}`}
+                  onClick={() => {
+                    if (!photo || !lbContainer || alreadyAdded) return;
+                    setTrayPhotos(prev => [...prev, { photo, containerId: lbContainer.id, containerName: lbContainer.name }]);
+                  }}
+                >
+                  {alreadyAdded ? 'Added ✓' : 'Add to Items to sell'}
+                </button>
+                <button
+                  className="lightbox-sell-btn"
+                  onClick={() => {
+                    if (!photo || !lbContainer) return;
+                    closeLightbox();
+                    setSellContainer(lbContainer);
+                    setSellSourcePhotos([photo]);
+                    setSellSourceContainerIds(null);
+                    setSellIsFromTray(false);
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
+                  Sell this photo
+                </button>
+              </div>
+            );
+          })()}
 
           <div className="lightbox-desc" onClick={e => e.stopPropagation()}>
             <input
@@ -1762,8 +1801,98 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           user={user}
           container={sellContainer}
           sourcePhotos={sellSourcePhotos ?? undefined}
-          onClose={() => { setSellContainer(null); setSellSourcePhotos(null); }}
+          sourceContainerIds={sellSourceContainerIds ?? undefined}
+          isFromTray={sellIsFromTray}
+          onClose={() => {
+            setSellContainer(null);
+            setSellSourcePhotos(null);
+            setSellSourceContainerIds(null);
+            setSellIsFromTray(false);
+          }}
         />
+      )}
+
+      {/* Items to sell tray */}
+      {showTray && (
+        <div className="tray-overlay" onClick={() => setShowTray(false)}>
+          <div className="tray-sheet" onClick={e => e.stopPropagation()}>
+            <div className="tray-header">
+              <span className="tray-title">
+                {trayPhotos.length > 0 ? `Items to sell (${trayPhotos.length})` : 'Items to sell'}
+              </span>
+              <button className="tray-close-btn" onClick={() => setShowTray(false)} aria-label="Close">✕</button>
+            </div>
+
+            {trayPhotos.length === 0 ? (
+              <p className="tray-empty">
+                Add photos to your selection using the 'Add to Items to sell' button in any photo.
+              </p>
+            ) : (
+              <>
+                <div className="tray-list">
+                  {trayPhotos.map((tp, i) => (
+                    <div key={`${tp.photo.id}-${i}`} className="tray-item">
+                      <div className="tray-item-thumb">
+                        <ThumbImage storagePath={tp.photo.storagePath} alt={tp.containerName} />
+                      </div>
+                      <div className="tray-item-meta">
+                        <span className="tray-item-container">{tp.containerName}</span>
+                        {tp.photo.aiDescription && (
+                          <span className="tray-item-desc">{tp.photo.aiDescription}</span>
+                        )}
+                      </div>
+                      <button
+                        className="tray-item-remove"
+                        onClick={() => setTrayPhotos(prev => prev.filter((_, j) => j !== i))}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="tray-actions">
+                  <button
+                    className="tray-clear-btn"
+                    onClick={() => setTrayPhotos([])}
+                  >
+                    Clear all
+                  </button>
+                  <button
+                    className="tray-create-btn"
+                    onClick={() => {
+                      const uniqueContainerIds = [...new Set(trayPhotos.map(tp => tp.containerId))];
+                      const photos = trayPhotos.map(tp => tp.photo);
+                      if (uniqueContainerIds.length === 1) {
+                        const c = containers.find(ct => ct.id === uniqueContainerIds[0]);
+                        if (!c) return;
+                        setSellContainer(c);
+                        setSellSourcePhotos(photos);
+                        setSellSourceContainerIds(null);
+                      } else {
+                        const syntheticContainer: ContainerForListing = {
+                          id: '',
+                          name: 'Selected items',
+                          location: '',
+                          photos,
+                          aiDescription: '',
+                          aiTags: [],
+                        };
+                        setSellContainer(syntheticContainer);
+                        setSellSourcePhotos(photos);
+                        setSellSourceContainerIds(uniqueContainerIds);
+                      }
+                      setSellIsFromTray(true);
+                      setShowTray(false);
+                    }}
+                  >
+                    Create listing draft
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Invite panel */}

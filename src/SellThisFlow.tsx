@@ -3,8 +3,8 @@ import { type User } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, addDoc, updateDoc, collection, serverTimestamp,
 } from 'firebase/firestore';
-import { db } from './firebase';
-import { ThumbImage } from './shared';
+import { db, auth } from './firebase';
+import { ThumbImage, PROXY_BASE } from './shared';
 import type { PhotoItem } from './shared';
 import vowvyLogo from './assets/logo-mark.svg';
 import './SellThisFlow.css';
@@ -16,7 +16,7 @@ type ShippingIntent = 'local' | 'ship' | 'unsure';
 type Step = 'loading' | 'confirm' | 'questions' | 'review' | 'platform' | 'copy';
 type RewriteMode = 'shorter' | 'friendlier' | 'professional' | 'detail' | 'casual';
 
-interface ContainerForListing {
+export interface ContainerForListing {
   id: string;
   name: string;
   location: string;
@@ -37,6 +37,8 @@ interface Props {
   user: User;
   container: ContainerForListing;
   sourcePhotos?: PhotoItem[];
+  sourceContainerIds?: string[];
+  isFromTray?: boolean;
   onClose: () => void;
 }
 
@@ -179,9 +181,44 @@ const PLATFORM_URLS: Record<string, string> = {
 
 const ALL_PLATFORMS = ['Facebook Marketplace', 'Craigslist', 'Etsy', 'eBay', 'Other'];
 
+// ---- Download button (fetch-blob approach) --------------------------------
+
+function DownloadPhotoBtn({ photo, index }: { photo: PhotoItem; index: number }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleDownload() {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+      const proxyUrl = `${PROXY_BASE}?path=${encodeURIComponent(photo.storagePath)}`;
+      const res = await fetch(proxyUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `photo-${index + 1}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch { /* silently fail */ } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button className="sell-download-btn" onClick={handleDownload} disabled={loading}>
+      {loading ? '…' : `Photo ${index + 1}`}
+    </button>
+  );
+}
+
 // ---- Component ------------------------------------------------------------
 
-export default function SellThisFlow({ user, container, sourcePhotos, onClose }: Props) {
+export default function SellThisFlow({ user, container, sourcePhotos, sourceContainerIds, isFromTray, onClose }: Props) {
   const [step, setStep]                   = useState<Step>('loading');
   const [sellingScope, setSellingScope]   = useState<SellingScope>('whole');
   const [itemHint, setItemHint]           = useState('');
@@ -226,7 +263,8 @@ export default function SellThisFlow({ user, container, sourcePhotos, onClose }:
       const ref = await addDoc(
         collection(db, `users/${user.uid}/listings`),
         {
-          containerId:          container.id,
+          containerId:          sourceContainerIds ? null : container.id,
+          sourceContainerIds:   sourceContainerIds ?? [],
           photoIds,
           sellingScope,
           itemHint:             itemHint.trim(),
@@ -398,11 +436,13 @@ export default function SellThisFlow({ user, container, sourcePhotos, onClose }:
             <div className="sell-field">
               <span className="sell-label">Photos for this listing</span>
               <p className="sell-photos-hint">
-                {sourcePhotos
-                  ? sourcePhotos.length === 1
-                    ? 'Using this photo'
-                    : 'Using photos that matched your search'
-                  : 'Using photos from this container'}
+                {isFromTray
+                  ? 'Using selected items'
+                  : sourcePhotos
+                    ? sourcePhotos.length === 1
+                      ? 'Using this photo'
+                      : 'Using photos that matched your search'
+                    : 'Using photos from this container'}
               </p>
               <div className="sell-photo-thumbs">
                 {(sourcePhotos ?? container.photos.filter(p => !p.deletedAt)).map(p => (
@@ -546,6 +586,21 @@ export default function SellThisFlow({ user, container, sourcePhotos, onClose }:
                 </button>
               </div>
             </div>
+
+            {(() => {
+              const photos = (sourcePhotos ?? container.photos.filter(p => !p.deletedAt)).filter(p => !p.deletedAt);
+              if (photos.length === 0) return null;
+              return (
+                <div className="sell-field">
+                  <span className="sell-label">Download photos for your listing</span>
+                  <div className="sell-download-row">
+                    {photos.map((p, i) => (
+                      <DownloadPhotoBtn key={p.id} photo={p} index={i} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {platformUrl && (
               <a

@@ -564,3 +564,33 @@
   color: #7a3b2e;
   text-decoration: underline;
 }
+
+/* ---- Photo downloads ---- */
+
+.sell-download-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sell-download-btn {
+  background: #f5f0ec;
+  border: 1px solid #c8b0a0;
+  color: #7a5a48;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: 'Lora', serif;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.sell-download-btn:hover:not(:disabled) {
+  background: #ede5dd;
+  border-color: #a08070;
+}
+
+.sell-download-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
