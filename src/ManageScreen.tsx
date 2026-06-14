@@ -243,6 +243,11 @@ export default function ManageScreen({ user }: Props) {
           ) : (
             <span className="manage-name">{loc.name}</span>
           )}
+          {loc.visibility !== 'inherit' && (
+            <span className={`loc-vis-pill${loc.visibility === 'private' ? ' pill-private' : ' pill-shared'}`}>
+              {loc.visibility === 'private' ? 'Private' : 'Shared'}
+            </span>
+          )}
           <div className="manage-actions">
             {isEditing ? (
               <button className="manage-btn save" onClick={() => renameLocation(loc.id, editingName)}>Save</button>
