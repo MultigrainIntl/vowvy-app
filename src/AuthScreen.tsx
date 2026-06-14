@@ -243,7 +243,8 @@ export default function AuthScreen() {
         <div className="auth-card">
           <img src={logoMark} alt="" className="auth-logo-mark" />
           <h1 className="auth-logo">Vowvy</h1>
-          <p className="auth-mode-heading">Create your account</p>
+          <p className="auth-mode-heading">Start remembering what you have</p>
+          <p className="auth-mode-sub">Take photos, organize your things, and find them later.</p>
 
           <div className="auth-fields">
             <input
@@ -313,6 +314,7 @@ export default function AuthScreen() {
         <img src={logoMark} alt="" className="auth-logo-mark" />
         <h1 className="auth-logo">Vowvy</h1>
         <p className="auth-mode-heading">Welcome back</p>
+        <p className="auth-mode-sub">Find what you saved, continue organizing, or prepare items when you're ready.</p>
 
         <div className="auth-fields">
           <input

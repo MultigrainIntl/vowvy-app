@@ -6,6 +6,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
+  background: #f8f5f1;
 }
 
 .auth-card {
@@ -14,6 +15,14 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.auth-screen .auth-card {
+  background: #fff;
+  border: 1px solid var(--warm-gray);
+  border-radius: 12px;
+  padding: 36px 28px 32px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
 }
 
 .auth-logo-mark {
@@ -167,10 +176,19 @@
 }
 
 .auth-mode-heading {
-  font-family: var(--font-body);
-  font-size: 15px;
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--charcoal);
+  text-align: center;
+  margin-top: -4px;
+}
+
+.auth-mode-sub {
+  font-size: 13px;
   color: var(--muted-slate);
   text-align: center;
+  line-height: 1.6;
   margin-top: -8px;
 }
 
