@@ -93,6 +93,26 @@
 .manage-btn.delete { color: #a04030; border-color: #e0b0a0; }
 .manage-btn.add   { color: #7a3b2e; border-color: #c8a090; }
 
+.loc-vis-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.pill-private {
+  background: #fde8e4;
+  color: #a04030;
+}
+
+.pill-shared {
+  background: #e4f0e4;
+  color: #3a6e3a;
+}
+
 .loc-lock-btn {
   background: none;
   border: none;
