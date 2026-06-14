@@ -2,6 +2,81 @@
 
 Newest first. Plain English: what changed and why it matters.
 
+## June 13–14, 2026 — Policy, AI, Search, Sell This, and Items to sell
+
+### Lightbox UI cleanup (commit 4c14467, merged c01826d)
+
+- Privacy dropdown in lightbox now uses plain-English labels: "Follow parent / Hide from helpers / Show to helpers" instead of "Inherit / Private / Shared". Firestore values are unchanged.
+- Status text now reflects visibility setting precisely: e.g. "Following parent — helpers can see this" vs "Following parent — helpers cannot see this" depending on effectiveIsPrivate.
+- "Sell this photo" button removed from lightbox. Single selling entry point from photos is now "Add to Items to sell" → tray → Create listing draft.
+
+### Items to sell tray (commit 737a48c, merged 46cd1d8)
+
+- "Add to Items to sell" button added to lightbox (owner only). Toggles to "Added ✓" when photo is already in tray.
+- "Items to sell (N)" indicator in app header when tray has items; hidden when empty.
+- "Sell" button added next to search bar; shows count when tray has items.
+- Tray panel: bottom-sheet overlay showing selected photos with container name, Remove per item, Clear all, Create listing draft.
+- Multi-container support: photos from different containers produce a synthetic container shell; listing stored with containerId: null and sourceContainerIds[] array.
+- Copy/Ready to Post step now includes per-photo download buttons (fetch-blob via proxyImage) so photos can be saved before posting.
+
+### Search-matched thumbnails and listing flow (commit 5f07636, merged 062b6ef)
+
+- Container cards now show the newest search-matched photo as thumbnail when search is active, rather than the default latest photo.
+- Terracotta "N matches" badge on thumbnail when search is filtering photos.
+- "Add to Items to sell" (then tray) and "Sell this" card button both pass matched photos as source photos into the listing draft flow.
+- Listing draft "Photos for this listing" thumbnail strip shows the actual source photos being used.
+
+### Search photo listing context (commit 0c278fa, merged db87c37)
+
+- Lightbox opened from a search result now shows only matching photos (newest-first) with a filter banner.
+- "Show all photos" button in banner reveals the full photo set.
+- "Sell this photo" (now removed) and "Add to Items to sell" from lightbox correctly pass the individual photo as the sole source photo into the listing draft.
+
+### Search/tag cleanup (commit 2e8c9d3, merged d5ddcd8)
+
+- AI keyword chips removed from main container cards entirely — cards were cluttered and tags were often generic.
+- Search now includes photo-level aiDescription, aiTags, and aiObjects in addition to container-level fields and notes.
+- photoMatchMap computed per render: per-container list of photos that matched the query.
+- Generic display tags (art, graphics, decorations, logistics, etc.) suppressed from lightbox display when more specific tags exist. filterDisplayTags() helper handles this client-side without touching stored data.
+
+### Photo-level AI analysis (commit 4eb4379)
+
+- PhotoItem now stores per-photo AI fields: aiDescription, aiTags, aiObjects, aiStatus.
+- analyzeContainerPhoto Cloud Function (onDocumentWritten) now identifies the newly added photo by ID comparison and patches only that photo's entry in photos[]. Previously it overwrote container-root AI fields on every photo addition, losing the first photo's analysis.
+- Re-reads the document before writing to prevent concurrent-upload conflicts.
+- Container-level aiTags and aiSearchTerms are merged across all non-deleted photos.
+- Lightbox in MainScreen and ContainerScreen displays the selected photo's own AI description and tags.
+
+### VOWVY branding in Sell This (commit a59f791)
+
+- Ready to Post screen shows a small VOWVY branding footer: logo mark, "Created with VOWVY", vowvy.com link.
+- Optional checkbox "Add 'Created with VOWVY' note to description" — defaults off. When on, appends the note to clipboard copy only; stored draft text is unchanged.
+
+### Sell This — listing draft MVP (commit 0f90d2d, merged 663696e)
+
+- "Sell this" button added to container action row (owner only).
+- One-time listing responsibility confirmation screen (stored in users/{uid} as listingConfirmationAcceptedAt).
+- Questions step: describe the item, what you're selling (whole / one / a few), shipping intent, optional condition notes.
+- Draft built from user input + container/photo AI data. No external pricing or AI calls.
+- Draft stored at users/{uid}/listings/{listingId} with title, description, condition, category, suggested platforms.
+- Review step: view draft, adjust tone (shorter / friendlier / professional / more detail / casual) with rule-based rewrites.
+- Platform picker: Facebook Marketplace, Craigslist, Etsy, eBay, Other.
+- Copy title / copy description buttons. Manual posting only — no marketplace API or auto-fill.
+- Optional: paste listing URL back to save it against the draft.
+
+### Container action button wrapping fix (commit 3658fbb, merged ad762b4)
+
+- Container action buttons (Add photo, Take photos, Print QR, Move, Sell this) now wrap correctly after Sell this was added. No overlap with the right-side upload panel.
+
+### Policy acceptance, legal pages, and photo moderation metadata (commit 7cf965a, merged 429464d)
+
+- /privacy, /terms, /acceptable-use pages added and linked from the auth screen.
+- New users must check a policy acknowledgement box before signing up.
+- Existing users who signed up before the policy gate see a one-time acceptance screen on their next login; dismissed permanently after accepting.
+- All new photo uploads now include moderation metadata fields: moderationStatus ("pending"), moderationCheckedAt, moderationProvider, moderationReason. Field structure ready for a future automated moderation step.
+
+---
+
 ## June 13, 2026 — Internationalization Phase 1A + Privacy Phase 1A & 1B
 
 ### Internationalization Phase 1A (commit f1b9389, merged 5a1c601)
@@ -54,20 +129,7 @@ Newest first. Plain English: what changed and why it matters.
 - Collaborators screen: privacy note added — "Private locations and containers are hidden from collaborators. A shared item stays visible even inside a private area."
 - Individual photo privacy was **intentionally not implemented** (future work).
 
-### Latest main commits as of June 13, 2026
-
-```
-a9af39d Merge feature/privacy-controls-ui-pass into main
-90ce606 Improve privacy controls UI
-0bc7697 Merge feature/privacy-phase-1b-location-toggle into main
-ac05ac2 Add location privacy inheritance controls
-57b37c1 Merge feature/privacy-phase-1b-effective-enforcement into main
-3185096 Switch privacy enforcement to effective privacy
-d2a7179 Merge feature/privacy-phase-1b-visibility-backfill into main
-0a79e0d Add visibility backfill tooling for locations and containers
-7c77e7a Merge feature/privacy-phase-1b-lightbox-proxy into main
-daa310f Route lightbox photos through proxy
-```
+---
 
 ## June 12, 2026
 
