@@ -27,6 +27,24 @@ interface Container {
 
 interface Props { user: User; }
 
+function LockedIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2"/>
+      <path d="M7 11V7a5 5 0 0 0 10 0v4"/>
+    </svg>
+  );
+}
+
+function UnlockedIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2"/>
+      <path d="M17 11V7H7"/>
+    </svg>
+  );
+}
+
 export default function ManageScreen({ user }: Props) {
   const [locations, setLocations]     = useState<Location[]>([]);
   const [containers, setContainers]   = useState<Container[]>([]);
@@ -216,7 +234,7 @@ export default function ManageScreen({ user }: Props) {
             }}>Move</button>
             <button className="manage-btn delete" onClick={() => deleteLocation(loc.id)}>Delete</button>
             <button
-              className="loc-lock-btn"
+              className={`loc-lock-btn${loc.effectiveIsPrivate ? ' is-private' : ''}`}
               aria-label={loc.effectiveIsPrivate ? 'Helpers cannot see this place' : 'Helpers can see this place'}
               title={loc.effectiveIsPrivate ? 'Helpers cannot see this place' : 'Helpers can see this place'}
               onClick={async () => {
@@ -226,7 +244,7 @@ export default function ManageScreen({ user }: Props) {
                 await applyLocationVisibility(loc.id, newVis);
               }}
             >
-              {loc.effectiveIsPrivate ? '🔒' : '🔓'}
+              {loc.effectiveIsPrivate ? <LockedIcon /> : <UnlockedIcon />}
             </button>
             <button className="manage-btn add" onClick={() => {
               setAddingUnder(loc.id);

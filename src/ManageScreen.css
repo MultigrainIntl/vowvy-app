@@ -96,11 +96,15 @@
 .loc-lock-btn {
   background: none;
   border: none;
-  font-size: 16px;
-  line-height: 1;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 6px;
   flex-shrink: 0;
+  line-height: 0;
+  color: #6b8c6b;
+}
+
+.loc-lock-btn.is-private {
+  color: #a04030;
 }
 
 .manage-children {
