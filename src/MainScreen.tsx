@@ -17,6 +17,7 @@ import { navigate } from './nav';
 import logoMark from './assets/logo-mark.svg';
 import './MainScreen.css';
 import { subscribeToLocations, createLocation, getLocationPath, type Location } from './locations';
+import SellThisFlow from './SellThisFlow';
 
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 function isRecent(ts: number) { return Date.now() - ts < THIRTY_DAYS; }
@@ -156,6 +157,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [searchQuery, setSearchQuery]                 = useState('');
   const [printContainer, setPrintContainer]           = useState<Container | null>(null);
   const [moveSource, setMoveSource] = useState<{ containerId: string; mode: 'container' | 'photo'; photoId?: string } | null>(null);
+  const [sellContainer, setSellContainer] = useState<Container | null>(null);
   const [viewingOwnerUid, setViewingOwnerUid]         = useState(initialOwnerUid ?? user.uid);
   const [sharedInventories, setSharedInventories]     = useState<{ ownerUid: string; ownerName: string }[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -713,6 +715,15 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
               {t('main.card.move')}
             </button>
+            {viewingOwnerUid === user.uid && (
+              <button
+                className="card-action-btn"
+                onClick={() => setSellContainer(c)}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
+                Sell this
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1642,6 +1653,15 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Sell this flow */}
+      {sellContainer && (
+        <SellThisFlow
+          user={user}
+          container={sellContainer}
+          onClose={() => setSellContainer(null)}
+        />
       )}
 
       {/* Invite panel */}

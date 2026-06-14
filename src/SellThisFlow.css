@@ -1,0 +1,472 @@
+/* ---- Full-screen overlay ---- */
+
+.sell-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 600px) {
+  .sell-overlay {
+    align-items: center;
+  }
+}
+
+/* ---- Sheet / modal card ---- */
+
+.sell-sheet {
+  position: relative;
+  background: #fff;
+  width: 100%;
+  max-width: 540px;
+  max-height: 92vh;
+  overflow-y: auto;
+  border-radius: 18px 18px 0 0;
+  padding: 28px 24px 48px;
+  font-family: 'Lora', serif;
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 600px) {
+  .sell-sheet {
+    border-radius: 18px;
+    max-height: 88vh;
+  }
+}
+
+/* ---- Close button ---- */
+
+.sell-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #aaa;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.sell-close-btn:hover { color: #555; background: #f5f0ec; }
+
+/* ---- Step wrapper ---- */
+
+.sell-step {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sell-step--loading {
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.sell-loading-dot {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e8e0d8;
+  border-top-color: #7a3b2e;
+  border-radius: 50%;
+  animation: sell-spin 0.8s linear infinite;
+}
+
+@keyframes sell-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---- Typography ---- */
+
+.sell-heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: #7a3b2e;
+  margin: 0;
+  padding-right: 32px;
+}
+
+.sell-container-label {
+  font-size: 13px;
+  color: #888;
+  margin: -12px 0 0;
+}
+
+.sell-body {
+  font-size: 15px;
+  color: #444;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.sell-body--small {
+  font-size: 13px;
+  color: #666;
+}
+
+.sell-disclaimer {
+  background: #faf8f6;
+  border: 1px solid #e8e0d8;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+/* ---- Form fields ---- */
+
+.sell-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sell-field--mt {
+  margin-top: 4px;
+}
+
+.sell-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  font-family: 'Lora', serif;
+}
+
+.sell-optional {
+  font-weight: 400;
+  color: #999;
+}
+
+.sell-input {
+  padding: 10px 12px;
+  border: 1px solid #c8a090;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: 'Lora', serif;
+  color: #333;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.sell-input:focus {
+  border-color: #7a3b2e;
+}
+
+.sell-textarea {
+  padding: 10px 12px;
+  border: 1px solid #c8a090;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: 'Lora', serif;
+  color: #333;
+  background: #fff;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+  line-height: 1.5;
+}
+
+.sell-textarea:focus {
+  border-color: #7a3b2e;
+}
+
+.sell-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.sell-radio input[type="radio"] {
+  accent-color: #7a3b2e;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* ---- Buttons ---- */
+
+.sell-primary-btn {
+  background: #7a3b2e;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-family: 'Lora', serif;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s;
+  margin-top: 4px;
+}
+
+.sell-primary-btn:hover:not(:disabled) { background: #6a3226; }
+.sell-primary-btn:disabled { opacity: 0.55; cursor: default; }
+
+.sell-back-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 13px;
+  font-family: 'Lora', serif;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.sell-back-btn:hover { color: #555; }
+
+.sell-done-btn {
+  background: #f5f0ec;
+  color: #7a3b2e;
+  border: 1px solid #c8a090;
+  border-radius: 10px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-family: 'Lora', serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sell-done-btn:hover { background: #ede5dd; }
+
+/* ---- Draft review ---- */
+
+.sell-draft-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sell-draft-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #999;
+  font-family: 'Lora', serif;
+}
+
+.sell-draft-value {
+  font-size: 14px;
+  color: #222;
+  margin: 0;
+  line-height: 1.55;
+  background: #faf8f6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e8e0d8;
+}
+
+.sell-draft-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.sell-draft-desc {
+  white-space: pre-line;
+  font-size: 13px;
+}
+
+.sell-draft-row {
+  display: flex;
+  gap: 12px;
+}
+
+.sell-draft-half {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- Rewrite buttons ---- */
+
+.sell-rewrites {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sell-rewrites-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #999;
+  font-family: 'Lora', serif;
+}
+
+.sell-rewrite-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sell-rewrite-btn {
+  background: #f5f0ec;
+  border: 1px solid #c8b0a0;
+  color: #7a5a48;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-family: 'Lora', serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.sell-rewrite-btn:hover {
+  background: #ede5dd;
+  border-color: #a08070;
+  color: #333;
+}
+
+/* ---- Platform picker ---- */
+
+.sell-platforms {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sell-platform-btn {
+  background: #fff;
+  border: 1px solid #e0d8d0;
+  border-radius: 10px;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-family: 'Lora', serif;
+  color: #333;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.sell-platform-btn:hover {
+  background: #faf8f6;
+  border-color: #7a3b2e;
+  color: #7a3b2e;
+}
+
+/* ---- Copy & post ---- */
+
+.sell-copy-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid #e8e0d8;
+  border-radius: 10px;
+  padding: 14px;
+  background: #faf8f6;
+}
+
+.sell-copy-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sell-copy-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #999;
+  flex-shrink: 0;
+  padding-top: 2px;
+  min-width: 70px;
+  font-family: 'Lora', serif;
+}
+
+.sell-copy-text {
+  flex: 1;
+  font-size: 14px;
+  color: #222;
+  line-height: 1.5;
+}
+
+.sell-copy-text--desc {
+  white-space: pre-line;
+  font-size: 12px;
+  color: #555;
+}
+
+.sell-copy-btn {
+  background: #7a3b2e;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: 'Lora', serif;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.sell-copy-btn:hover { background: #6a3226; }
+
+.sell-open-btn {
+  display: block;
+  background: #f5f0ec;
+  border: 1px solid #c8a090;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-family: 'Lora', serif;
+  color: #7a3b2e;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+
+.sell-open-btn:hover { background: #ede5dd; }
+
+.sell-url-row {
+  display: flex;
+  gap: 8px;
+}
+
+.sell-url-row .sell-input {
+  flex: 1;
+}
+
+.sell-save-url-btn {
+  background: #7a3b2e;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-family: 'Lora', serif;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.sell-save-url-btn:hover:not(:disabled) { background: #6a3226; }
+.sell-save-url-btn:disabled { opacity: 0.55; cursor: default; }
+
+.sell-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
