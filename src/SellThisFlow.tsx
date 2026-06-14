@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { PhotoItem } from './shared';
+import vowvyLogo from './assets/logo-mark.svg';
 import './SellThisFlow.css';
 
 // ---- Types ----------------------------------------------------------------
@@ -186,6 +187,7 @@ export default function SellThisFlow({ user, container, onClose }: Props) {
   const [descCopied, setDescCopied]       = useState(false);
   const [urlSaved, setUrlSaved]           = useState(false);
   const [saving, setSaving]               = useState(false);
+  const [brandingNote, setBrandingNote]   = useState(false);
 
   // Check one-time confirmation on mount
   useEffect(() => {
@@ -507,7 +509,12 @@ export default function SellThisFlow({ user, container, onClose }: Props) {
                 <span className="sell-copy-text sell-copy-text--desc">{draft.description}</span>
                 <button
                   className="sell-copy-btn"
-                  onClick={() => copyText(draft.description, setDescCopied)}
+                  onClick={() => copyText(
+                    brandingNote
+                      ? draft.description + '\n\nListing drafted with VOWVY — vowvy.com'
+                      : draft.description,
+                    setDescCopied,
+                  )}
                 >
                   {descCopied ? '✓ Copied' : 'Copy description'}
                 </button>
@@ -546,6 +553,27 @@ export default function SellThisFlow({ user, container, onClose }: Props) {
                   {urlSaved ? 'Saved ✓' : 'Save'}
                 </button>
               </div>
+            </div>
+
+            <label className="sell-branding-toggle">
+              <input
+                type="checkbox"
+                checked={brandingNote}
+                onChange={e => setBrandingNote(e.target.checked)}
+              />
+              <span>Add 'Created with VOWVY' note to description</span>
+            </label>
+
+            <div className="sell-branding-footer">
+              <img src={vowvyLogo} alt="VOWVY" className="sell-branding-logo" />
+              <span className="sell-branding-text">Created with VOWVY</span>
+              <span className="sell-branding-sep">·</span>
+              <a
+                href="https://vowvy.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="sell-branding-link"
+              >vowvy.com</a>
             </div>
 
             <div className="sell-footer-row">
