@@ -45,18 +45,6 @@ function UnlockedIcon() {
   );
 }
 
-const VIS_LABELS: Record<Visibility, string> = {
-  inherit: 'Follow parent',
-  private: 'Hidden',
-  shared:  'Visible',
-};
-
-const MENU_OPTIONS: Array<{ vis: Visibility; label: string; sub: string }> = [
-  { vis: 'inherit', label: 'Follow parent', sub: 'Same as the place above it' },
-  { vis: 'private', label: 'Hidden',        sub: 'Helpers cannot see this'    },
-  { vis: 'shared',  label: 'Visible',       sub: 'Helpers can see this'       },
-];
-
 export default function ManageScreen({ user }: Props) {
   const [locations, setLocations]     = useState<Location[]>([]);
   const [containers, setContainers]   = useState<Container[]>([]);
@@ -278,7 +266,10 @@ export default function ManageScreen({ user }: Props) {
                   : loc.visibility === 'private' ? 'Hidden from helpers' : 'Always visible to helpers'
               }
               onClick={async () => {
-                const newVis: Visibility = loc.effectiveIsPrivate ? 'inherit' : 'private';
+                const newVis: Visibility =
+                  loc.visibility === 'private' ? 'inherit'
+                  : loc.effectiveIsPrivate     ? 'shared'
+                  :                              'private';
                 const ok = window.confirm('This will update privacy for this location, child locations, and containers inside it. Continue?');
                 if (!ok) return;
                 await applyLocationVisibility(loc.id, newVis);
@@ -288,32 +279,28 @@ export default function ManageScreen({ user }: Props) {
             </button>
             <div style={{ position: 'relative' }}>
               <button
-                className={`loc-vis-pill${loc.visibility === 'private' ? ' vis-private' : loc.visibility === 'shared' ? ' vis-shared' : ''}`}
-                aria-label={`Privacy: ${VIS_LABELS[loc.visibility]}`}
+                className="loc-menu-btn"
+                aria-label="Privacy options"
+                title="Privacy options"
                 onClick={e => {
                   e.stopPropagation();
                   setMenuOpenId(menuOpenId === loc.id ? null : loc.id);
                 }}
-              >
-                {VIS_LABELS[loc.visibility]}<span className="loc-vis-arrow"> ▾</span>
-              </button>
+              >⋯</button>
               {menuOpenId === loc.id && (
                 <div className="loc-menu-dropdown" role="menu">
-                  {MENU_OPTIONS.map(opt => (
+                  {(['inherit', 'private', 'shared'] as Visibility[]).map(v => (
                     <button
-                      key={opt.vis}
-                      className={`loc-menu-item${loc.visibility === opt.vis ? ' active' : ''}`}
+                      key={v}
+                      className={`loc-menu-item${loc.visibility === v ? ' active' : ''}`}
                       role="menuitem"
                       onClick={async () => {
                         setMenuOpenId(null);
-                        await applyLocationVisibility(loc.id, opt.vis);
+                        await applyLocationVisibility(loc.id, v);
                       }}
                     >
-                      <span className="loc-menu-check">{loc.visibility === opt.vis ? '✓' : ''}</span>
-                      <span>
-                        {opt.label}
-                        <span className="loc-menu-sub">{opt.sub}</span>
-                      </span>
+                      <span className="loc-menu-check">{loc.visibility === v ? '✓' : ''}</span>
+                      {v === 'inherit' ? 'Follow parent' : v === 'private' ? 'Hide from helpers' : 'Show to helpers'}
                     </button>
                   ))}
                 </div>
