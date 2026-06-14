@@ -31,7 +31,7 @@ function LockedIcon() {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="3" y="11" width="18" height="11" rx="2"/>
-      <path d="M7 11V7a5 5 0 0 0 10 0v4"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
     </svg>
   );
 }
@@ -40,7 +40,7 @@ function UnlockedIcon() {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="3" y="11" width="18" height="11" rx="2"/>
-      <path d="M17 11V7H7"/>
+      <path d="M7 11V7a5 5 0 0 1 9.9-1.7"/>
     </svg>
   );
 }
@@ -59,6 +59,7 @@ export default function ManageScreen({ user }: Props) {
   const [newTopLevelName, setNewTopLevelName]           = useState('');
   const [movingId, setMovingId]                         = useState<string | null>(null);
   const [healthOpen, setHealthOpen]                     = useState(false);
+  const [menuOpenId, setMenuOpenId]                     = useState<string | null>(null);
 
   useEffect(() => subscribeToLocations(user.uid, setLocations), [user.uid]);
 
@@ -253,11 +254,19 @@ export default function ManageScreen({ user }: Props) {
             }}>Move</button>
             <button className="manage-btn delete" onClick={() => deleteLocation(loc.id)}>Delete</button>
             <button
-              className={`loc-lock-btn${loc.effectiveIsPrivate ? ' is-private' : ''}`}
-              aria-label={loc.effectiveIsPrivate ? 'Helpers cannot see this place' : 'Helpers can see this place'}
-              title={loc.effectiveIsPrivate ? 'Helpers cannot see this place' : 'Helpers can see this place'}
+              className={`loc-lock-btn${loc.effectiveIsPrivate ? ' is-private' : ''}${loc.visibility === 'inherit' ? ' is-inherit' : ''}`}
+              aria-label={
+                loc.visibility === 'inherit'
+                  ? (loc.effectiveIsPrivate ? 'Following parent — helpers cannot see this place' : 'Following parent — helpers can see this place')
+                  : loc.visibility === 'private' ? 'Hidden from helpers' : 'Always visible to helpers'
+              }
+              title={
+                loc.visibility === 'inherit'
+                  ? (loc.effectiveIsPrivate ? 'Following parent — helpers cannot see this place' : 'Following parent — helpers can see this place')
+                  : loc.visibility === 'private' ? 'Hidden from helpers' : 'Always visible to helpers'
+              }
               onClick={async () => {
-                const newVis: Visibility = loc.effectiveIsPrivate ? 'shared' : 'private';
+                const newVis: Visibility = loc.effectiveIsPrivate ? 'inherit' : 'private';
                 const ok = window.confirm('This will update privacy for this location, child locations, and containers inside it. Continue?');
                 if (!ok) return;
                 await applyLocationVisibility(loc.id, newVis);
@@ -265,6 +274,35 @@ export default function ManageScreen({ user }: Props) {
             >
               {loc.effectiveIsPrivate ? <LockedIcon /> : <UnlockedIcon />}
             </button>
+            <div style={{ position: 'relative' }}>
+              <button
+                className="loc-menu-btn"
+                aria-label="Privacy options"
+                title="Privacy options"
+                onClick={e => {
+                  e.stopPropagation();
+                  setMenuOpenId(menuOpenId === loc.id ? null : loc.id);
+                }}
+              >⋯</button>
+              {menuOpenId === loc.id && (
+                <div className="loc-menu-dropdown" role="menu">
+                  {(['inherit', 'private', 'shared'] as Visibility[]).map(v => (
+                    <button
+                      key={v}
+                      className={`loc-menu-item${loc.visibility === v ? ' active' : ''}`}
+                      role="menuitem"
+                      onClick={async () => {
+                        setMenuOpenId(null);
+                        await applyLocationVisibility(loc.id, v);
+                      }}
+                    >
+                      <span className="loc-menu-check">{loc.visibility === v ? '✓' : ''}</span>
+                      {v === 'inherit' ? 'Follow parent' : v === 'private' ? 'Hide from helpers' : 'Show to helpers'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button className="manage-btn add" onClick={() => {
               setAddingUnder(loc.id);
               setNewSubName('');
@@ -493,6 +531,13 @@ export default function ManageScreen({ user }: Props) {
               setNewTopLevelName('');
             }}>Add</button>
           </div>
+        )}
+
+        {menuOpenId !== null && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 50 }}
+            onClick={() => setMenuOpenId(null)}
+          />
         )}
 
         {topLevel.map(loc => renderLocation(loc))}
