@@ -132,9 +132,17 @@ export default function ManageScreen({ user }: Props) {
       setMovingId(null);
       return;
     }
-    // Writes ONLY parentId. Containers, photos, name, and id are untouched.
     await updateDoc(doc(db, `users/${user.uid}/locations/${id}`), { parentId: newParentId });
     setMovingId(null);
+    // 'inherit' locations derive effectiveIsPrivate from parent — re-propagate using
+    // the new parent's stored effective (read before the snapshot fires to avoid a race).
+    if (loc.visibility === 'inherit') {
+      const newParent = newParentId ? locations.find(l => l.id === newParentId) : null;
+      const newParentEffective = newParent?.effectiveIsPrivate ?? false;
+      if (newParentEffective !== loc.effectiveIsPrivate) {
+        await propagateEffective(id, 'inherit', newParentEffective);
+      }
+    }
   }
 
   // Health Check repair: reattach an orphaned location to the top level so the
@@ -142,40 +150,37 @@ export default function ManageScreen({ user }: Props) {
   // user must click the button — no automatic repair.
   async function repairOrphanToTopLevel(id: string) {
     await updateDoc(doc(db, `users/${user.uid}/locations/${id}`), { parentId: null });
+    const loc = locations.find(l => l.id === id);
+    if (loc?.visibility === 'inherit' && loc.effectiveIsPrivate) {
+      await propagateEffective(id, 'inherit', false);
+    }
   }
 
-  async function applyLocationVisibility(locId: string, newVisibility: Visibility) {
-    // Compute effectiveIsPrivate for a location given its visibility and its parent's already-resolved value.
-    function resolveEffective(id: string, vis: Visibility, resolvedMap: Map<string, boolean>): boolean {
-      if (vis === 'private') return true;
-      if (vis === 'shared') return false;
-      const loc = locations.find(l => l.id === id);
-      if (!loc || !loc.parentId) return false;
-      if (resolvedMap.has(loc.parentId)) return resolvedMap.get(loc.parentId)!;
-      const parent = locations.find(l => l.id === loc.parentId);
-      return parent?.effectiveIsPrivate ?? false;
-    }
-
-    // BFS through the target location and all descendants, collecting updates.
+  // BFS propagation of effectiveIsPrivate for a location subtree plus their containers.
+  // rootEffective must be pre-computed by the caller so this function never reads stale parentId state.
+  async function propagateEffective(rootId: string, rootVis: Visibility, rootEffective: boolean) {
     const locUpdates = new Map<string, { visibility: Visibility; effectiveIsPrivate: boolean }>();
     const effectiveMap = new Map<string, boolean>();
 
-    const targetEffective = resolveEffective(locId, newVisibility, effectiveMap);
-    locUpdates.set(locId, { visibility: newVisibility, effectiveIsPrivate: targetEffective });
-    effectiveMap.set(locId, targetEffective);
+    locUpdates.set(rootId, { visibility: rootVis, effectiveIsPrivate: rootEffective });
+    effectiveMap.set(rootId, rootEffective);
 
-    const queue: string[] = getLocationChildren(locId, locations).map(c => c.id);
+    const queue: string[] = getLocationChildren(rootId, locations).map(c => c.id);
     while (queue.length > 0) {
       const childId = queue.shift()!;
       const child = locations.find(l => l.id === childId);
       if (!child) continue;
-      const childEffective = resolveEffective(childId, child.visibility, effectiveMap);
+      const parentEffective = child.parentId
+        ? (effectiveMap.get(child.parentId) ?? (locations.find(l => l.id === child.parentId)?.effectiveIsPrivate ?? false))
+        : false;
+      const childEffective = child.visibility === 'private' ? true
+        : child.visibility === 'shared' ? false
+        : parentEffective;
       locUpdates.set(childId, { visibility: child.visibility, effectiveIsPrivate: childEffective });
       effectiveMap.set(childId, childEffective);
       queue.push(...getLocationChildren(childId, locations).map(c => c.id));
     }
 
-    // Containers in affected locations — recompute effectiveIsPrivate from their own visibility.
     const allWrites: [string, Record<string, unknown>][] = [];
     for (const [id, upd] of locUpdates) {
       allWrites.push([`users/${user.uid}/locations/${id}`, { visibility: upd.visibility, effectiveIsPrivate: upd.effectiveIsPrivate }]);
@@ -195,6 +200,20 @@ export default function ManageScreen({ user }: Props) {
       }
       await batch.commit();
     }
+  }
+
+  async function applyLocationVisibility(locId: string, newVisibility: Visibility) {
+    function resolveEffective(id: string, vis: Visibility, resolvedMap: Map<string, boolean>): boolean {
+      if (vis === 'private') return true;
+      if (vis === 'shared') return false;
+      const loc = locations.find(l => l.id === id);
+      if (!loc || !loc.parentId) return false;
+      if (resolvedMap.has(loc.parentId)) return resolvedMap.get(loc.parentId)!;
+      const parent = locations.find(l => l.id === loc.parentId);
+      return parent?.effectiveIsPrivate ?? false;
+    }
+    const targetEffective = resolveEffective(locId, newVisibility, new Map());
+    await propagateEffective(locId, newVisibility, targetEffective);
   }
 
   function renderLocation(loc: Location, depth = 0) {
@@ -292,7 +311,7 @@ export default function ManageScreen({ user }: Props) {
                   onChange={e => setNewSubName(e.target.value)}
                   onKeyDown={async e => {
                     if (e.key === 'Enter' && newSubName.trim()) {
-                      await createLocation(user.uid, newSubName.trim(), loc.id);
+                      await createLocation(user.uid, newSubName.trim(), loc.id, loc.effectiveIsPrivate);
                       setAddingUnder(null);
                       setNewSubName('');
                     }
@@ -301,7 +320,7 @@ export default function ManageScreen({ user }: Props) {
                 />
                 <button className="manage-btn save" onClick={async () => {
                   if (newSubName.trim()) {
-                    await createLocation(user.uid, newSubName.trim(), loc.id);
+                    await createLocation(user.uid, newSubName.trim(), loc.id, loc.effectiveIsPrivate);
                     setAddingUnder(null);
                     setNewSubName('');
                   }
