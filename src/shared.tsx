@@ -14,6 +14,10 @@ export interface PhotoItem {
   deletedAt?: number;
   addedBy?: string;
   addedByName?: string;
+  moderationStatus?: 'pending' | 'approved' | 'flagged' | 'blocked';
+  moderationCheckedAt?: number | null;
+  moderationProvider?: string | null;
+  moderationReason?: string | null;
 }
 
 export interface ContainerNote {

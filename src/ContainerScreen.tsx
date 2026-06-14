@@ -133,7 +133,7 @@ export default function ContainerScreen({ user, containerId }: Props) {
       const storagePath = `users/${user.uid}/containers/${containerId}/photos/${Date.now()}.jpg`;
       await uploadBytes(ref(storage, storagePath), compressed);
       const photoUrl  = await getDownloadURL(ref(storage, storagePath));
-      const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now() };
+      const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
       const updatedPhotos = [...(container?.photos ?? []), photoItem];
       await updateDoc(doc(db, `users/${user.uid}/containers/${containerId}`), {
         photos: updatedPhotos,

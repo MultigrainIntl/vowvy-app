@@ -376,7 +376,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       if (selectedContainerId === 'new') {
         const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
         const { url: photoUrl, storagePath } = await uploadPhoto(containerRef.id, allFiles[0]);
-        const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' };
+        const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
         const locEffective1 = resolvedLocationId
           ? (locations.find(l => l.id === resolvedLocationId)?.effectiveIsPrivate ?? false)
           : false;
@@ -398,7 +398,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         });
       } else {
         const { url: photoUrl, storagePath } = await uploadPhoto(selectedContainerId, allFiles[0]);
-        const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' };
+        const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
         const existing = containers.find(c => c.id === selectedContainerId);
         const updatedPhotos = [...(existing?.photos ?? []), photoItem];
         await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${selectedContainerId}`), {
@@ -459,7 +459,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             console.log('Upload done');
             photoUrl = await getDownloadURL(ref(storage, storagePath));
           }
-          const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' };
+          const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
           const existing = containers.find(c => c.id === id);
           const updatedPhotos = [...(existing?.photos ?? []), photoItem];
           await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${id}`), {
@@ -1212,7 +1212,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                       await uploadBytes(ref(storage, storagePath), compressed);
                       photoUrl = await getDownloadURL(ref(storage, storagePath));
                     }
-                    const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' };
+                    const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
                     const existing = containers.find(c => c.id === lightboxContainerId);
                     await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), {
                       photos: [...(existing?.photos ?? []), photoItem],
