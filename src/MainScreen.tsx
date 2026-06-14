@@ -170,6 +170,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [printContainer, setPrintContainer]           = useState<Container | null>(null);
   const [moveSource, setMoveSource] = useState<{ containerId: string; mode: 'container' | 'photo'; photoId?: string } | null>(null);
   const [sellContainer, setSellContainer] = useState<Container | null>(null);
+  const [sellSourcePhotos, setSellSourcePhotos] = useState<PhotoItem[] | null>(null);
   const [viewingOwnerUid, setViewingOwnerUid]         = useState(initialOwnerUid ?? user.uid);
   const [sharedInventories, setSharedInventories]     = useState<{ ownerUid: string; ownerName: string }[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -579,15 +580,6 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), { notes: updated });
   }
 
-  async function handleDeleteTag(containerId: string, tag: string) {
-    if (!auth.currentUser) return;
-    await auth.currentUser.getIdToken(true);
-    const container = containers.find(c => c.id === containerId);
-    if (!container) return;
-    await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), {
-      aiTags: container.aiTags.filter(t => t !== tag),
-    });
-  }
 
   async function handleCopyLink() {
     await navigator.clipboard.writeText('https://vowvy-1ba5f.web.app');
@@ -642,14 +634,18 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   function openLightbox(c: Container) {
     const activePhotos = c.photos.filter(p => !p.deletedAt).reverse();
     if (activePhotos.length === 0) return;
+    // Reverse filtered photos to newest-first, matching activePhotos ordering
     const filtered = photoMatchMap.get(c.id);
-    const photosToShow = filtered ?? activePhotos;
+    const filteredSorted = filtered ? [...filtered].reverse() : null;
+    const photosToShow = filteredSorted ?? activePhotos;
     setLightboxItems(photosToShow);
     setLightboxContainerId(c.id);
     setLightboxIndex(0);
     setLightboxDescDraft(photosToShow[0].description ?? '');
-    setLightboxAllPhotos(filtered ? activePhotos : null);
-    setLightboxFilterQuery(filtered ? trimmedQuery : '');
+    setLightboxAllPhotos(filteredSorted ? activePhotos : null);
+    setLightboxFilterQuery(filteredSorted ? trimmedQuery : '');
+    // Reset scroll so the lightbox always opens on photo 0
+    setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollLeft = 0; }, 0);
   }
 
   function closeLightbox() {
@@ -697,16 +693,6 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           {showLocation && <div className="container-location">{displayLocation(c)}</div>}
           <div className="container-time">{relativeTime(c.createdAt)}</div>
           {c.aiStatus === 'processing' && <div className="ai-processing">{t('main.card.aiProcessing')}</div>}
-          {c.aiStatus === 'done' && c.aiTags.length > 0 && (
-            <div className="ai-tags">
-              {filterDisplayTags(c.aiTags, 5).map(tag => (
-                <span key={tag} className="ai-tag">
-                  {tag}
-                  <button className="tag-delete-btn" onClick={e => { e.stopPropagation(); handleDeleteTag(c.id, tag); }}>✕</button>
-                </span>
-              ))}
-            </div>
-          )}
           <ContainerNotes
             containerId={c.id}
             notes={c.notes.filter(n => !n.deletedAt)}
@@ -758,7 +744,10 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             {viewingOwnerUid === user.uid && (
               <button
                 className="card-action-btn"
-                onClick={() => setSellContainer(c)}
+                onClick={() => {
+                  setSellContainer(c);
+                  setSellSourcePhotos(photoMatchMap.get(c.id) ?? null);
+                }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
                 Sell this
@@ -1744,7 +1733,8 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         <SellThisFlow
           user={user}
           container={sellContainer}
-          onClose={() => setSellContainer(null)}
+          sourcePhotos={sellSourcePhotos ?? undefined}
+          onClose={() => { setSellContainer(null); setSellSourcePhotos(null); }}
         />
       )}
 

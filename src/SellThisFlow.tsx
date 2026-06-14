@@ -4,6 +4,7 @@ import {
   doc, getDoc, setDoc, addDoc, updateDoc, collection, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { ThumbImage } from './shared';
 import type { PhotoItem } from './shared';
 import vowvyLogo from './assets/logo-mark.svg';
 import './SellThisFlow.css';
@@ -35,6 +36,7 @@ interface Draft {
 interface Props {
   user: User;
   container: ContainerForListing;
+  sourcePhotos?: PhotoItem[];
   onClose: () => void;
 }
 
@@ -91,6 +93,7 @@ function buildDraft(
   itemHint: string,
   shippingIntent: ShippingIntent,
   userNotes: string,
+  sourcePhotos?: PhotoItem[],
 ): Draft {
   const title = capitalize(itemHint.trim());
 
@@ -99,9 +102,10 @@ function buildDraft(
     sellingScope === 'one'   ? `${title}. One item, pictured.` :
                                `${title}. A few items — see photos for details.`;
 
-  const aiPart = container.aiDescription?.trim()
-    ? `\n\n${container.aiDescription.trim()}`
-    : '';
+  // Prefer source photo AI description; fall back to container-level
+  const photoAiDesc = sourcePhotos?.find(p => p.aiDescription?.trim())?.aiDescription?.trim() ?? '';
+  const aiText = photoAiDesc || container.aiDescription?.trim() || '';
+  const aiPart = aiText ? `\n\n${aiText}` : '';
 
   const conditionPart = userNotes.trim()
     ? `\n\nCondition notes: ${userNotes.trim()}`
@@ -114,7 +118,11 @@ function buildDraft(
 
   const description = scopeIntro + aiPart + conditionPart + shippingPart;
   const condition   = userNotes.trim() || 'See photos for condition details.';
-  const category    = guessCategory(itemHint, container.aiTags);
+  // Prefer source photo tags for category guessing; fall back to container tags
+  const tagsForCategory = sourcePhotos?.flatMap(p => p.aiTags ?? []).length
+    ? sourcePhotos.flatMap(p => p.aiTags ?? [])
+    : container.aiTags;
+  const category    = guessCategory(itemHint, tagsForCategory);
   const platforms   = guessPlatforms(shippingIntent, category);
 
   return { title, description, condition, category, platforms };
@@ -173,7 +181,7 @@ const ALL_PLATFORMS = ['Facebook Marketplace', 'Craigslist', 'Etsy', 'eBay', 'Ot
 
 // ---- Component ------------------------------------------------------------
 
-export default function SellThisFlow({ user, container, onClose }: Props) {
+export default function SellThisFlow({ user, container, sourcePhotos, onClose }: Props) {
   const [step, setStep]                   = useState<Step>('loading');
   const [sellingScope, setSellingScope]   = useState<SellingScope>('whole');
   const [itemHint, setItemHint]           = useState('');
@@ -210,8 +218,8 @@ export default function SellThisFlow({ user, container, onClose }: Props) {
     if (!itemHint.trim() || saving) return;
     setSaving(true);
     try {
-      const d = buildDraft(container, sellingScope, itemHint, shippingIntent, userNotes);
-      const photoIds = container.photos
+      const d = buildDraft(container, sellingScope, itemHint, shippingIntent, userNotes, sourcePhotos);
+      const photoIds = (sourcePhotos ?? container.photos.filter(p => !p.deletedAt))
         .filter(p => !p.deletedAt)
         .map(p => p.id);
 
@@ -385,6 +393,22 @@ export default function SellThisFlow({ user, container, onClose }: Props) {
                 placeholder="small scratch on top, missing remote, works great…"
                 rows={2}
               />
+            </div>
+
+            <div className="sell-field">
+              <span className="sell-label">Photos for this listing</span>
+              <p className="sell-photos-hint">
+                {sourcePhotos
+                  ? 'Using photos that matched your search'
+                  : 'Using photos from this container'}
+              </p>
+              <div className="sell-photo-thumbs">
+                {(sourcePhotos ?? container.photos.filter(p => !p.deletedAt)).map(p => (
+                  <div key={p.id} className="sell-photo-thumb">
+                    <ThumbImage storagePath={p.storagePath} alt="Listing photo" />
+                  </div>
+                ))}
+              </div>
             </div>
 
             <button
