@@ -1407,20 +1407,6 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 >
                   {alreadyAdded ? 'Added ✓' : 'Add to Items to sell'}
                 </button>
-                <button
-                  className="lightbox-sell-btn"
-                  onClick={() => {
-                    if (!photo || !lbContainer) return;
-                    closeLightbox();
-                    setSellContainer(lbContainer);
-                    setSellSourcePhotos([photo]);
-                    setSellSourceContainerIds(null);
-                    setSellIsFromTray(false);
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
-                  Sell this photo
-                </button>
               </div>
             );
           })()}
@@ -1468,12 +1454,18 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     });
                   }}
                 >
-                  <option value="inherit">Inherit</option>
-                  <option value="private">Private</option>
-                  <option value="shared">Shared</option>
+                  <option value="inherit">Follow parent</option>
+                  <option value="private">Hide from helpers</option>
+                  <option value="shared">Show to helpers</option>
                 </select>
                 <span className="lightbox-privacy-status">
-                  {lbContainer.effectiveIsPrivate ? 'Hidden from collaborators' : 'Visible to collaborators'}
+                  {lbContainer.visibility === 'inherit'
+                    ? lbContainer.effectiveIsPrivate
+                      ? 'Following parent — helpers cannot see this'
+                      : 'Following parent — helpers can see this'
+                    : lbContainer.visibility === 'private'
+                      ? 'Helpers cannot see this'
+                      : 'Helpers can see this'}
                 </span>
               </div>
             );
