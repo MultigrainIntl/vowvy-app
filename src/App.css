@@ -435,13 +435,27 @@
 .landing-audience-list li {
   padding: 16px 0;
   border-bottom: 1px solid var(--warm-gray);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 0 14px;
+  align-items: start;
 }
 
 .landing-audience-list li:first-child {
   border-top: 1px solid var(--warm-gray);
+}
+
+.landing-audience-icon {
+  color: var(--terracotta);
+  display: flex;
+  justify-content: center;
+  padding-top: 1px;
+}
+
+.landing-audience-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .landing-audience-list li strong {

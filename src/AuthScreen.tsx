@@ -146,6 +146,79 @@ export default function AuthScreen() {
         ),
       },
     ];
+    const audienceRows = [
+      {
+        title: 'Home & storage',
+        desc: "Remember what's in boxes, closets, garages, basements, and storage areas.",
+        icon: (
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 13L14 3l11 10" />
+            <path d="M6 11v14h16V11" />
+            <rect x="11" y="17" width="6" height="8" />
+          </svg>
+        ),
+      },
+      {
+        title: 'Moving & dorms',
+        desc: 'Track belongings before, during, and after a move.',
+        icon: (
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="11" width="20" height="13" rx="2" />
+            <path d="M4 11l3-6h14l3 6" />
+            <line x1="11" y1="15" x2="17" y2="15" />
+          </svg>
+        ),
+      },
+      {
+        title: 'Families & estates',
+        desc: 'Organize keepsakes, valuables, donations, and items to sell.',
+        icon: (
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="22" height="20" rx="2" />
+            <path d="M3 18l7-7 4 4 3-3 8 7" />
+            <circle cx="9" cy="10" r="2" />
+          </svg>
+        ),
+      },
+      {
+        title: 'Office & workspaces',
+        desc: 'Keep track of supplies, equipment, samples, and shared storage.',
+        icon: (
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="10" width="22" height="14" rx="2" />
+            <path d="M10 10V8a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <line x1="3" y1="17" x2="25" y2="17" />
+            <line x1="14" y1="13" x2="14" y2="21" />
+          </svg>
+        ),
+      },
+      {
+        title: 'Real estate & cleanouts',
+        desc: 'Document rooms, contents, staging items, and cleanout projects.',
+        icon: (
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="4" width="20" height="21" rx="2" />
+            <line x1="4" y1="11" x2="24" y2="11" />
+            <rect x="11" y="17" width="6" height="8" />
+            <rect x="8" y="7" width="3" height="2" rx="0.5" fill="currentColor" stroke="none" opacity="0.4" />
+            <rect x="17" y="7" width="3" height="2" rx="0.5" fill="currentColor" stroke="none" opacity="0.4" />
+            <rect x="8" y="14" width="3" height="2" rx="0.5" fill="currentColor" stroke="none" opacity="0.4" />
+            <rect x="17" y="14" width="3" height="2" rx="0.5" fill="currentColor" stroke="none" opacity="0.4" />
+          </svg>
+        ),
+      },
+      {
+        title: 'Insurance documentation',
+        desc: 'Create a photo-based record of belongings — useful when preparing documentation for insurance purposes.',
+        icon: (
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 3h10l6 7v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+            <polyline points="16 3 16 10 22 10" />
+            <path d="M9 17l2.5 2.5 5-5" />
+          </svg>
+        ),
+      },
+    ];
     return (
       <div className="auth-landing">
 
@@ -205,17 +278,13 @@ export default function AuthScreen() {
           <h2 className="landing-section-heading">Useful at home, at school, and at work</h2>
           <p className="landing-section-intro">The same simple idea works across many real-life situations.</p>
           <ul className="landing-audience-list">
-            {[
-              { title: 'Home & storage', desc: "Remember what's in boxes, closets, garages, basements, and storage areas." },
-              { title: 'Moving & dorms', desc: 'Track belongings before, during, and after a move.' },
-              { title: 'Families & estates', desc: 'Organize keepsakes, valuables, donations, and items to sell.' },
-              { title: 'Office & workspaces', desc: 'Keep track of supplies, equipment, samples, and shared storage.' },
-              { title: 'Real estate & cleanouts', desc: 'Document rooms, contents, staging items, and cleanout projects.' },
-              { title: 'Insurance documentation', desc: 'Create a photo-based record of belongings — useful when preparing documentation for insurance purposes.' },
-            ].map(({ title, desc }, i) => (
+            {audienceRows.map(({ title, desc, icon }, i) => (
               <li key={i}>
-                <strong>{title}</strong>
-                <span>{desc}</span>
+                <span className="landing-audience-icon" aria-hidden="true">{icon}</span>
+                <div className="landing-audience-text">
+                  <strong>{title}</strong>
+                  <span>{desc}</span>
+                </div>
               </li>
             ))}
           </ul>
