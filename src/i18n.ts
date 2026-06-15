@@ -20,6 +20,12 @@ i18next
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
       lookupLocalStorage: 'vowvy-lang',
+      // Normalize any 'pt' or 'pt-PT' variant to 'pt-BR' so the load path
+      // always resolves to /locales/pt-BR/translation.json. Without this,
+      // nonExplicitSupportedLngs passes 'pt' as supported but Firebase Hosting
+      // returns the SPA index.html (HTTP 200 HTML) for the missing /locales/pt/
+      // path, causing silent parse failure and English fallback.
+      convertDetectedLanguage: (lng: string) => lng.startsWith('pt') ? 'pt-BR' : lng,
     },
     interpolation: {
       escapeValue: false,
