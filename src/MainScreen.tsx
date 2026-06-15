@@ -198,6 +198,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [inviteCopied, setInviteCopied]       = useState(false);
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [inviteExpiry, setInviteExpiry] = useState<number | null>(7); // days, null = no expiry
+  const [cardMoreOpenId, setCardMoreOpenId] = useState<string | null>(null);
   const updatePhotoInputRef = useRef<HTMLInputElement>(null);
   const scrollRef           = useRef<HTMLDivElement>(null);
 
@@ -422,6 +423,45 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           lastModifiedBy: user.uid,
           lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
         });
+      } else if (selectedContainerId === '__loose__') {
+        const looseExisting = containers.find(c =>
+          c.locationId === resolvedLocationId && c.name === 'Unsorted' && !c.deletedAt
+        );
+        if (looseExisting) {
+          const { url: photoUrl, storagePath } = await uploadPhoto(looseExisting.id, allFiles[0]);
+          const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
+          await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${looseExisting.id}`), {
+            photos: [...looseExisting.photos, photoItem],
+            photoUrls: arrayUnion(photoUrl),
+            photoStoragePaths: arrayUnion(storagePath),
+            lastModifiedAt: serverTimestamp(),
+            lastModifiedBy: user.uid,
+            lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+          });
+        } else {
+          const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
+          const { url: photoUrl, storagePath } = await uploadPhoto(containerRef.id, allFiles[0]);
+          const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
+          const locEffectiveLoose = resolvedLocationId
+            ? (locations.find(l => l.id === resolvedLocationId)?.effectiveIsPrivate ?? false)
+            : false;
+          await setDoc(containerRef, {
+            location: resolvedLocationName,
+            locationId: resolvedLocationId,
+            name: 'Unsorted',
+            photos: [photoItem],
+            photoUrls: [photoUrl],
+            photoStoragePaths: [storagePath],
+            createdAt: serverTimestamp(),
+            deletedAt: null,
+            isPrivate: locEffectiveLoose,
+            visibility: 'inherit',
+            effectiveIsPrivate: locEffectiveLoose,
+            lastModifiedAt: serverTimestamp(),
+            lastModifiedBy: user.uid,
+            lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+          });
+        }
       } else {
         const { url: photoUrl, storagePath } = await uploadPhoto(selectedContainerId, allFiles[0]);
         const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
@@ -686,8 +726,8 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           ) : null}
         </div>
         <div className="container-meta">
-          <div className="container-name">
-            {c.name}
+          <div className={`container-name${c.name === 'Unsorted' ? ' container-name--loose' : ''}`}>
+            {c.name === 'Unsorted' ? 'Loose items' : c.name}
             {viewingOwnerUid === user.uid && (
               <button
                 onClick={async () => {
@@ -748,31 +788,39 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.776 48.776 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" /></svg>
               {captureContainerId === c.id ? t('main.card.done') : t('main.card.takePhotos')}
             </button>
-            {viewingOwnerUid === user.uid && (
-              <button className="card-action-btn" onClick={() => setPrintContainer(c)} title={t('main.card.printQR')}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="6" width="2" height="2"/><path d="M13 3h8v8h-8V3zm1.5 1.5v5h5v-5h-5z"/><rect x="16" y="6" width="2" height="2"/><path d="M3 13h8v8H3v-8zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="16" width="2" height="2"/><rect x="13" y="13" width="2" height="2"/><rect x="16" y="13" width="2" height="2"/><rect x="19" y="13" width="2" height="2"/><rect x="13" y="16" width="2" height="2"/><rect x="19" y="16" width="2" height="2"/><rect x="13" y="19" width="2" height="2"/><rect x="16" y="19" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/></svg>
-                {t('main.card.printQR')}
-              </button>
-            )}
-            <button
-              className="card-action-btn"
-              onClick={() => setMoveSource({ containerId: c.id, mode: 'container' })}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
-              {t('main.card.move')}
-            </button>
-            {viewingOwnerUid === user.uid && (
+            {viewingOwnerUid === user.uid ? (
+              <div className="card-more-wrap">
+                <button
+                  className="card-action-btn"
+                  onClick={e => { e.stopPropagation(); setCardMoreOpenId(cardMoreOpenId === c.id ? null : c.id); }}
+                  aria-label="More actions"
+                >
+                  ⋯
+                </button>
+                {cardMoreOpenId === c.id && (
+                  <div className="card-more-dropdown">
+                    <button className="card-more-item" onClick={() => { setPrintContainer(c); setCardMoreOpenId(null); }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="6" width="2" height="2"/><path d="M13 3h8v8h-8V3zm1.5 1.5v5h5v-5h-5z"/><rect x="16" y="6" width="2" height="2"/><path d="M3 13h8v8H3v-8zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="16" width="2" height="2"/><rect x="13" y="13" width="2" height="2"/><rect x="16" y="13" width="2" height="2"/><rect x="19" y="13" width="2" height="2"/><rect x="13" y="16" width="2" height="2"/><rect x="19" y="16" width="2" height="2"/><rect x="13" y="19" width="2" height="2"/><rect x="16" y="19" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/></svg>
+                      {t('main.card.printQR')}
+                    </button>
+                    <button className="card-more-item" onClick={() => { setMoveSource({ containerId: c.id, mode: 'container' }); setCardMoreOpenId(null); }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
+                      {t('main.card.move')}
+                    </button>
+                    <button className="card-more-item" onClick={() => { setSellContainer(c); setSellSourcePhotos(photoMatchMap.get(c.id) ?? null); setSellSourceContainerIds(null); setSellIsFromTray(false); setCardMoreOpenId(null); }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
+                      Sell this
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
               <button
                 className="card-action-btn"
-                onClick={() => {
-                  setSellContainer(c);
-                  setSellSourcePhotos(photoMatchMap.get(c.id) ?? null);
-                  setSellSourceContainerIds(null);
-                  setSellIsFromTray(false);
-                }}
+                onClick={() => setMoveSource({ containerId: c.id, mode: 'container' })}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
-                Sell this
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
+                {t('main.card.move')}
               </button>
             )}
           </div>
@@ -1121,15 +1169,20 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               onChange={e => { setSelectedContainerId(e.target.value); setNewContainerName(''); }}
             >
               <option value="">{t('main.capture.selectContainer')}</option>
-              {containersAtLocation.map(c => (
+              {selectedLocationId && selectedLocationId !== 'new' && (
+                <option value="__loose__">Add directly to this space</option>
+              )}
+              {containersAtLocation.filter(c => c.name !== 'Unsorted').map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
-              <option value="new">{t('main.capture.createNewContainer')}</option>
+              <option value="new">Add a container (box, bin, drawer…)</option>
             </select>
 
             {selectedContainerId && selectedContainerId !== 'new' && (
               <p className="container-confirm">
-                {t('main.capture.addingTo', { name: activeContainers.find(c => c.id === selectedContainerId)?.name })}
+                {selectedContainerId === '__loose__'
+                  ? 'Adding directly to this space'
+                  : t('main.capture.addingTo', { name: activeContainers.find(c => c.id === selectedContainerId)?.name })}
               </p>
             )}
 
@@ -1471,6 +1524,10 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             );
           })()}
         </div>
+      )}
+
+      {cardMoreOpenId && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setCardMoreOpenId(null)} />
       )}
 
       {printContainer && (

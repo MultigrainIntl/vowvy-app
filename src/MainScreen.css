@@ -870,6 +870,13 @@
   padding: 4px;
 }
 
+/* ---- Loose items (Unsorted container displayed without its internal name) ---- */
+
+.container-name--loose {
+  color: var(--muted-slate);
+  font-style: italic;
+}
+
 /* ---- Container action buttons row ---- */
 
 .container-actions {
@@ -878,6 +885,45 @@
   gap: 8px;
   align-items: center;
   margin-top: 8px;
+}
+
+/* ---- More actions dropdown ---- */
+
+.card-more-wrap {
+  position: relative;
+}
+
+.card-more-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 164px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+  z-index: 100;
+  padding: 4px 0;
+}
+
+.card-more-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-body);
+}
+
+.card-more-item:hover {
+  background: #f5f0ec;
 }
 
 /* ---- QR Print Modal ---- */
