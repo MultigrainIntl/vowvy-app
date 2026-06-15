@@ -4,6 +4,7 @@ import {
   doc, getDoc, setDoc, updateDoc, serverTimestamp,
   collection,
 } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { db } from './firebase';
 import { navigate } from './nav';
 import { PARTNERS, type PartnerBox } from './partnerBoxes';
@@ -18,6 +19,7 @@ interface Props {
 type State = 'loading' | 'ready' | 'claiming' | 'done' | 'error' | 'already-claimed';
 
 export default function ClaimBoxScreen({ boxId, user }: Props) {
+  const { t } = useTranslation();
   const [state, setState]   = useState<State>('loading');
   const [box, setBox]       = useState<PartnerBox | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -26,7 +28,7 @@ export default function ClaimBoxScreen({ boxId, user }: Props) {
   useEffect(() => {
     getDoc(doc(db, 'partnerBoxes', boxId)).then(snap => {
       if (!snap.exists()) {
-        setErrorMsg('This box ID is not recognized.');
+        setErrorMsg(t('acceptInvite.errorInvalid'));
         setState('error');
         return;
       }
@@ -37,13 +39,13 @@ export default function ClaimBoxScreen({ boxId, user }: Props) {
         return;
       }
       if (data.status === 'active' && data.claimedByUid !== user.uid) {
-        setErrorMsg('This box has already been claimed by another account.');
+        setErrorMsg(t('claimBox.errorClaimed'));
         setState('error');
         return;
       }
       setState('ready');
     }).catch(() => {
-      setErrorMsg('Failed to load box. Please try again.');
+      setErrorMsg(t('claimBox.errorLoad'));
       setState('error');
     });
   }, [boxId, user.uid]);
@@ -78,7 +80,7 @@ export default function ClaimBoxScreen({ boxId, user }: Props) {
       setContainerId(containerRef.id);
       setState('done');
     } catch (e: any) {
-      setErrorMsg(e?.message ?? 'Failed to claim box. Please try again.');
+      setErrorMsg(e?.message ?? t('claimBox.errorClaim'));
       setState('error');
     }
   }
@@ -97,7 +99,7 @@ export default function ClaimBoxScreen({ boxId, user }: Props) {
       <div className="claim-content">
         {state === 'loading' && (
           <div className="claim-card">
-            <p className="claim-loading">Loading box info…</p>
+            <p className="claim-loading">{t('claimBox.loading')}</p>
           </div>
         )}
 
@@ -105,7 +107,7 @@ export default function ClaimBoxScreen({ boxId, user }: Props) {
           <div className="claim-card">
             {partner && (
               <div className="claim-sponsor">
-                <span className="claim-sponsor-label">Sponsored by</span>
+                <span className="claim-sponsor-label">{t('claimBox.sponsoredBy')}</span>
                 <a href={partner.website} target="_blank" rel="noopener noreferrer" className="claim-sponsor-name">
                   {partner.name}
                 </a>
@@ -115,17 +117,14 @@ export default function ClaimBoxScreen({ boxId, user }: Props) {
               </div>
             )}
             <div className="claim-box-id">📦 {boxId}</div>
-            <h1 className="claim-title">Track what's in this box</h1>
-            <p className="claim-body">
-              Photograph your items and Vowvy will automatically tag and organize them.
-              Find anything later by searching your inventory.
-            </p>
+            <h1 className="claim-title">{t('claimBox.trackTitle')}</h1>
+            <p className="claim-body">{t('claimBox.trackBody')}</p>
             <button
               className="claim-btn"
               disabled={state === 'claiming'}
               onClick={handleClaim}
             >
-              {state === 'claiming' ? 'Setting up…' : 'Add to my inventory'}
+              {state === 'claiming' ? t('claimBox.settingUp') : t('claimBox.addToInventory')}
             </button>
           </div>
         )}
@@ -134,9 +133,9 @@ export default function ClaimBoxScreen({ boxId, user }: Props) {
           <div className="claim-card">
             <div className="claim-icon">📦</div>
             <h1 className="claim-title">{boxId}</h1>
-            <p className="claim-body">You've already added this box to your inventory.</p>
+            <p className="claim-body">{t('claimBox.alreadyClaimed')}</p>
             <button className="claim-btn" onClick={() => navigate('/')}>
-              Go to my inventory
+              {t('claimBox.goToInventory')}
             </button>
           </div>
         )}
@@ -144,17 +143,17 @@ export default function ClaimBoxScreen({ boxId, user }: Props) {
         {state === 'done' && (
           <div className="claim-card">
             <div className="claim-icon">✓</div>
-            <h1 className="claim-title">Box added!</h1>
+            <h1 className="claim-title">{t('claimBox.doneTitle')}</h1>
             <p className="claim-body">
-              {boxId} is now in your inventory. Start photographing your items.
+              {t('claimBox.doneBody', { boxId })}
             </p>
             {partner && (
               <p className="claim-sponsor-tagline" style={{ marginBottom: 16 }}>
-                Courtesy of <strong>{partner.name}</strong>
+                {t('claimBox.courtesyOf', { name: partner.name })}
               </p>
             )}
             <button className="claim-btn" onClick={() => navigate(`/container/${containerId}`)}>
-              Start adding photos
+              {t('claimBox.startPhotos')}
             </button>
           </div>
         )}
@@ -162,9 +161,9 @@ export default function ClaimBoxScreen({ boxId, user }: Props) {
         {state === 'error' && (
           <div className="claim-card">
             <div className="claim-icon claim-icon-error">✕</div>
-            <h1 className="claim-title">Can't claim this box</h1>
+            <h1 className="claim-title">{t('claimBox.errorTitle')}</h1>
             <p className="claim-body">{errorMsg}</p>
-            <button className="claim-btn" onClick={() => navigate('/')}>Go home</button>
+            <button className="claim-btn" onClick={() => navigate('/')}>{t('acceptInvite.goHome')}</button>
           </div>
         )}
       </div>

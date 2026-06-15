@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { type User } from 'firebase/auth';
 import { collection, doc, getDoc, query, orderBy, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
+import { useTranslation } from 'react-i18next';
 import { auth, db, storage } from './firebase';
 import { ThumbImage } from './shared';
 import type { PhotoItem, ContainerNote } from './shared';
@@ -33,15 +34,16 @@ interface TrashedNote {
   note: ContainerNote;
 }
 
-type FeedbackLabel = 'Restored' | 'Deleted' | 'Error — try again';
+type FeedbackKey = 'restored' | 'deleted' | 'error';
 
 interface Props { user: User }
 
 export default function TrashScreen({ user }: Props) {
+  const { t } = useTranslation();
   const [trashedContainers, setTrashedContainers] = useState<TrashedContainer[]>([]);
   const [trashedPhotos,     setTrashedPhotos]     = useState<TrashedPhoto[]>([]);
   const [trashedNotes,      setTrashedNotes]       = useState<TrashedNote[]>([]);
-  const [feedback,  setFeedback]  = useState<Record<string, FeedbackLabel>>({});
+  const [feedback,  setFeedback]  = useState<Record<string, FeedbackKey>>({});
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -89,19 +91,18 @@ export default function TrashScreen({ user }: Props) {
     });
   }, [user.uid]);
 
-  // Immediately show feedback, fire write, dismiss after 1.5s on success or revert on failure.
-  function act(key: string, label: FeedbackLabel, write: () => Promise<void>) {
+  function act(key: string, label: FeedbackKey, write: () => Promise<void>) {
     setFeedback(f => ({ ...f, [key]: label }));
     write().then(() => {
       setTimeout(() => setDismissed(d => new Set([...d, key])), 1500);
     }).catch(() => {
-      setFeedback(f => ({ ...f, [key]: 'Error — try again' }));
+      setFeedback(f => ({ ...f, [key]: 'error' }));
       setTimeout(() => setFeedback(f => { const n = { ...f }; delete n[key]; return n; }), 3000);
     });
   }
 
   function restoreContainer(c: TrashedContainer) {
-    act(c.id, 'Restored', async () => {
+    act(c.id, 'restored', async () => {
       if (!auth.currentUser) throw new Error('Not signed in');
       await auth.currentUser.getIdToken(true);
       await updateDoc(doc(db, `users/${user.uid}/containers/${c.id}`), { deletedAt: null });
@@ -109,8 +110,8 @@ export default function TrashScreen({ user }: Props) {
   }
 
   function deleteContainerForever(c: TrashedContainer) {
-    if (!window.confirm(`Permanently delete "${c.name}" and all its photos? This cannot be undone.`)) return;
-    act(c.id, 'Deleted', async () => {
+    if (!window.confirm(t('trash.deleteContainerConfirm', { name: c.name }))) return;
+    act(c.id, 'deleted', async () => {
       if (!auth.currentUser) throw new Error('Not signed in');
       await auth.currentUser.getIdToken(true);
       await Promise.all(c.photos.map(p => deleteObject(ref(storage, p.storagePath)).catch(() => {})));
@@ -120,7 +121,7 @@ export default function TrashScreen({ user }: Props) {
 
   function restorePhoto(tp: TrashedPhoto) {
     const key = tp.photo.storagePath;
-    act(key, 'Restored', async () => {
+    act(key, 'restored', async () => {
       if (!auth.currentUser) throw new Error('Not signed in');
       await auth.currentUser.getIdToken(true);
       const containerDoc = await getDoc(doc(db, `users/${user.uid}/containers/${tp.containerId}`));
@@ -138,9 +139,9 @@ export default function TrashScreen({ user }: Props) {
   }
 
   function deletePhotoForever(tp: TrashedPhoto) {
-    if (!window.confirm(`Permanently delete this photo from "${tp.containerName}"?`)) return;
+    if (!window.confirm(t('trash.deletePhotoConfirm', { name: tp.containerName }))) return;
     const key = tp.photo.storagePath;
-    act(key, 'Deleted', async () => {
+    act(key, 'deleted', async () => {
       if (!auth.currentUser) throw new Error('Not signed in');
       await auth.currentUser.getIdToken(true);
       const containerDoc = await getDoc(doc(db, `users/${user.uid}/containers/${tp.containerId}`));
@@ -158,7 +159,7 @@ export default function TrashScreen({ user }: Props) {
   }
 
   function restoreNote(tn: TrashedNote) {
-    act(tn.note.id, 'Restored', async () => {
+    act(tn.note.id, 'restored', async () => {
       if (!auth.currentUser) throw new Error('Not signed in');
       await auth.currentUser.getIdToken(true);
       const containerDoc = await getDoc(doc(db, `users/${user.uid}/containers/${tn.containerId}`));
@@ -174,8 +175,8 @@ export default function TrashScreen({ user }: Props) {
   }
 
   function deleteNoteForever(tn: TrashedNote) {
-    if (!window.confirm(`Permanently delete this note from "${tn.containerName}"?`)) return;
-    act(tn.note.id, 'Deleted', async () => {
+    if (!window.confirm(t('trash.deleteNoteConfirm', { name: tn.containerName }))) return;
+    act(tn.note.id, 'deleted', async () => {
       if (!auth.currentUser) throw new Error('Not signed in');
       await auth.currentUser.getIdToken(true);
       const containerDoc = await getDoc(doc(db, `users/${user.uid}/containers/${tn.containerId}`));
@@ -190,16 +191,19 @@ export default function TrashScreen({ user }: Props) {
   function renderActions(key: string, onRestore: () => void, onDelete: () => void) {
     const fb = feedback[key];
     if (fb) {
+      const label = fb === 'restored' ? t('trash.restored')
+        : fb === 'deleted' ? t('trash.deleted')
+        : t('trash.errorTryAgain');
       return (
-        <span className={`trash-feedback ${fb === 'Restored' ? 'feedback-restored' : fb === 'Deleted' ? 'feedback-deleted' : 'feedback-error'}`}>
-          {fb}
+        <span className={`trash-feedback ${fb === 'restored' ? 'feedback-restored' : fb === 'deleted' ? 'feedback-deleted' : 'feedback-error'}`}>
+          {label}
         </span>
       );
     }
     return (
       <>
-        <button className="trash-restore-btn" onClick={onRestore}>Restore</button>
-        <button className="trash-delete-btn" onClick={onDelete}>Delete Forever</button>
+        <button className="trash-restore-btn" onClick={onRestore}>{t('trash.restore')}</button>
+        <button className="trash-delete-btn" onClick={onDelete}>{t('trash.deleteForever')}</button>
       </>
     );
   }
@@ -212,25 +216,25 @@ export default function TrashScreen({ user }: Props) {
   return (
     <div className="trash-screen">
       <header className="trash-header">
-        <button className="trash-back" onClick={() => navigate('/')}>← Back</button>
+        <button className="trash-back" onClick={() => navigate('/')}>{t('shared.back')}</button>
         <img src={logoMark} alt="Vowvy" className="trash-logo" />
       </header>
 
       <main className="trash-main">
-        <h1 className="trash-title">Recently Deleted</h1>
-        <p className="trash-subtitle">Items deleted within the last 30 days</p>
+        <h1 className="trash-title">{t('trash.title')}</h1>
+        <p className="trash-subtitle">{t('trash.subtitle')}</p>
 
-        {isEmpty && <p className="trash-empty">Nothing in Recently Deleted.</p>}
+        {isEmpty && <p className="trash-empty">{t('trash.empty')}</p>}
 
         {visibleContainers.length > 0 && (
           <section className="trash-section">
-            <h2 className="trash-section-title">Containers</h2>
+            <h2 className="trash-section-title">{t('trash.containersSection')}</h2>
             {visibleContainers.map(c => (
               <div key={c.id} className="trash-item">
                 <div className="trash-item-info">
                   <div className="trash-item-name">{c.name}</div>
                   <div className="trash-item-meta">
-                    {c.location} · {c.photos.length} photo{c.photos.length !== 1 ? 's' : ''}
+                    {c.location} · {t('trash.photoCount', { count: c.photos.length })}
                   </div>
                 </div>
                 <div className="trash-item-actions">
@@ -243,15 +247,15 @@ export default function TrashScreen({ user }: Props) {
 
         {visiblePhotos.length > 0 && (
           <section className="trash-section">
-            <h2 className="trash-section-title">Photos</h2>
+            <h2 className="trash-section-title">{t('trash.photosSection')}</h2>
             {visiblePhotos.map(tp => (
               <div key={tp.photo.storagePath} className="trash-item">
                 <div className="trash-thumb">
-                  <ThumbImage storagePath={tp.photo.storagePath} alt={tp.photo.description || 'Photo'} />
+                  <ThumbImage storagePath={tp.photo.storagePath} alt={tp.photo.description || t('trash.photoFallback')} />
                 </div>
                 <div className="trash-item-info">
-                  <div className="trash-item-name">{tp.photo.description || 'Photo'}</div>
-                  <div className="trash-item-meta">from {tp.containerName}</div>
+                  <div className="trash-item-name">{tp.photo.description || t('trash.photoFallback')}</div>
+                  <div className="trash-item-meta">{t('trash.from', { name: tp.containerName })}</div>
                 </div>
                 <div className="trash-item-actions">
                   {renderActions(tp.photo.storagePath, () => restorePhoto(tp), () => deletePhotoForever(tp))}
@@ -263,12 +267,12 @@ export default function TrashScreen({ user }: Props) {
 
         {visibleNotes.length > 0 && (
           <section className="trash-section">
-            <h2 className="trash-section-title">Notes</h2>
+            <h2 className="trash-section-title">{t('trash.notesSection')}</h2>
             {visibleNotes.map(tn => (
               <div key={tn.note.id} className="trash-item">
                 <div className="trash-item-info">
                   <div className="trash-item-name trash-item-note-text">{tn.note.text}</div>
-                  <div className="trash-item-meta">from {tn.containerName}</div>
+                  <div className="trash-item-meta">{t('trash.from', { name: tn.containerName })}</div>
                 </div>
                 <div className="trash-item-actions">
                   {renderActions(tn.note.id, () => restoreNote(tn), () => deleteNoteForever(tn))}

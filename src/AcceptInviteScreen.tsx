@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { type User } from 'firebase/auth';
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { db } from './firebase';
 import { navigate } from './nav';
 import logoMark from './assets/logo-mark.svg';
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export default function AcceptInviteScreen({ user, token }: Props) {
+  const { t } = useTranslation();
   const [invite, setInvite]   = useState<InviteData | null>(null);
   const [state, setState]     = useState<'loading' | 'ready' | 'accepting' | 'done' | 'error'>('loading');
   const [errorMsg, setErrorMsg] = useState('');
@@ -26,24 +28,23 @@ export default function AcceptInviteScreen({ user, token }: Props) {
   useEffect(() => {
     getDoc(doc(db, 'invites', token)).then(snap => {
       if (!snap.exists()) {
-        setErrorMsg('This invite link is invalid or has expired.');
+        setErrorMsg(t('acceptInvite.errorInvalid'));
         setState('error');
         return;
       }
       const data = snap.data() as InviteData;
       if (data.status === 'revoked') {
-        setErrorMsg('This invite has been revoked by the owner.');
+        setErrorMsg(t('acceptInvite.errorRevoked'));
         setState('error');
         return;
       }
       if (data.status === 'active') {
-        // Already accepted — if it was accepted by this user, just go home
-        setErrorMsg('This invite has already been accepted.');
+        setErrorMsg(t('acceptInvite.errorAlreadyAccepted'));
         setState('error');
         return;
       }
       if (data.ownerUid === user.uid) {
-        setErrorMsg("You can't accept your own invite.");
+        setErrorMsg(t('acceptInvite.errorOwnInvite'));
         setState('error');
         return;
       }
@@ -52,7 +53,7 @@ export default function AcceptInviteScreen({ user, token }: Props) {
           ? data.expiresAt
           : (data.expiresAt as { toDate: () => Date }).toDate();
         if (expiry < new Date()) {
-          setErrorMsg('This invite link has expired.');
+          setErrorMsg(t('acceptInvite.errorExpired'));
           setState('error');
           return;
         }
@@ -60,7 +61,7 @@ export default function AcceptInviteScreen({ user, token }: Props) {
       setInvite(data);
       setState('ready');
     }).catch(() => {
-      setErrorMsg('Failed to load invite. Please try again.');
+      setErrorMsg(t('acceptInvite.errorLoad'));
       setState('error');
     });
   }, [token, user.uid]);
@@ -69,7 +70,6 @@ export default function AcceptInviteScreen({ user, token }: Props) {
     if (!invite) return;
     setState('accepting');
     try {
-      // Create collaborator doc under owner's subcollection (keyed by collaborator UID)
       await setDoc(doc(db, `users/${invite.ownerUid}/collaborators/${user.uid}`), {
         displayName: user.displayName ?? user.email?.split('@')[0] ?? 'Collaborator',
         email: user.email ?? '',
@@ -77,7 +77,6 @@ export default function AcceptInviteScreen({ user, token }: Props) {
         inviteToken: token,
         acceptedAt: serverTimestamp(),
       });
-      // Mark invite as used — single-use
       await updateDoc(doc(db, 'invites', token), {
         status: 'active',
         acceptedByUid: user.uid,
@@ -86,7 +85,7 @@ export default function AcceptInviteScreen({ user, token }: Props) {
       });
       setState('done');
     } catch (e: any) {
-      setErrorMsg(e?.message ?? 'Failed to accept invite. Please try again.');
+      setErrorMsg(e?.message ?? t('acceptInvite.errorAccept'));
       setState('error');
     }
   }
@@ -100,37 +99,36 @@ export default function AcceptInviteScreen({ user, token }: Props) {
 
       <main className="accept-main">
         {state === 'loading' && (
-          <p className="accept-status">Loading invite…</p>
+          <p className="accept-status">{t('acceptInvite.loading')}</p>
         )}
 
         {state === 'ready' && invite && (
           <div className="accept-card">
             <div className="accept-icon">📦</div>
-            <h1 className="accept-title">You've been invited</h1>
+            <h1 className="accept-title">{t('acceptInvite.invitedTitle')}</h1>
             <p className="accept-body">
-              <strong>{invite.ownerDisplayName}</strong> has invited you to collaborate
-              on their Vowvy inventory. You'll be able to view and add containers and photos.
+              {t('acceptInvite.inviteBody', { name: invite.ownerDisplayName })}
             </p>
-            <p className="accept-signed-in-as">Signing in as {user.email}</p>
+            <p className="accept-signed-in-as">{t('acceptInvite.signingInAs', { email: user.email })}</p>
             <button className="accept-btn" onClick={handleAccept}>
-              Accept Invite
+              {t('acceptInvite.acceptBtn')}
             </button>
           </div>
         )}
 
         {state === 'accepting' && (
-          <p className="accept-status">Accepting…</p>
+          <p className="accept-status">{t('acceptInvite.accepting')}</p>
         )}
 
         {state === 'done' && (
           <div className="accept-card">
             <div className="accept-icon">✓</div>
-            <h1 className="accept-title">You're in!</h1>
+            <h1 className="accept-title">{t('acceptInvite.youreInTitle')}</h1>
             <p className="accept-body">
-              You now have access to {invite?.ownerDisplayName}'s inventory.
+              {t('acceptInvite.accessGranted', { name: invite?.ownerDisplayName })}
             </p>
             <button className="accept-btn" onClick={() => navigate(`/?owner=${invite?.ownerUid}`)}>
-              Go to inventory
+              {t('acceptInvite.goToInventory')}
             </button>
           </div>
         )}
@@ -138,10 +136,10 @@ export default function AcceptInviteScreen({ user, token }: Props) {
         {state === 'error' && (
           <div className="accept-card">
             <div className="accept-icon">✕</div>
-            <h1 className="accept-title">Can't accept this invite</h1>
+            <h1 className="accept-title">{t('acceptInvite.cantAcceptTitle')}</h1>
             <p className="accept-body">{errorMsg}</p>
             <button className="accept-btn" onClick={() => navigate('/')}>
-              Go home
+              {t('acceptInvite.goHome')}
             </button>
           </div>
         )}

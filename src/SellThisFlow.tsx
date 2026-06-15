@@ -3,6 +3,7 @@ import { type User } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, addDoc, updateDoc, collection, serverTimestamp,
 } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { db, auth } from './firebase';
 import { ThumbImage, PROXY_BASE } from './shared';
 import type { PhotoItem } from './shared';
@@ -121,11 +122,6 @@ function buildDraft(
     sellingScope === 'one'   ? `${title}. One item, pictured.` :
                                `${title}. A few items — see photos for details.`;
 
-  // AI captions are shown in inventory/lightbox (per-photo aiDescription).
-  // Not included in listing copy — avoids image-caption language ("rests on a napkin…").
-  // Future workstream: generate a separate buyer-friendly AI summary for listings.
-  const aiPart = '';
-
   const conditionPart = userNotes.trim()
     ? `\n\nCondition notes: ${userNotes.trim()}`
     : '\n\nCondition appears good based on photos. Please review all photos carefully before purchasing.';
@@ -135,9 +131,8 @@ function buildDraft(
     shippingIntent === 'ship'  ? '\n\nWilling to ship — buyer pays actual shipping cost.' :
                                  '\n\nLocal pickup preferred; may consider shipping.';
 
-  const description = scopeIntro + aiPart + conditionPart + shippingPart;
+  const description = scopeIntro + conditionPart + shippingPart;
   const condition   = userNotes.trim() || 'See photos for condition details.';
-  // Prefer source photo tags for category guessing; fall back to container tags
   const tagsForCategory = sourcePhotos?.flatMap(p => p.aiTags ?? []).length
     ? sourcePhotos.flatMap(p => p.aiTags ?? [])
     : container.aiTags;
@@ -156,7 +151,6 @@ function rewriteDraft(draft: Draft, mode: RewriteMode, container: ContainerForLi
   switch (mode) {
     case 'shorter': {
       const parts = draft.description.split('\n\n').filter(Boolean);
-      // Keep scope intro + condition only (2 paragraphs)
       const shorter = parts.slice(0, 2).join('\n\n');
       return { ...draft, description: shorter || draft.description };
     }
@@ -178,7 +172,7 @@ function rewriteDraft(draft: Draft, mode: RewriteMode, container: ContainerForLi
       const tags = container.aiTags.slice(0, 8).join(', ');
       const extra = tags ? `\n\nItems visible in photos: ${tags}.` : '';
       const notesText = container.aiDescription?.trim()
-        ? '' // already included in original draft
+        ? ''
         : extra;
       return { ...draft, description: draft.description + notesText + extra };
     }
@@ -223,10 +217,6 @@ function extFromMimeType(mimeType: string): string {
   return map[mimeType.toLowerCase()] ?? 'jpg';
 }
 
-// Builds a descriptive filename for a listing photo.
-// Priority: aiObjects[0] > aiTags[0] > user description > title slug.
-// ext defaults to 'jpg' for button labels before the blob is fetched;
-// callers that have the blob should pass extFromMimeType(blob.type).
 function buildPhotoFilename(photo: PhotoItem, index: number, titleSlug: string, ext = 'jpg'): string {
   const prefix = String(index + 1).padStart(2, '0');
   const descriptor =
@@ -238,20 +228,15 @@ function buildPhotoFilename(photo: PhotoItem, index: number, titleSlug: string, 
   return `${prefix}-${slug}.${ext}`;
 }
 
-// File System Access API — Chrome/Edge 88+ only; Firefox and Safari return false.
 const FILE_SYSTEM_ACCESS_SUPPORTED =
   typeof window !== 'undefined' && 'showDirectoryPicker' in window;
 
-// Blocks auto-generated listing folders ("VOWVY - Title - YYYY-MM-DD HHmm") to prevent
-// nesting. Allows plain parent folders like "VOWVY Exports".
 function looksLikeListingFolder(name: string): boolean {
   if (/^VOWVY - .+ - \d{4}-\d{2}-\d{2} \d{4}$/.test(name)) return true;
   const lower = name.toLowerCase();
   return lower.includes('listing') || lower.includes('marketplace');
 }
 
-// Parent export directory chosen by the user — persists for the current page session.
-// Survives modal close/reopen. Cleared on page refresh.
 let savedParentDir: any = null;
 
 // ---- Download button (fetch-blob approach) --------------------------------
@@ -293,6 +278,7 @@ function DownloadPhotoBtn({ photo, index, titleSlug }: { photo: PhotoItem; index
 // ---- Component ------------------------------------------------------------
 
 export default function SellThisFlow({ user, container, sourcePhotos, sourceContainerIds, isFromTray, onClose }: Props) {
+  const { t } = useTranslation();
   const [step, setStep]                   = useState<Step>('loading');
   const [sellingScope, setSellingScope]   = useState<SellingScope>(() => {
     if (isFromTray) return 'few';
@@ -317,7 +303,6 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
   const [folderWarn, setFolderWarn]       = useState(false);
   const [savedLocationName, setSavedLocationName] = useState<string>(() => savedParentDir?.name ?? '');
 
-  // Check one-time confirmation on mount
   useEffect(() => {
     getDoc(doc(db, 'users', user.uid)).then(snap => {
       const data = snap.data();
@@ -419,7 +404,6 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
     setFolderState('working');
     setFolderWarn(false);
     try {
-      // Build folder name: "VOWVY - {title} - YYYY-MM-DD HHmm"
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, '0');
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}${pad(now.getMinutes())}`;
@@ -429,14 +413,12 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
       const token = await auth.currentUser?.getIdToken();
       if (!token) { setFolderState('error'); return; }
 
-      // Use saved parent location or prompt the user to pick one.
       let parentDir = savedParentDir;
       if (!parentDir) {
         parentDir = await (window as any).showDirectoryPicker({
           mode: 'readwrite',
           startIn: 'downloads',
         });
-        // Guard against nesting inside an existing listing/export folder.
         if (looksLikeListingFolder(parentDir.name)) {
           setFolderState('idle');
           setFolderWarn(true);
@@ -446,20 +428,12 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
         setSavedLocationName(parentDir.name);
       }
 
-      // Create listing subfolder inside the chosen parent.
-      // Future "Clean listing photos": swap in a listing-photos/ subdirectory here
-      // and write originals to an originals/ subdirectory. The fetch+write loop
-      // below is identical regardless of target directory handle.
       const listingDir = await parentDir.getDirectoryHandle(name, { create: true });
 
-      // Determine listing photos.
-      // Future: replace exportPhotos with cleaned versions when that feature ships.
-      // The write loop below does not need to change — only this array changes.
       const exportPhotos = (sourcePhotos ?? container.photos.filter(p => !p.deletedAt))
         .filter(p => !p.deletedAt);
       const titleSlug = slugify(draft.title, 30);
 
-      // Write photo files
       for (let i = 0; i < exportPhotos.length; i++) {
         const photo = exportPhotos[i];
         const proxyUrl = `${PROXY_BASE}?path=${encodeURIComponent(photo.storagePath)}`;
@@ -474,7 +448,6 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
         await writable.close();
       }
 
-      // Write text files
       const descText = brandingNote
         ? draft.description + '\n\nListing drafted with VOWVY — vowvy.com'
         : draft.description;
@@ -507,7 +480,6 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
       setFolderName(name);
       setFolderState('done');
     } catch (err: any) {
-      // AbortError = user cancelled the picker dialog — go back to idle
       if (err?.name === 'AbortError') {
         setFolderState('idle');
       } else {
@@ -542,7 +514,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
   return (
     <div className="sell-overlay" onClick={onClose}>
       <div className="sell-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
-        <button className="sell-close-btn" onClick={onClose} aria-label="Close">✕</button>
+        <button className="sell-close-btn" onClick={onClose} aria-label={t('sell.done')}>✕</button>
 
         {/* ── Loading ── */}
         {step === 'loading' && (
@@ -554,14 +526,10 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
         {/* ── One-time confirmation ── */}
         {step === 'confirm' && (
           <div className="sell-step">
-            <h2 className="sell-heading">Before we start</h2>
-            <p className="sell-body">
-              Before creating listings, please confirm: You are responsible for making
-              sure you own this item, it can legally be sold, and your listing is
-              accurate. VOWVY creates drafts — you post them.
-            </p>
+            <h2 className="sell-heading">{t('sell.beforeWeStart')}</h2>
+            <p className="sell-body">{t('sell.confirmBody')}</p>
             <button className="sell-primary-btn" onClick={handleConfirm}>
-              I understand
+              {t('sell.iUnderstand')}
             </button>
           </div>
         )}
@@ -569,33 +537,31 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
         {/* ── Questions ── */}
         {step === 'questions' && (
           <div className="sell-step">
-            <h2 className="sell-heading">Sell this</h2>
+            <h2 className="sell-heading">{t('sell.heading')}</h2>
             <p className="sell-container-label">{container.name}</p>
 
             <div className="sell-field">
-              <label className="sell-label">
-                Describe it in a few words
-              </label>
+              <label className="sell-label">{t('sell.describeLabel')}</label>
               <input
                 className="sell-input"
                 value={itemHint}
                 onChange={e => setItemHint(e.target.value)}
-                placeholder="blue ceramic lamp"
+                placeholder={t('sell.describePlaceholder')}
                 maxLength={60}
                 autoFocus
               />
             </div>
 
             <div className="sell-field">
-              <label className="sell-label">What are you selling?</label>
+              <label className="sell-label">{t('sell.whatSelling')}</label>
               {(isFromTray || sourcePhotos) && (
                 <p className="sell-body sell-body--small">
-                  You're creating a listing from selected photos — not the whole container.
+                  {t('sell.fromTrayNote')}
                 </p>
               )}
-              {([ ['whole', 'The whole container'],
-                  ['one',   'Just one item in these photos'],
-                  ['few',   "A few items — I'll describe them"],
+              {([ ['whole', t('sell.scopeWhole')],
+                  ['one',   t('sell.scopeOne')],
+                  ['few',   t('sell.scopeFew')],
               ] as [SellingScope, string][]).map(([val, label]) => (
                 <label key={val} className="sell-radio">
                   <input
@@ -611,10 +577,10 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
             </div>
 
             <div className="sell-field">
-              <label className="sell-label">How do you want to sell it?</label>
-              {([ ['local',  'Local pickup only'],
-                  ['ship',   'I can ship it'],
-                  ['unsure', 'Not sure yet'],
+              <label className="sell-label">{t('sell.howSell')}</label>
+              {([ ['local',  t('sell.shippingLocal')],
+                  ['ship',   t('sell.shippingShip')],
+                  ['unsure', t('sell.shippingUnsure')],
               ] as [ShippingIntent, string][]).map(([val, label]) => (
                 <label key={val} className="sell-radio">
                   <input
@@ -631,28 +597,28 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
 
             <div className="sell-field">
               <label className="sell-label">
-                Anything important to mention?
-                <span className="sell-optional"> optional</span>
+                {t('sell.anythingToMention')}
+                <span className="sell-optional"> {t('sell.optional')}</span>
               </label>
               <textarea
                 className="sell-textarea"
                 value={userNotes}
                 onChange={e => setUserNotes(e.target.value)}
-                placeholder="small scratch on top, missing remote, works great…"
+                placeholder={t('sell.conditionPlaceholder')}
                 rows={2}
               />
             </div>
 
             <div className="sell-field">
-              <span className="sell-label">Photos for this listing</span>
+              <span className="sell-label">{t('sell.photosForListing')}</span>
               <p className="sell-photos-hint">
                 {isFromTray
-                  ? 'Using selected items'
+                  ? t('sell.usingSelectedItems')
                   : sourcePhotos
                     ? sourcePhotos.length === 1
-                      ? 'Using this photo'
-                      : 'Using photos that matched your search'
-                    : 'Using photos from this container'}
+                      ? t('sell.usingThisPhoto')
+                      : t('sell.usingMatchedPhotos')
+                    : t('sell.usingContainerPhotos')}
               </p>
               <div className="sell-photo-thumbs">
                 {(sourcePhotos ?? container.photos.filter(p => !p.deletedAt)).map(p => (
@@ -668,7 +634,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
               onClick={handleCreateDraft}
               disabled={!itemHint.trim() || saving}
             >
-              {saving ? 'Creating draft…' : 'Create my draft'}
+              {saving ? t('sell.creatingDraft') : t('sell.createDraft')}
             </button>
           </div>
         )}
@@ -676,30 +642,29 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
         {/* ── Review ── */}
         {step === 'review' && draft && (
           <div className="sell-step">
-            <h2 className="sell-heading">Your draft</h2>
+            <h2 className="sell-heading">{t('sell.yourDraft')}</h2>
             <p className="sell-body sell-body--small sell-disclaimer">
-              This is a starting point — review it before posting.
-              VOWVY does not verify ownership, condition, value, or marketplace acceptance.
+              {t('sell.reviewDisclaimer')}
             </p>
 
             <div className="sell-draft-field">
-              <span className="sell-draft-label">Title</span>
+              <span className="sell-draft-label">{t('sell.titleLabel')}</span>
               <p className="sell-draft-value sell-draft-title">{draft.title}</p>
             </div>
 
             <div className="sell-draft-field">
-              <span className="sell-draft-label">Description</span>
+              <span className="sell-draft-label">{t('sell.descriptionLabel')}</span>
               <p className="sell-draft-value sell-draft-desc">{draft.description}</p>
             </div>
 
             <div className="sell-draft-field">
-              <span className="sell-draft-label">Condition</span>
+              <span className="sell-draft-label">{t('sell.conditionLabel')}</span>
               <p className="sell-draft-value">{draft.condition}</p>
             </div>
 
             <div className="sell-draft-row">
               <div className="sell-draft-field sell-draft-half">
-                <span className="sell-draft-label">Category</span>
+                <span className="sell-draft-label">{t('sell.categoryLabel')}</span>
                 <select
                   className="sell-input"
                   value={editedCategory}
@@ -711,19 +676,19 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
                 </select>
               </div>
               <div className="sell-draft-field sell-draft-half">
-                <span className="sell-draft-label">Suggested platforms</span>
+                <span className="sell-draft-label">{t('sell.suggestedPlatforms')}</span>
                 <p className="sell-draft-value">{draft.platforms.join(', ')}</p>
               </div>
             </div>
 
             <div className="sell-rewrites">
-              <span className="sell-rewrites-label">Adjust tone</span>
+              <span className="sell-rewrites-label">{t('sell.adjustTone')}</span>
               <div className="sell-rewrite-btns">
-                {([ ['shorter',      'Make it shorter'],
-                    ['friendlier',   'Make it friendlier'],
-                    ['professional', 'More professional'],
-                    ['detail',       'Add more detail'],
-                    ['casual',       'More casual'],
+                {([ ['shorter',      t('sell.toneShorter')],
+                    ['friendlier',   t('sell.toneFriendlier')],
+                    ['professional', t('sell.toneProfessional')],
+                    ['detail',       t('sell.toneDetail')],
+                    ['casual',       t('sell.toneCasual')],
                 ] as [RewriteMode, string][]).map(([mode, label]) => (
                   <button
                     key={mode}
@@ -740,7 +705,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
               className="sell-primary-btn"
               onClick={() => setStep('platform')}
             >
-              Looks good — choose where to post
+              {t('sell.looksGood')}
             </button>
           </div>
         )}
@@ -748,7 +713,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
         {/* ── Platform picker ── */}
         {step === 'platform' && (
           <div className="sell-step">
-            <h2 className="sell-heading">Where do you want to post this?</h2>
+            <h2 className="sell-heading">{t('sell.whereToPost')}</h2>
             <div className="sell-platforms">
               {ALL_PLATFORMS.map(p => (
                 <button
@@ -761,7 +726,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
               ))}
             </div>
             <button className="sell-back-btn" onClick={() => setStep('review')}>
-              ← Back to draft
+              {t('sell.backToDraft')}
             </button>
           </div>
         )}
@@ -769,27 +734,26 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
         {/* ── Copy & post ── */}
         {step === 'copy' && draft && (
           <div className="sell-step">
-            <h2 className="sell-heading">Ready to post</h2>
+            <h2 className="sell-heading">{t('sell.readyToPost')}</h2>
             {selectedPlatform && selectedPlatform !== 'Other' && (
               <p className="sell-body sell-body--small">
-                You chose <strong>{selectedPlatform}</strong>.
-                Copy the title and description, open the platform, and paste.
+                {t('sell.youChose', { platform: selectedPlatform })}
               </p>
             )}
 
             <div className="sell-copy-block">
               <div className="sell-copy-row">
-                <span className="sell-copy-label">Title</span>
+                <span className="sell-copy-label">{t('sell.titleLabel')}</span>
                 <span className="sell-copy-text">{draft.title}</span>
                 <button
                   className="sell-copy-btn"
                   onClick={() => copyText(draft.title, setTitleCopied)}
                 >
-                  {titleCopied ? '✓ Copied' : 'Copy title'}
+                  {titleCopied ? t('sell.copied') : t('sell.copyTitle')}
                 </button>
               </div>
               <div className="sell-copy-row sell-copy-row--desc">
-                <span className="sell-copy-label">Description</span>
+                <span className="sell-copy-label">{t('sell.descriptionLabel')}</span>
                 <span className="sell-copy-text sell-copy-text--desc">{draft.description}</span>
                 <button
                   className="sell-copy-btn"
@@ -800,7 +764,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
                     setDescCopied,
                   )}
                 >
-                  {descCopied ? '✓ Copied' : 'Copy description'}
+                  {descCopied ? t('sell.copied') : t('sell.copyDescription')}
                 </button>
               </div>
             </div>
@@ -811,18 +775,18 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
               const titleSlug = slugify(draft.title, 30);
               return (
                 <div className="sell-field">
-                  <span className="sell-label">Photos for your listing</span>
+                  <span className="sell-label">{t('sell.photosForYourListing')}</span>
 
                   {FILE_SYSTEM_ACCESS_SUPPORTED ? (
                     <>
                       {folderState === 'done' ? (
                         <div className="sell-folder-ready">
-                          <p className="sell-folder-name">VOWVY created this folder: <strong>{folderName}</strong></p>
+                          <p className="sell-folder-name">{t('sell.folderCreated')} <strong>{folderName}</strong></p>
                           <p className="sell-folder-instruction">
-                            Use this folder when Facebook asks you to add photos.
+                            {t('sell.folderInstruction')}
                           </p>
                           <button className="sell-folder-change-btn" onClick={handleChangeLocation}>
-                            Change VOWVY export folder
+                            {t('sell.changeExportFolder')}
                           </button>
                         </div>
                       ) : (
@@ -830,29 +794,29 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
                           {savedLocationName ? (
                             <>
                               <p className="sell-folder-hint">
-                                VOWVY will save to: <strong>{savedLocationName}</strong>. Click <strong>Create listing folder</strong> and VOWVY will create a named folder automatically.
+                                {t('sell.saveToLocation', { name: savedLocationName })}
                               </p>
                               <button
                                 className="sell-primary-btn"
                                 onClick={handlePrepareFolder}
                                 disabled={folderState === 'working'}
                               >
-                                {folderState === 'working' ? 'Creating folder…' : 'Create listing folder'}
+                                {folderState === 'working' ? t('sell.creatingFolder') : t('sell.createListingFolder')}
                               </button>
                               <button
                                 className="sell-folder-change-btn"
                                 onClick={handleChangeLocation}
                                 disabled={folderState === 'working'}
                               >
-                                Change save location
+                                {t('sell.changeSaveLocation')}
                               </button>
                             </>
                           ) : (
                             <>
                               <div className="sell-disclaimer">
-                                <p className="sell-label">First-time setup</p>
+                                <p className="sell-label">{t('sell.folderSetupTitle')}</p>
                                 <ol className="sell-setup-steps">
-                                  <li>Click <strong>Set VOWVY export folder</strong>.</li>
+                                  <li>Click <strong>{t('sell.setExportFolder')}</strong>.</li>
                                   <li>In the window that opens, go to Downloads.</li>
                                   <li>Click <strong>New Folder</strong>.</li>
                                   <li>Name it <strong>VOWVY Exports</strong>.</li>
@@ -865,25 +829,23 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
                                 onClick={handlePrepareFolder}
                                 disabled={folderState === 'working'}
                               >
-                                {folderState === 'working' ? 'Setting location…' : 'Set VOWVY export folder'}
+                                {folderState === 'working' ? t('sell.settingLocation') : t('sell.setExportFolder')}
                               </button>
                             </>
                           )}
                         </>
                       )}
                       {folderWarn && (
-                        <p className="sell-folder-warn">
-                          Choose a plain parent folder like "VOWVY Exports" — not an auto-generated listing folder.
-                        </p>
+                        <p className="sell-folder-warn">{t('sell.folderWarn')}</p>
                       )}
                       {folderState === 'error' && (
-                        <p className="sell-folder-error">Something went wrong. Try again or download photos below.</p>
+                        <p className="sell-folder-error">{t('sell.folderError')}</p>
                       )}
-                      <p className="sell-fallback-note">Or download individually:</p>
+                      <p className="sell-fallback-note">{t('sell.downloadIndividually')}</p>
                     </>
                   ) : (
                     <p className="sell-fallback-note">
-                      This browser doesn't support folder export. Download the photos below with listing-ready filenames.
+                      {t('sell.noFolderExport')}
                     </p>
                   )}
 
@@ -903,14 +865,14 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
                 rel="noopener noreferrer"
                 className="sell-open-btn"
               >
-                Open {selectedPlatform} ↗
+                {t('sell.openPlatform', { platform: selectedPlatform })}
               </a>
             )}
 
             <div className="sell-field sell-field--mt">
               <label className="sell-label">
-                Paste your listing link here
-                <span className="sell-optional"> optional</span>
+                {t('sell.pasteLinkLabel')}
+                <span className="sell-optional"> {t('sell.optional')}</span>
               </label>
               <div className="sell-url-row">
                 <input
@@ -925,7 +887,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
                   onClick={handleSavePostedUrl}
                   disabled={!postedUrl.trim() || urlSaved}
                 >
-                  {urlSaved ? 'Saved ✓' : 'Save'}
+                  {urlSaved ? t('sell.savedUrl') : t('shared.save')}
                 </button>
               </div>
             </div>
@@ -936,7 +898,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
                 checked={brandingNote}
                 onChange={e => setBrandingNote(e.target.checked)}
               />
-              <span>Add 'Created with VOWVY' note to description</span>
+              <span>{t('sell.brandingToggle')}</span>
             </label>
 
             <div className="sell-branding-footer">
@@ -953,10 +915,10 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
 
             <div className="sell-footer-row">
               <button className="sell-back-btn" onClick={() => setStep('platform')}>
-                ← Change platform
+                {t('sell.changePlatform')}
               </button>
               <button className="sell-done-btn" onClick={onClose}>
-                Done
+                {t('sell.done')}
               </button>
             </div>
           </div>

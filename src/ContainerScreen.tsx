@@ -3,6 +3,7 @@ import { type User } from 'firebase/auth';
 import { doc, onSnapshot, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
+import { useTranslation } from 'react-i18next';
 import { auth, db, storage } from './firebase';
 import { ThumbImage, ContainerNotes } from './shared';
 import type { ContainerNote, PhotoItem } from './shared';
@@ -70,6 +71,7 @@ function mapContainer(snap: any): Container {
 }
 
 export default function ContainerScreen({ user, containerId }: Props) {
+  const { t } = useTranslation();
   const [container, setContainer] = useState<Container | null>(null);
   const [notFound, setNotFound]   = useState(false);
   const [lbIndex, setLbIndex]     = useState(0);
@@ -149,16 +151,16 @@ export default function ContainerScreen({ user, containerId }: Props) {
 
   const header = (
     <header className="cs-header">
-      <button className="cs-back" onClick={() => navigate('/')}>← Back</button>
+      <button className="cs-back" onClick={() => navigate('/')}>{t('shared.back')}</button>
       <img src={logoMark} alt="Vowvy" className="cs-logo" />
     </header>
   );
 
   if (notFound) return (
-    <div className="container-screen">{header}<p className="cs-empty">Container not found.</p></div>
+    <div className="container-screen">{header}<p className="cs-empty">{t('containerScreen.notFound')}</p></div>
   );
   if (!container) return (
-    <div className="container-screen">{header}<p className="cs-empty">Loading…</p></div>
+    <div className="container-screen">{header}<p className="cs-empty">{t('containerScreen.loading')}</p></div>
   );
 
   const activePhotos = container.photos.filter(p => !p.deletedAt);
@@ -174,7 +176,7 @@ export default function ContainerScreen({ user, containerId }: Props) {
           <div className="cs-photos">
             {activePhotos.map((photo, i) => (
               <div key={photo.id} className="cs-photo-wrap" onClick={() => { setLbIndex(i); setLbOpen(true); }}>
-                <ThumbImage storagePath={photo.storagePath} alt={`Photo ${i + 1}`} />
+                <ThumbImage storagePath={photo.storagePath} alt={`${t('main.card.addPhoto')} ${i + 1}`} />
               </div>
             ))}
           </div>
@@ -186,13 +188,13 @@ export default function ContainerScreen({ user, containerId }: Props) {
             disabled={adding}
             onClick={() => updatePhotoInputRef.current?.click()}
           >
-            {adding ? 'Adding…' : 'Add Photo'}
+            {adding ? t('containerScreen.adding') : t('main.card.addPhoto')}
           </button>
           <input type="file" ref={updatePhotoInputRef} className="photo-input-hidden" onChange={handleAddPhoto} />
         </div>
 
         {container.aiStatus === 'processing' && (
-          <p className="cs-ai-processing">Analyzing contents…</p>
+          <p className="cs-ai-processing">{t('containerScreen.analyzingContents')}</p>
         )}
         {container.aiDescription && (
           <p className="cs-ai-desc">{container.aiDescription}</p>
@@ -216,11 +218,11 @@ export default function ContainerScreen({ user, containerId }: Props) {
       {lbOpen && activePhotos.length > 0 && (
         <div className="cs-lb-backdrop" onClick={() => setLbOpen(false)}>
           <div className="cs-lb-toolbar" onClick={e => e.stopPropagation()}>
-            <button className="cs-lb-delete" onClick={handleDeletePhoto}>Delete</button>
+            <button className="cs-lb-delete" onClick={handleDeletePhoto}>{t('main.lightbox.delete')}</button>
             <button className="cs-lb-close" onClick={() => setLbOpen(false)}>✕</button>
           </div>
           <div className="cs-lb-img" onClick={e => e.stopPropagation()}>
-            <ThumbImage storagePath={activePhotos[lbIndex].storagePath} alt={`Photo ${lbIndex + 1}`} />
+            <ThumbImage storagePath={activePhotos[lbIndex].storagePath} alt={`${t('main.card.addPhoto')} ${lbIndex + 1}`} />
           </div>
           {activePhotos.length > 1 && (
             <div className="cs-lb-nav" onClick={e => e.stopPropagation()}>
@@ -242,7 +244,7 @@ export default function ContainerScreen({ user, containerId }: Props) {
             if (photo.aiStatus === 'processing') {
               return (
                 <div className="cs-lb-ai" onClick={e => e.stopPropagation()}>
-                  <span className="cs-lb-ai-analyzing">Analyzing…</span>
+                  <span className="cs-lb-ai-analyzing">{t('main.card.aiProcessing')}</span>
                 </div>
               );
             }

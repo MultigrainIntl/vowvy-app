@@ -4,6 +4,7 @@ import {
   collection, doc, onSnapshot, deleteDoc, updateDoc, setDoc,
   query, where, orderBy, getDocs, Timestamp, serverTimestamp,
 } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { db } from './firebase';
 import { navigate } from './nav';
 import logoMark from './assets/logo-mark.svg';
@@ -21,6 +22,7 @@ interface Collaborator {
 interface Props { user: User; }
 
 export default function CollaboratorDashboard({ user }: Props) {
+  const { t } = useTranslation();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [search, setSearch]               = useState('');
   const [revoking, setRevoking]           = useState<string | null>(null);
@@ -103,7 +105,7 @@ export default function CollaboratorDashboard({ user }: Props) {
   }
 
   async function revokeCollaborator(c: Collaborator) {
-    if (!window.confirm(`Remove ${c.displayName}'s access?`)) return;
+    if (!window.confirm(t('collabDash.revokeConfirm', { name: c.displayName }))) return;
     setRevoking(c.uid);
     try {
       await deleteDoc(doc(db, `users/${user.uid}/collaborators/${c.uid}`));
@@ -123,11 +125,11 @@ export default function CollaboratorDashboard({ user }: Props) {
   }
 
   function formatExpiry(d: Date | null): string {
-    if (!d) return 'No expiry';
+    if (!d) return t('collabDash.noExpiry');
     const now = new Date();
-    if (d < now) return 'Expired';
+    if (d < now) return t('collabDash.expired');
     const days = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return days === 1 ? 'Expires tomorrow' : `Expires in ${days} days`;
+    return days === 1 ? t('collabDash.expiresTomorrow') : t('collabDash.expiresInDays', { count: days });
   }
 
   const filtered = collaborators.filter(c =>
@@ -143,29 +145,26 @@ export default function CollaboratorDashboard({ user }: Props) {
           <span className="app-wordmark">Vowvy</span>
         </div>
         <div className="header-actions">
-          <button className="sign-out-btn" onClick={() => navigate('/')}>← Back</button>
+          <button className="sign-out-btn" onClick={() => navigate('/')}>{t('shared.back')}</button>
         </div>
       </header>
 
       <div className="collab-content">
-        <h2 className="collab-title">Collaborators</h2>
-        <p className="collab-subtitle">People who have access to your inventory</p>
+        <h2 className="collab-title">{t('collabDash.title')}</h2>
+        <p className="collab-subtitle">{t('collabDash.subtitle')}</p>
 
         <div className="collab-privacy-note">
           <span className="collab-privacy-note-icon">🔒</span>
           <div>
-            <p className="collab-privacy-note-heading">Helpers only see what you've made visible.</p>
-            <p className="collab-privacy-note-body">
-              Before inviting a helper, go to <strong>Manage Locations</strong> and make the places or containers they need visible to helpers.
-              Hidden places and containers stay hidden — even after the helper joins.
-            </p>
-            <p className="collab-privacy-tip">💡 Want a helper to see something? Make it visible to helpers first.</p>
+            <p className="collab-privacy-note-heading">{t('collabDash.privacyHeading')}</p>
+            <p className="collab-privacy-note-body">{t('collabDash.privacyBody')}</p>
+            <p className="collab-privacy-tip">{t('collabDash.privacyTip')}</p>
           </div>
         </div>
 
         <div className="collab-invite-box">
           <p style={{ margin: '0 0 12px', fontSize: 14, color: '#555' }}>
-            Generate a link and send it to a helper. They can add photos and help with the places and containers you've made visible to them.
+            {t('collabDash.inviteDesc')}
           </p>
           {inviteLink ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -187,7 +186,7 @@ export default function CollaboratorDashboard({ user }: Props) {
                     background: '#7a3b2e', color: '#fff', fontSize: 14, cursor: 'pointer',
                   }}
                 >
-                  {inviteCopied ? '✓ Copied!' : 'Copy link'}
+                  {inviteCopied ? t('main.invite.copied') : t('main.invite.copyLink')}
                 </button>
                 <button
                   onClick={() => { setInviteLink(null); setInviteCopied(false); }}
@@ -196,14 +195,14 @@ export default function CollaboratorDashboard({ user }: Props) {
                     background: '#fff', fontSize: 14, cursor: 'pointer', color: '#555',
                   }}
                 >
-                  New link
+                  {t('main.invite.newLink')}
                 </button>
               </div>
             </div>
           ) : (
             <>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-                <label style={{ fontSize: 13, color: '#555' }}>Link expires after</label>
+                <label style={{ fontSize: 13, color: '#555' }}>{t('main.invite.expiryLabel')}</label>
                 <select
                   value={inviteExpiry ?? 'never'}
                   onChange={e => setInviteExpiry(e.target.value === 'never' ? null : Number(e.target.value))}
@@ -212,10 +211,10 @@ export default function CollaboratorDashboard({ user }: Props) {
                     background: '#faf8f6', fontSize: 14, color: '#333',
                   }}
                 >
-                  <option value={1}>24 hours</option>
-                  <option value={7}>7 days</option>
-                  <option value={30}>30 days</option>
-                  <option value="never">No expiry</option>
+                  <option value={1}>{t('main.invite.expiry24h')}</option>
+                  <option value={7}>{t('main.invite.expiry7d')}</option>
+                  <option value={30}>{t('main.invite.expiry30d')}</option>
+                  <option value="never">{t('main.invite.expiryNever')}</option>
                 </select>
               </div>
               <button
@@ -227,7 +226,7 @@ export default function CollaboratorDashboard({ user }: Props) {
                   color: '#fff', fontSize: 14, cursor: generatingInvite ? 'not-allowed' : 'pointer',
                 }}
               >
-                {generatingInvite ? 'Generating…' : 'Generate invite link'}
+                {generatingInvite ? t('main.invite.generating') : t('main.invite.generate')}
               </button>
             </>
           )}
@@ -237,16 +236,16 @@ export default function CollaboratorDashboard({ user }: Props) {
           <input
             type="text"
             className="collab-search"
-            placeholder="Search by name or email…"
+            placeholder={t('collabDash.searchPlaceholder')}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         )}
 
         {collaborators.length === 0 ? (
-          <p className="collab-empty">No collaborators yet.</p>
+          <p className="collab-empty">{t('collabDash.noCollaborators')}</p>
         ) : filtered.length === 0 ? (
-          <p className="collab-empty">No results for "{search}"</p>
+          <p className="collab-empty">{t('collabDash.noResults', { search })}</p>
         ) : (
           <div className="collab-list">
             {filtered.map(c => (
@@ -258,13 +257,13 @@ export default function CollaboratorDashboard({ user }: Props) {
                   <div className="collab-name">{c.displayName}</div>
                   <div className="collab-email">{c.email}</div>
                   <div className="collab-meta">
-                    Joined {formatDate(c.acceptedAt)} · {formatExpiry(c.expiresAt)}
+                    {t('collabDash.joined', { date: formatDate(c.acceptedAt) })} · {formatExpiry(c.expiresAt)}
                     {(() => {
                       const latest = recentActivity.find(a => a.collaboratorUid === c.uid);
                       if (!latest) return null;
                       const mins = Math.floor((Date.now() - latest.modifiedAt.getTime()) / 60000);
                       const timeAgo = mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins/60)}h ago` : `${Math.floor(mins/1440)}d ago`;
-                      return <span style={{ color: '#7a3b2e', marginLeft: 8 }}>· Added to {latest.containerName} {timeAgo}</span>;
+                      return <span style={{ color: '#7a3b2e', marginLeft: 8 }}>{t('collabDash.addedTo', { container: latest.containerName, time: timeAgo })}</span>;
                     })()}
                   </div>
                 </div>
@@ -273,7 +272,7 @@ export default function CollaboratorDashboard({ user }: Props) {
                   disabled={revoking === c.uid}
                   onClick={() => revokeCollaborator(c)}
                 >
-                  {revoking === c.uid ? 'Revoking…' : 'Revoke'}
+                  {revoking === c.uid ? t('collabDash.revoking') : t('main.invite.revoke')}
                 </button>
               </div>
             ))}

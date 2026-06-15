@@ -6,6 +6,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { navigate } from './nav';
 import {
   subscribeToLocations, createLocation,
@@ -46,6 +47,7 @@ function UnlockedIcon() {
 }
 
 export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
+  const { t } = useTranslation();
   const [locations, setLocations]     = useState<Location[]>([]);
   const [containers, setContainers]   = useState<Container[]>([]);
   const [editingId, setEditingId]     = useState<string | null>(null);
@@ -98,17 +100,14 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
   }
 
   async function deleteLocation(id: string) {
-    // Block deletion when sub-locations exist, to avoid orphaning children.
-    // No data is modified in this case — the user resolves it with Move/Delete.
     const childLocations = getLocationChildren(id, locations);
     if (childLocations.length > 0) {
       const loc = locations.find(l => l.id === id);
       const name = loc?.name.trim() || 'this location';
-      window.alert(`You can't delete “${name}” because it has sub-locations. Move or delete its sub-locations first.`);
+      window.alert(t('manage.deleteLocationAlert', { name }));
       return;
     }
-    if (!window.confirm('Delete this location? Containers inside it will become unassigned.')) return;
-    // Unassign containers in this location
+    if (!window.confirm(t('manage.deleteLocationConfirm'))) return;
     const affected = containers.filter(c => c.locationId === id);
     const batch = writeBatch(db);
     affected.forEach(c => {
@@ -126,17 +125,13 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
   async function moveLocation(id: string, newParentId: string | null) {
     const loc = locations.find(l => l.id === id);
     if (!loc) { setMovingId(null); return; }
-    // No-op: selecting the current parent just closes the picker.
     if ((loc.parentId ?? null) === (newParentId ?? null)) { setMovingId(null); return; }
-    // Safety: never under itself or any of its own descendants (prevents cycles).
     if (newParentId === id || getDescendantIds(id, locations).has(newParentId ?? '')) {
       setMovingId(null);
       return;
     }
     await updateDoc(doc(db, `users/${user.uid}/locations/${id}`), { parentId: newParentId });
     setMovingId(null);
-    // 'inherit' locations derive effectiveIsPrivate from parent — re-propagate using
-    // the new parent's stored effective (read before the snapshot fires to avoid a race).
     if (loc.visibility === 'inherit') {
       const newParent = newParentId ? locations.find(l => l.id === newParentId) : null;
       const newParentEffective = newParent?.effectiveIsPrivate ?? false;
@@ -146,9 +141,6 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
     }
   }
 
-  // Health Check repair: reattach an orphaned location to the top level so the
-  // normal Rename/Move/Delete tools become reachable. Writes ONLY parentId. The
-  // user must click the button — no automatic repair.
   async function repairOrphanToTopLevel(id: string) {
     await updateDoc(doc(db, `users/${user.uid}/locations/${id}`), { parentId: null });
     const loc = locations.find(l => l.id === id);
@@ -157,8 +149,6 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
     }
   }
 
-  // BFS propagation of effectiveIsPrivate for a location subtree plus their containers.
-  // rootEffective must be pre-computed by the caller so this function never reads stale parentId state.
   async function propagateEffective(rootId: string, rootVis: Visibility, rootEffective: boolean) {
     const locUpdates = new Map<string, { visibility: Visibility; effectiveIsPrivate: boolean }>();
     const effectiveMap = new Map<string, boolean>();
@@ -223,6 +213,10 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
     const isExpanded = expandedIds.has(loc.id);
     const isEditing = editingId === loc.id;
 
+    const lockAriaLabel = loc.visibility === 'inherit'
+      ? (loc.effectiveIsPrivate ? t('manage.followParentHiddenLabel') : t('manage.followParentVisibleLabel'))
+      : loc.visibility === 'private' ? t('manage.hiddenFromHelpers') : t('manage.alwaysVisible');
+
     return (
       <div key={loc.id} style={{ marginLeft: depth * 20 }}>
         <div className="manage-row location-row">
@@ -245,37 +239,29 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
           )}
           {loc.visibility !== 'inherit' && (
             <span className={`loc-vis-pill${loc.visibility === 'private' ? ' pill-private' : ' pill-shared'}`}>
-              {loc.visibility === 'private' ? 'Private' : 'Shared'}
+              {loc.visibility === 'private' ? t('manage.private') : t('manage.shared')}
             </span>
           )}
           <div className="manage-actions">
             {isEditing ? (
-              <button className="manage-btn save" onClick={() => renameLocation(loc.id, editingName)}>Save</button>
+              <button className="manage-btn save" onClick={() => renameLocation(loc.id, editingName)}>{t('shared.save')}</button>
             ) : (
-              <button className="manage-btn edit" onClick={() => { setEditingId(loc.id); setEditingName(loc.name); }}>Rename</button>
+              <button className="manage-btn edit" onClick={() => { setEditingId(loc.id); setEditingName(loc.name); }}>{t('manage.rename')}</button>
             )}
             <button className="manage-btn edit" onClick={() => {
               setMovingId(movingId === loc.id ? null : loc.id);
-            }}>Move</button>
-            <button className="manage-btn delete" onClick={() => deleteLocation(loc.id)}>Delete</button>
+            }}>{t('main.move.containerTitle').split(' ')[0]}</button>
+            <button className="manage-btn delete" onClick={() => deleteLocation(loc.id)}>{t('manage.delete')}</button>
             <button
               className={`loc-lock-btn${loc.effectiveIsPrivate ? ' is-private' : ''}${loc.visibility === 'inherit' ? ' is-inherit' : ''}`}
-              aria-label={
-                loc.visibility === 'inherit'
-                  ? (loc.effectiveIsPrivate ? 'Following parent — helpers cannot see this place' : 'Following parent — helpers can see this place')
-                  : loc.visibility === 'private' ? 'Hidden from helpers' : 'Always visible to helpers'
-              }
-              title={
-                loc.visibility === 'inherit'
-                  ? (loc.effectiveIsPrivate ? 'Following parent — helpers cannot see this place' : 'Following parent — helpers can see this place')
-                  : loc.visibility === 'private' ? 'Hidden from helpers' : 'Always visible to helpers'
-              }
+              aria-label={lockAriaLabel}
+              title={lockAriaLabel}
               onClick={async () => {
                 const newVis: Visibility =
                   loc.visibility === 'private' ? 'inherit'
                   : loc.effectiveIsPrivate     ? 'shared'
                   :                              'private';
-                const ok = window.confirm('This will update privacy for this location, child locations, and containers inside it. Continue?');
+                const ok = window.confirm(t('manage.privacyUpdateConfirm'));
                 if (!ok) return;
                 await applyLocationVisibility(loc.id, newVis);
               }}
@@ -285,8 +271,8 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
             <div style={{ position: 'relative' }}>
               <button
                 className="loc-menu-btn"
-                aria-label="Privacy options"
-                title="Privacy options"
+                aria-label={t('manage.privacyOptions')}
+                title={t('manage.privacyOptions')}
                 onClick={e => {
                   e.stopPropagation();
                   setMenuOpenId(menuOpenId === loc.id ? null : loc.id);
@@ -305,7 +291,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                       }}
                     >
                       <span className="loc-menu-check">{loc.visibility === v ? '✓' : ''}</span>
-                      {v === 'inherit' ? 'Follow parent' : v === 'private' ? 'Hide from helpers' : 'Show to helpers'}
+                      {v === 'inherit' ? t('manage.followParent') : v === 'private' ? t('manage.hideFromHelpers') : t('manage.showToHelpers')}
                     </button>
                   ))}
                 </div>
@@ -315,12 +301,12 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
               setAddingUnder(loc.id);
               setNewSubName('');
               setExpandedIds(prev => new Set([...prev, loc.id]));
-            }}>+ Sub-location</button>
+            }}>{t('manage.addSubLocation')}</button>
             <button className="manage-btn add" onClick={() => {
               setAddingContainerUnder(loc.id);
               setNewContainerName('');
               setExpandedIds(prev => new Set([...prev, loc.id]));
-            }}>+ Container</button>
+            }}>{t('manage.addContainer')}</button>
           </div>
         </div>
 
@@ -335,12 +321,12 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                 defaultValue={loc.parentId ?? ''}
                 onChange={e => moveLocation(loc.id, e.target.value === '' ? null : e.target.value)}
               >
-                <option value="">Top level (no parent)</option>
+                <option value="">{t('manage.topLevel')}</option>
                 {eligible.map(l => (
                   <option key={l.id} value={l.id}>{getLocationPath(l.id, locations)}</option>
                 ))}
               </select>
-              <button className="manage-btn" onClick={() => setMovingId(null)}>Cancel</button>
+              <button className="manage-btn" onClick={() => setMovingId(null)}>{t('manage.cancel')}</button>
             </div>
           );
         })()}
@@ -352,7 +338,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                 <input
                   autoFocus
                   className="manage-input"
-                  placeholder="Sub-location name"
+                  placeholder={t('manage.subLocationPlaceholder')}
                   value={newSubName}
                   onChange={e => setNewSubName(e.target.value)}
                   onKeyDown={async e => {
@@ -370,7 +356,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                     setAddingUnder(null);
                     setNewSubName('');
                   }
-                }}>Add</button>
+                }}>{t('main.capture.add')}</button>
               </div>
             )}
             {addingContainerUnder === loc.id && (
@@ -378,7 +364,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                 <input
                   autoFocus
                   className="manage-input"
-                  placeholder="Container name — e.g. Counter, Drawer, Box 1"
+                  placeholder={t('manage.containerNamePlaceholder')}
                   value={newContainerName}
                   onChange={e => setNewContainerName(e.target.value)}
                   onKeyDown={async e => {
@@ -419,7 +405,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                   });
                   setAddingContainerUnder(null);
                   setNewContainerName('');
-                }}>Add</button>
+                }}>{t('main.capture.add')}</button>
               </div>
             )}
             {children.map(child => renderLocation(child, depth + 1))}
@@ -451,9 +437,9 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
         )}
         <div className="manage-actions">
           {isEditing ? (
-            <button className="manage-btn save" onClick={() => renameContainer(c.id, editingName)}>Save</button>
+            <button className="manage-btn save" onClick={() => renameContainer(c.id, editingName)}>{t('shared.save')}</button>
           ) : (
-            <button className="manage-btn edit" onClick={() => { setEditingId(c.id); setEditingName(c.name); }}>Rename</button>
+            <button className="manage-btn edit" onClick={() => { setEditingId(c.id); setEditingName(c.name); }}>{t('manage.rename')}</button>
           )}
         </div>
       </div>
@@ -472,15 +458,15 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
           <span className="app-wordmark">Vowvy</span>
         </div>
         <div className="header-actions">
-          <button className="sign-out-btn" onClick={() => navigate('/')}>← Back</button>
+          <button className="sign-out-btn" onClick={() => navigate('/')}>{t('shared.back')}</button>
         </div>
       </header>
 
       <div className="manage-content">
-        <h2 className="manage-title">Manage Locations</h2>
+        <h2 className="manage-title">{t('manage.title')}</h2>
         {onStartGuidedAdd && (
           <button className="manage-guided-add-btn" onClick={onStartGuidedAdd}>
-            + Set up a new space
+            {t('manage.addNewSpace')}
           </button>
         )}
 
@@ -491,7 +477,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
               onClick={() => setHealthOpen(v => !v)}
               aria-expanded={healthOpen}
             >
-              <span>⚠️ Location Health Check — {healthIssues.length} {healthIssues.length === 1 ? 'item' : 'items'} found</span>
+              <span>{t('manage.health.header', { count: healthIssues.length })}</span>
               <span className="health-chevron">{healthOpen ? '▾' : '▸'}</span>
             </button>
             {healthOpen && (
@@ -504,7 +490,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                         className="health-repair-btn"
                         onClick={() => repairOrphanToTopLevel(issue.locationIds[0])}
                       >
-                        Move to top level
+                        {t('manage.health.moveToTopLevel')}
                       </button>
                     )}
                   </li>
@@ -516,8 +502,8 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
 
         {topLevel.length === 0 && !addingTopLevel && (
           <div className="manage-empty">
-            <p>No locations yet.</p>
-            <button className="manage-btn add" onClick={() => setAddingTopLevel(true)}>+ Add first location</button>
+            <p>{t('manage.noLocations')}</p>
+            <button className="manage-btn add" onClick={() => setAddingTopLevel(true)}>{t('manage.addFirstLocation')}</button>
           </div>
         )}
         {addingTopLevel && (
@@ -525,7 +511,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
             <input
               autoFocus
               className="manage-input"
-              placeholder="Location name — e.g. Kitchen, Garage"
+              placeholder={t('manage.locationPlaceholder')}
               value={newTopLevelName}
               onChange={e => setNewTopLevelName(e.target.value)}
               onKeyDown={async e => {
@@ -542,7 +528,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
               await createLocation(user.uid, newTopLevelName.trim(), null);
               setAddingTopLevel(false);
               setNewTopLevelName('');
-            }}>Add</button>
+            }}>{t('main.capture.add')}</button>
           </div>
         )}
 
@@ -557,7 +543,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
 
         {unassigned.length > 0 && (
           <div className="manage-section">
-            <h3 className="manage-subtitle">Unassigned containers</h3>
+            <h3 className="manage-subtitle">{t('manage.unassigned')}</h3>
             {unassigned.map(c => renderContainer(c))}
           </div>
         )}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { updateProfile, sendPasswordResetEmail, type User } from 'firebase/auth';
+import { useTranslation } from 'react-i18next';
 import { auth } from './firebase';
 import { navigate } from './nav';
 import logoMark from './assets/logo-mark.svg';
@@ -7,6 +8,7 @@ import logoMark from './assets/logo-mark.svg';
 interface Props { user: User; }
 
 export default function ProfileScreen({ user }: Props) {
+  const { t } = useTranslation();
   const [displayName, setDisplayName] = useState(user.displayName ?? '');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
@@ -18,9 +20,9 @@ export default function ProfileScreen({ user }: Props) {
     setSaveMsg('');
     try {
       await updateProfile(user, { displayName: displayName.trim() });
-      setSaveMsg('Name updated.');
+      setSaveMsg(t('profile.nameUpdated'));
     } catch {
-      setSaveMsg('Could not save — please try again.');
+      setSaveMsg(t('profile.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -31,9 +33,9 @@ export default function ProfileScreen({ user }: Props) {
     setResetMsg('');
     try {
       await sendPasswordResetEmail(auth, user.email);
-      setResetMsg('Reset email sent — check your inbox.');
+      setResetMsg(t('profile.resetSent'));
     } catch {
-      setResetMsg('Could not send reset email — please try again.');
+      setResetMsg(t('profile.resetFailed'));
     }
   }
 
@@ -45,21 +47,21 @@ export default function ProfileScreen({ user }: Props) {
           <span className="app-wordmark">Vowvy</span>
         </div>
         <div className="header-actions">
-          <button className="sign-out-btn" onClick={() => navigate('/')}>← Back</button>
+          <button className="sign-out-btn" onClick={() => navigate('/')}>{t('shared.back')}</button>
         </div>
       </header>
 
       <main style={{ flex: 1, padding: '32px 24px', maxWidth: 480, width: '100%', margin: '0 auto' }}>
-        <h1 style={{ fontSize: 32, marginBottom: 24 }}>Profile</h1>
+        <h1 style={{ fontSize: 32, marginBottom: 24 }}>{t('profile.title')}</h1>
 
         <section style={{ marginBottom: 32 }}>
-          <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginBottom: 4 }}>Email</p>
+          <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginBottom: 4 }}>{t('profile.emailLabel')}</p>
           <p style={{ fontSize: 15 }}>{user.email}</p>
         </section>
 
         <section style={{ marginBottom: 32 }}>
           <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-slate)', marginBottom: 6 }}>
-            Display name
+            {t('profile.displayNameLabel')}
           </label>
           <div style={{ display: 'flex', gap: 10 }}>
             <input
@@ -83,7 +85,7 @@ export default function ProfileScreen({ user }: Props) {
                 opacity: saving || !displayName.trim() ? 0.45 : 1,
               }}
             >
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('profile.saving') : t('shared.save')}
             </button>
           </div>
           {saveMsg && (
@@ -93,7 +95,7 @@ export default function ProfileScreen({ user }: Props) {
 
         {user.email === 'george@multigrain.com' && (
           <section style={{ marginBottom: 32 }}>
-            <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginBottom: 10 }}>Platform</p>
+            <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginBottom: 10 }}>{t('profile.platformLabel')}</p>
             <button
               onClick={() => navigate('/admin')}
               style={{
@@ -109,7 +111,7 @@ export default function ProfileScreen({ user }: Props) {
         )}
 
         <section>
-          <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginBottom: 10 }}>Password</p>
+          <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginBottom: 10 }}>{t('profile.passwordLabel')}</p>
           <button
             onClick={handlePasswordReset}
             style={{
@@ -119,7 +121,7 @@ export default function ProfileScreen({ user }: Props) {
               border: '1px solid var(--warm-gray)',
             }}
           >
-            Send password reset email
+            {t('profile.sendResetEmail')}
           </button>
           {resetMsg && (
             <p style={{ fontSize: 13, color: 'var(--muted-slate)', marginTop: 8 }}>{resetMsg}</p>
