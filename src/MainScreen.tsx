@@ -939,6 +939,23 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               {t('main.header.recentlyDeleted', { count: trashCount })}
             </button>
           )}
+          <select
+            value={(() => {
+              const r = i18n.resolvedLanguage ?? i18n.language;
+              if (r.startsWith('pt')) return 'pt-BR';
+              if (r.startsWith('es')) return 'es';
+              return 'en';
+            })()}
+            onChange={e => i18n.changeLanguage(e.target.value)}
+            style={{
+              padding: '6px 10px', borderRadius: 20, border: '1px solid #ddd',
+              background: '#faf8f6', fontSize: 13, color: '#333', cursor: 'pointer',
+            }}
+          >
+            <option value="en">{t('language.en')}</option>
+            <option value="es">{t('language.es')}</option>
+            <option value="pt-BR">{t('language.ptBR')}</option>
+          </select>
           <button
             onClick={() => navigate('/profile')}
             style={{
