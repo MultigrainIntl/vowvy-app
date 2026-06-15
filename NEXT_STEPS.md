@@ -15,7 +15,7 @@ Prioritized. Each item should become a GitHub issue before work starts. Long-ter
 
 4. **Comparable pricing / search** — only if pursued: use careful, disclaimer-wrapped wording; no appraisal claims; no "your item is worth X" language. Likely: "similar items sold for" with source attribution.
 5. **Official marketplace integrations** — only through approved APIs and account-linking (Etsy Partner API, eBay Developers Program). No scraping, no auto-fill, no unapproved automation.
-6. **i18n / language cleanup** — defer until English UI stabilizes. Current Spanish and PT-BR strings will need a pass once Sell This and Items to sell labels settle.
+6. **i18n Phase 2** — translate post-login screens: MainScreen strings not yet covered, ManageScreen, ProfileScreen, TrashScreen, CollaboratorDashboard, AcceptInviteScreen, SellThisFlow, ClaimBoxScreen. Pre-login screens (AuthScreen, PolicyAcceptanceScreen, OnboardingScreen) are done as of June 14, 2026.
 
 ## Standing cleanup (carry forward)
 

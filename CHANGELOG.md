@@ -2,6 +2,20 @@
 
 Newest first. Plain English: what changed and why it matters.
 
+## June 14, 2026 — Internationalization Phase 1 (pre-login screens)
+
+### Multilingual first-time/signed-out experience (commit 5f2a77d)
+
+- **AuthScreen** fully translated: welcome landing page (headline, subheadline, 4-step how-it-works, 7 benefits, 6 audience rows, closing CTA), sign-up form, and sign-in form. Language selector (`<select>`) added to all three views — positioned in a top bar on the landing page and right-aligned inside the card on sign-up/sign-in.
+- **PolicyAcceptanceScreen** translated: intro, three policy link labels, agree button, and sign-out link.
+- **OnboardingScreen** fully translated: category cards (9 types), all question screens (home setup, moving setup, storage setup, collection setup), space/storage checkbox names, size cards, steppers, back/preview/create buttons, and error text. Space names are written to Firestore in the user's chosen language.
+- **Locale files** (EN / ES / PT-BR): 124 new keys added per file across `auth.landing`, `auth.signup`, `auth.signin`, `policy`, and `onboarding` sections. All three files are structurally identical at 263 keys total.
+- **Language selector**: canonical values `en` / `es` / `pt-BR`; reads and writes `localStorage["vowvy-lang"]`; `pt` and `pt-BR` both resolve to Portuguese. Language choice persists across page refreshes.
+- **CSS** (`App.css`): `.auth-lang-bar`, `.auth-lang-row`, `.auth-lang-select` added for language selector placement in auth views. No visual redesign to any other element.
+- **Post-login screens** (MainScreen, ManageScreen, ProfileScreen, etc.) not changed — Phase 2.
+
+---
+
 ## June 13–14, 2026 — Policy, AI, Search, Sell This, and Items to sell
 
 ### Lightbox UI cleanup (commit 4c14467, merged c01826d)
