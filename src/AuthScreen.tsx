@@ -5,7 +5,7 @@ import {
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, Trans } from 'react-i18next';
 import { auth, db } from './firebase';
 import logoMark from './assets/logo-mark.svg';
 
@@ -26,7 +26,7 @@ function friendlyError(code: string, t: (key: string) => string): string {
 }
 
 export default function AuthScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [mode, setMode]           = useState<AuthMode>('welcome');
   const [email, setEmail]         = useState('');
   const [password, setPassword]   = useState('');
@@ -37,6 +37,28 @@ export default function AuthScreen() {
   const [policyChecked, setPolicyChecked] = useState(false);
 
   const canSubmit = Boolean(email && password) && !busy;
+
+  const currentLang = (() => {
+    const r = i18n.resolvedLanguage ?? i18n.language;
+    if (r.startsWith('pt')) return 'pt-BR';
+    if (r.startsWith('es')) return 'es';
+    return 'en';
+  })();
+
+  function LangSelect() {
+    return (
+      <select
+        className="auth-lang-select"
+        value={currentLang}
+        onChange={e => i18n.changeLanguage(e.target.value)}
+        aria-label={t('language.label')}
+      >
+        <option value="en">{t('language.en')}</option>
+        <option value="es">{t('language.es')}</option>
+        <option value="pt-BR">{t('language.ptBR')}</option>
+      </select>
+    );
+  }
 
   function switchMode(next: AuthMode) {
     setMode(next);
@@ -96,7 +118,9 @@ export default function AuthScreen() {
   if (mode === 'welcome') {
     const howSteps = [
       {
-        num: '01', title: 'Take a photo', desc: 'Snap photos of items, boxes, rooms, offices, supplies, samples, or collections.',
+        num: '01',
+        title: t('auth.landing.step1.title'),
+        desc: t('auth.landing.step1.desc'),
         icon: (
           <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="4" y="11" width="32" height="22" rx="3" />
@@ -108,7 +132,9 @@ export default function AuthScreen() {
         ),
       },
       {
-        num: '02', title: 'VOWVY helps label it', desc: 'AI descriptions and tags make things easier to find.',
+        num: '02',
+        title: t('auth.landing.step2.title'),
+        desc: t('auth.landing.step2.desc'),
         icon: (
           <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="5" y="4" width="30" height="22" rx="3" />
@@ -123,7 +149,9 @@ export default function AuthScreen() {
         ),
       },
       {
-        num: '03', title: 'Find or share it later', desc: 'Search by item, note, tag, room, box, or location — or share with a helper.',
+        num: '03',
+        title: t('auth.landing.step3.title'),
+        desc: t('auth.landing.step3.desc'),
         icon: (
           <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="17" cy="17" r="11" />
@@ -134,7 +162,9 @@ export default function AuthScreen() {
         ),
       },
       {
-        num: '04', title: 'Use it when needed', desc: 'Prepare items to sell, share with helpers, support a move, or document belongings.',
+        num: '04',
+        title: t('auth.landing.step4.title'),
+        desc: t('auth.landing.step4.desc'),
         icon: (
           <svg width="44" height="44" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="6" y="3" width="28" height="35" rx="3" />
@@ -148,8 +178,8 @@ export default function AuthScreen() {
     ];
     const audienceRows = [
       {
-        title: 'Home & storage',
-        desc: "Remember what's in boxes, closets, garages, basements, and storage areas.",
+        title: t('auth.landing.audience1.title'),
+        desc: t('auth.landing.audience1.desc'),
         icon: (
           <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 13L14 3l11 10" />
@@ -159,8 +189,8 @@ export default function AuthScreen() {
         ),
       },
       {
-        title: 'Moving & dorms',
-        desc: 'Track belongings before, during, and after a move.',
+        title: t('auth.landing.audience2.title'),
+        desc: t('auth.landing.audience2.desc'),
         icon: (
           <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="4" y="11" width="20" height="13" rx="2" />
@@ -170,8 +200,8 @@ export default function AuthScreen() {
         ),
       },
       {
-        title: 'Families & estates',
-        desc: 'Organize keepsakes, valuables, donations, and items to sell.',
+        title: t('auth.landing.audience3.title'),
+        desc: t('auth.landing.audience3.desc'),
         icon: (
           <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="22" height="20" rx="2" />
@@ -181,8 +211,8 @@ export default function AuthScreen() {
         ),
       },
       {
-        title: 'Office & workspaces',
-        desc: 'Keep track of supplies, equipment, samples, and shared storage.',
+        title: t('auth.landing.audience4.title'),
+        desc: t('auth.landing.audience4.desc'),
         icon: (
           <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="10" width="22" height="14" rx="2" />
@@ -193,8 +223,8 @@ export default function AuthScreen() {
         ),
       },
       {
-        title: 'Real estate & cleanouts',
-        desc: 'Document rooms, contents, staging items, and cleanout projects.',
+        title: t('auth.landing.audience5.title'),
+        desc: t('auth.landing.audience5.desc'),
         icon: (
           <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="4" y="4" width="20" height="21" rx="2" />
@@ -208,8 +238,8 @@ export default function AuthScreen() {
         ),
       },
       {
-        title: 'Insurance documentation',
-        desc: 'Create a photo-based record of belongings — useful when preparing documentation for insurance purposes.',
+        title: t('auth.landing.audience6.title'),
+        desc: t('auth.landing.audience6.desc'),
         icon: (
           <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M6 3h10l6 7v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
@@ -219,31 +249,43 @@ export default function AuthScreen() {
         ),
       },
     ];
+    const benefits = [
+      t('auth.landing.benefit1'),
+      t('auth.landing.benefit2'),
+      t('auth.landing.benefit3'),
+      t('auth.landing.benefit4'),
+      t('auth.landing.benefit5'),
+      t('auth.landing.benefit6'),
+      t('auth.landing.benefit7'),
+    ];
     return (
       <div className="auth-landing">
+        <div className="auth-lang-bar">
+          <LangSelect />
+        </div>
 
         {/* Hero */}
         <div className="auth-card auth-landing-hero">
           <img src={logoMark} alt="" className="auth-logo-mark" />
           <h1 className="auth-logo">Vowvy</h1>
-          <p className="landing-headline">Finally know what you have, where it is, and what you're ready to let go.</p>
-          <p className="landing-subheadline">VOWVY gives you a searchable memory of your things — at home, at school, or at work. Organize what you have, find it later, share it with helpers, or prepare items to sell.</p>
+          <p className="landing-headline">{t('auth.landing.headline')}</p>
+          <p className="landing-subheadline">{t('auth.landing.subheadline')}</p>
           <div className="auth-buttons" style={{ marginTop: 8 }}>
-            <button onClick={() => switchMode('signup')}>Create your free account</button>
-            <button className="secondary" onClick={() => switchMode('signin')}>Sign in</button>
+            <button onClick={() => switchMode('signup')}>{t('auth.landing.createAccount')}</button>
+            <button className="secondary" onClick={() => switchMode('signin')}>{t('auth.signIn')}</button>
           </div>
         </div>
 
         {/* How VOWVY works */}
         <section className="landing-how">
-          <h2 className="landing-section-heading">How VOWVY works</h2>
-          <p className="landing-how-aha">Take a photo. VOWVY remembers.<br />Find it whenever you need it.</p>
+          <h2 className="landing-section-heading">{t('auth.landing.howTitle')}</h2>
+          <p className="landing-how-aha">{t('auth.landing.howAha')}</p>
           <ol className="landing-how-steps">
             {howSteps.map(({ num, title, desc, icon }, i) => (
               <li key={i} className="landing-how-step">
                 <span className="landing-how-icon-wrap">{icon}</span>
                 <div className="landing-how-step-content">
-                  <span className="landing-how-step-num">Step {num}</span>
+                  <span className="landing-how-step-num">{t('auth.landing.stepNum', { num })}</span>
                   <strong className="landing-how-title">{title}</strong>
                   <p className="landing-how-desc">{desc}</p>
                 </div>
@@ -254,20 +296,10 @@ export default function AuthScreen() {
 
         {/* What VOWVY helps you do */}
         <section className="landing-benefits">
-          <h2 className="landing-section-heading">What VOWVY helps you do</h2>
-          <p className="landing-section-intro">
-            VOWVY helps you photograph, organize, find, share, move, and sell the things you own — without trying to remember everything yourself.
-          </p>
+          <h2 className="landing-section-heading">{t('auth.landing.benefitsTitle')}</h2>
+          <p className="landing-section-intro">{t('auth.landing.benefitsIntro')}</p>
           <ul className="landing-benefits-list">
-            {[
-              "Remember what's in your boxes — take photos before storing things away.",
-              'Find things later — search by item, description, note, tag, room, box, or location.',
-              'Organize a move or cleanup — group items by room, container, collection, or storage area.',
-              "Keep track of valuables and keepsakes — add photos, notes, and details you don't want to forget.",
-              "Let AI do the labeling — VOWVY describes and tags photos so you don't have to type everything yourself.",
-              'Work with helpers — let family, assistants, or collaborators help organize while controlling what they can see.',
-              'Prepare items to sell — select photos, generate a title and description, and export everything for easier posting on marketplaces or similar sites.',
-            ].map((text, i) => (
+            {benefits.map((text, i) => (
               <li key={i}>{text}</li>
             ))}
           </ul>
@@ -275,8 +307,8 @@ export default function AuthScreen() {
 
         {/* Useful at home, at school, and at work */}
         <section className="landing-audience">
-          <h2 className="landing-section-heading">Useful at home, at school, and at work</h2>
-          <p className="landing-section-intro">The same simple idea works across many real-life situations.</p>
+          <h2 className="landing-section-heading">{t('auth.landing.audienceTitle')}</h2>
+          <p className="landing-section-intro">{t('auth.landing.audienceIntro')}</p>
           <ul className="landing-audience-list">
             {audienceRows.map(({ title, desc, icon }, i) => (
               <li key={i}>
@@ -292,10 +324,10 @@ export default function AuthScreen() {
 
         {/* Closing CTA */}
         <section className="landing-cta">
-          <h2 className="landing-cta-heading">Ready to stop guessing where things are?</h2>
+          <h2 className="landing-cta-heading">{t('auth.landing.ctaHeading')}</h2>
           <div className="auth-buttons landing-cta-buttons">
-            <button onClick={() => switchMode('signup')}>Get started</button>
-            <button className="secondary" onClick={() => switchMode('signin')}>Sign in</button>
+            <button onClick={() => switchMode('signup')}>{t('auth.landing.getStarted')}</button>
+            <button className="secondary" onClick={() => switchMode('signin')}>{t('auth.signIn')}</button>
           </div>
         </section>
 
@@ -307,10 +339,13 @@ export default function AuthScreen() {
     return (
       <div className="auth-screen">
         <div className="auth-card">
+          <div className="auth-lang-row">
+            <LangSelect />
+          </div>
           <img src={logoMark} alt="" className="auth-logo-mark" />
           <h1 className="auth-logo">Vowvy</h1>
-          <p className="auth-mode-heading">Start remembering what you have</p>
-          <p className="auth-mode-sub">Take photos, organize your things, and find them later.</p>
+          <p className="auth-mode-heading">{t('auth.signup.heading')}</p>
+          <p className="auth-mode-sub">{t('auth.signup.sub')}</p>
 
           <div className="auth-fields">
             <input
@@ -353,21 +388,25 @@ export default function AuthScreen() {
               onChange={e => setPolicyChecked(e.target.checked)}
             />
             <span>
-              I agree to Vowvy's{' '}
-              <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Use</a>,{' '}
-              <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>, and{' '}
-              <a href="/acceptable-use" target="_blank" rel="noopener noreferrer">Acceptable Use Policy</a>.
+              <Trans
+                i18nKey="auth.signup.policyAgreement"
+                components={{
+                  termsLink: <a href="/terms" target="_blank" rel="noopener noreferrer" />,
+                  privacyLink: <a href="/privacy" target="_blank" rel="noopener noreferrer" />,
+                  aupLink: <a href="/acceptable-use" target="_blank" rel="noopener noreferrer" />,
+                }}
+              />
             </span>
           </label>
 
           <div className="auth-buttons">
             <button onClick={handleSignUp} disabled={!canSubmit || !policyChecked}>
-              {busy ? 'Creating account…' : 'Create Account'}
+              {busy ? t('auth.signup.creating') : t('auth.signup.createAccount')}
             </button>
           </div>
 
           <button className="auth-mode-link" onClick={() => switchMode('signin')}>
-            Already have an account? Sign in
+            {t('auth.signup.haveAccount')}
           </button>
         </div>
       </div>
@@ -377,10 +416,13 @@ export default function AuthScreen() {
   return (
     <div className="auth-screen">
       <div className="auth-card">
+        <div className="auth-lang-row">
+          <LangSelect />
+        </div>
         <img src={logoMark} alt="" className="auth-logo-mark" />
         <h1 className="auth-logo">Vowvy</h1>
-        <p className="auth-mode-heading">Welcome back</p>
-        <p className="auth-mode-sub">Find what you saved, continue organizing, or prepare items when you're ready.</p>
+        <p className="auth-mode-heading">{t('auth.signin.heading')}</p>
+        <p className="auth-mode-sub">{t('auth.signin.sub')}</p>
 
         <div className="auth-fields">
           <input
@@ -427,7 +469,7 @@ export default function AuthScreen() {
         {resetMsg && <p className="auth-reset-msg">{resetMsg}</p>}
 
         <button className="auth-mode-link" onClick={() => switchMode('signup')}>
-          New to Vowvy? Create a free account
+          {t('auth.signin.newToVowvy')}
         </button>
       </div>
     </div>

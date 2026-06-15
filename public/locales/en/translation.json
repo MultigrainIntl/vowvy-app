@@ -22,6 +22,80 @@
     "reset": {
       "enterEmail": "Enter your email above first.",
       "sent": "Check your email for a reset link."
+    },
+    "landing": {
+      "headline": "Finally know what you have, where it is, and what you're ready to let go.",
+      "subheadline": "VOWVY gives you a searchable memory of your things — at home, at school, or at work. Organize what you have, find it later, share it with helpers, or prepare items to sell.",
+      "createAccount": "Create your free account",
+      "howTitle": "How VOWVY works",
+      "howAha": "Take a photo. VOWVY remembers. Find it whenever you need it.",
+      "stepNum": "Step {{num}}",
+      "step1": {
+        "title": "Take a photo",
+        "desc": "Snap photos of items, boxes, rooms, offices, supplies, samples, or collections."
+      },
+      "step2": {
+        "title": "VOWVY helps label it",
+        "desc": "AI descriptions and tags make things easier to find."
+      },
+      "step3": {
+        "title": "Find or share it later",
+        "desc": "Search by item, note, tag, room, box, or location — or share with a helper."
+      },
+      "step4": {
+        "title": "Use it when needed",
+        "desc": "Prepare items to sell, share with helpers, support a move, or document belongings."
+      },
+      "benefitsTitle": "What VOWVY helps you do",
+      "benefitsIntro": "VOWVY helps you photograph, organize, find, share, move, and sell the things you own — without trying to remember everything yourself.",
+      "benefit1": "Remember what's in your boxes — take photos before storing things away.",
+      "benefit2": "Find things later — search by item, description, note, tag, room, box, or location.",
+      "benefit3": "Organize a move or cleanup — group items by room, container, collection, or storage area.",
+      "benefit4": "Keep track of valuables and keepsakes — add photos, notes, and details you don't want to forget.",
+      "benefit5": "Let AI do the labeling — VOWVY describes and tags photos so you don't have to type everything yourself.",
+      "benefit6": "Work with helpers — let family, assistants, or collaborators help organize while controlling what they can see.",
+      "benefit7": "Prepare items to sell — select photos, generate a title and description, and export everything for easier posting on marketplaces or similar sites.",
+      "audienceTitle": "Useful at home, at school, and at work",
+      "audienceIntro": "The same simple idea works across many real-life situations.",
+      "audience1": {
+        "title": "Home & storage",
+        "desc": "Remember what's in boxes, closets, garages, basements, and storage areas."
+      },
+      "audience2": {
+        "title": "Moving & dorms",
+        "desc": "Track belongings before, during, and after a move."
+      },
+      "audience3": {
+        "title": "Families & estates",
+        "desc": "Organize keepsakes, valuables, donations, and items to sell."
+      },
+      "audience4": {
+        "title": "Office & workspaces",
+        "desc": "Keep track of supplies, equipment, samples, and shared storage."
+      },
+      "audience5": {
+        "title": "Real estate & cleanouts",
+        "desc": "Document rooms, contents, staging items, and cleanout projects."
+      },
+      "audience6": {
+        "title": "Insurance documentation",
+        "desc": "Create a photo-based record of belongings — useful when preparing documentation for insurance purposes."
+      },
+      "ctaHeading": "Ready to stop guessing where things are?",
+      "getStarted": "Get started"
+    },
+    "signup": {
+      "heading": "Start remembering what you have",
+      "sub": "Take photos, organize your things, and find them later.",
+      "policyAgreement": "I agree to Vowvy's <termsLink>Terms of Use</termsLink>, <privacyLink>Privacy Policy</privacyLink>, and <aupLink>Acceptable Use Policy</aupLink>.",
+      "creating": "Creating account…",
+      "createAccount": "Create Account",
+      "haveAccount": "Already have an account? Sign in"
+    },
+    "signin": {
+      "heading": "Welcome back",
+      "sub": "Find what you saved, continue organizing, or prepare items when you're ready.",
+      "newToVowvy": "New to Vowvy? Create a free account"
     }
   },
   "shared": {
@@ -53,7 +127,7 @@
     },
     "onboarding": {
       "title": "Welcome to Vowvy",
-      "tagline": "Take photos of your boxes, let AI identify and catalog what’s inside, organize everything by location and box or container, and share access with people you trust when you need to.",
+      "tagline": "Take photos of your boxes, let AI identify and catalog what's inside, organize everything by location and box or container, and share access with people you trust when you need to.",
       "createFirstLocation": "Create your first location",
       "locationInputLabel": "A location is where things live — a home, a garage, a storage unit.",
       "locationPlaceholder": "e.g. My House, Storage Unit 3",
@@ -67,18 +141,18 @@
         "containerTitle": "Box or container",
         "containerBody": "name it, like “Box 12” or “Blue bin”.",
         "photosTitle": "Photos",
-        "photosBody": "snap what’s inside. No typing needed.",
+        "photosBody": "snap what's inside. No typing needed.",
         "aiTitle": "AI catalog",
         "aiBody": "Vowvy identifies and tags your items so search can find them later.",
         "qrTitle": "QR & share",
         "qrBody": "print a QR label for any box, or share access with people you trust."
       }
     },
-    "firstBoxHint": "Location saved! Now add your first box or container below — give it a name and snap a photo of what’s inside.",
+    "firstBoxHint": "Location saved! Now add your first box or container below — give it a name and snap a photo of what's inside.",
     "capture": {
       "selectLocation": "— Select location —",
       "addNewLocation": "＋ Add new location",
-      "locationNamePlaceholder": "e.g. My House, Storage Unit 3, Mom’s Garage",
+      "locationNamePlaceholder": "e.g. My House, Storage Unit 3, Mom's Garage",
       "topLevel": "Top level — e.g. a Property or building",
       "insideLocation": "Inside: {{name}}",
       "add": "Add",
@@ -163,7 +237,7 @@
     "qr": {
       "print": "Print",
       "close": "Close",
-      "defaultTagline": "What’s in your box?"
+      "defaultTagline": "What's in your box?"
     },
     "errors": {
       "locationRequired": "Please enter a location name.",
@@ -181,5 +255,92 @@
     "en": "English",
     "es": "Español",
     "ptBR": "Português"
+  },
+  "policy": {
+    "intro": "Before continuing, please review and accept Vowvy's updated policies.",
+    "termsLink": "Terms of Use",
+    "privacyLink": "Privacy Policy",
+    "aupLink": "Acceptable Use Policy",
+    "agree": "I agree and continue",
+    "saving": "Saving…",
+    "signOut": "Sign out"
+  },
+  "onboarding": {
+    "categoryTitle": "What are you organizing first?",
+    "categorySubtitle": "We'll set up a quick location structure — you can always change it later.",
+    "creating": "Setting up your locations…",
+    "back": "← Back",
+    "previewBtn": "Preview my locations →",
+    "categories": {
+      "home":       { "label": "Home",                  "desc": "House, apartment, or condo" },
+      "moving":     { "label": "Moving",                "desc": "Packing up and moving somewhere new" },
+      "storage":    { "label": "Storage Unit",          "desc": "Organize by zone or shelf" },
+      "estate":     { "label": "Family / Estate",       "desc": "Shared belongings or estate items" },
+      "business":   { "label": "Business / Supplies",   "desc": "Inventory, tools, and supplies" },
+      "office":     { "label": "Office",                "desc": "Desk, files, and equipment" },
+      "collection": { "label": "Collection / Hobby",    "desc": "Display, stored, and for sale" },
+      "vehicle":    { "label": "Vehicle / RV / Boat",   "desc": "Compartments, tools, and gear" },
+      "custom":     { "label": "I'll set it up myself", "desc": "Start with a blank slate" }
+    },
+    "homeSetup": {
+      "title": "Home Setup",
+      "bedrooms": "Bedrooms",
+      "bathrooms": "Bathrooms",
+      "extraSpaces": "Extra spaces",
+      "starterStorage": "Starter storage",
+      "vehiclesQuestion": "Do you want to add your car(s)?",
+      "noVehicles": "None",
+      "skipVehicles": "Skip",
+      "vehicleSingular": "vehicle",
+      "vehiclesPlural": "vehicles"
+    },
+    "spaces": {
+      "kitchen": "Kitchen",
+      "livingRoom": "Living Room",
+      "diningRoom": "Dining Room",
+      "office": "Office",
+      "garage": "Garage",
+      "basement": "Basement",
+      "attic": "Attic",
+      "laundryRoom": "Laundry Room",
+      "storageRoom": "Storage Room",
+      "patio": "Patio / Outdoor"
+    },
+    "storage": {
+      "bedroomClosets": "Bedroom closets",
+      "linenCloset": "Linen closet",
+      "pantry": "Pantry",
+      "garageShelves": "Garage shelves",
+      "utilityCloset": "Utility closet"
+    },
+    "movingSetup": {
+      "title": "Moving Setup",
+      "bedrooms": "Bedrooms in the old place",
+      "includeGarage": "Include Garage / Storage?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "storageSetup": {
+      "title": "Storage Unit Setup",
+      "sizeQuestion": "What size is your unit?",
+      "small": "Small",
+      "smallDesc": "A few zones",
+      "medium": "Medium",
+      "mediumDesc": "Standard unit",
+      "large": "Large",
+      "largeDesc": "Large unit"
+    },
+    "collectionSetup": {
+      "title": "Collection Setup",
+      "question": "What are you collecting or organizing?",
+      "placeholder": "e.g. Vinyl Records, Books, Comic Books"
+    },
+    "preview": {
+      "title": "Here's what we'll create",
+      "subtitle": "You can rename, add, or remove any of these later.",
+      "create": "Create my locations",
+      "chooseDifferent": "Choose a different template",
+      "error": "Something went wrong. Please try again."
+    }
   }
 }

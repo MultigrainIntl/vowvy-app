@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { type User } from 'firebase/auth';
+import { useTranslation } from 'react-i18next';
 import logoMark from './assets/logo-mark.svg';
 import {
   type StarterNode,
@@ -21,31 +22,26 @@ type Step =
   | 'category' | 'home-q' | 'moving-q' | 'storage-q'
   | 'collection-q' | 'preview' | 'creating';
 
-const EXTRA_SPACES = [
-  'Kitchen', 'Living Room', 'Dining Room', 'Office',
-  'Garage', 'Basement', 'Attic', 'Laundry Room', 'Storage Room', 'Patio / Outdoor',
-];
-const STORAGE_OPTS = [
-  'Bedroom closets', 'Linen closet', 'Pantry', 'Garage shelves', 'Utility closet',
-];
+// Stable keys for extra spaces — translated at render time and passed to Firestore as names
+const EXTRA_SPACE_KEYS = [
+  'kitchen', 'livingRoom', 'diningRoom', 'office',
+  'garage', 'basement', 'attic', 'laundryRoom', 'storageRoom', 'patio',
+] as const;
 
-interface Category {
-  id: TemplateId;
-  icon: string;
-  label: string;
-  description: string;
-}
+// Stable keys for storage options — same pattern
+const STORAGE_OPT_KEYS = [
+  'bedroomClosets', 'linenCloset', 'pantry', 'garageShelves', 'utilityCloset',
+] as const;
 
-const CATEGORIES: Category[] = [
-  { id: 'home',       icon: '🏠', label: 'Home',                 description: 'House, apartment, or condo' },
-  { id: 'moving',     icon: '🚚', label: 'Moving',               description: 'Packing up and moving somewhere new' },
-  { id: 'storage',    icon: '📦', label: 'Storage Unit',         description: 'Organize by zone or shelf' },
-  { id: 'estate',     icon: '📜', label: 'Family / Estate',      description: 'Shared belongings or estate items' },
-  { id: 'business',   icon: '💼', label: 'Business / Supplies',  description: 'Inventory, tools, and supplies' },
-  { id: 'office',     icon: '🗂️', label: 'Office',               description: 'Desk, files, and equipment' },
-  { id: 'collection', icon: '⭐', label: 'Collection / Hobby',   description: 'Display, stored, and for sale' },
-  { id: 'vehicle',    icon: '🚗', label: 'Vehicle / RV / Boat',  description: 'Compartments, tools, and gear' },
-  { id: 'custom',     icon: '✏️', label: "I'll set it up myself", description: 'Start with a blank slate' },
+// Category icons are not translated
+const CATEGORY_ICONS: Record<TemplateId, string> = {
+  home: '🏠', moving: '🚚', storage: '📦', estate: '📜',
+  business: '💼', office: '🗂️', collection: '⭐', vehicle: '🚗', custom: '✏️',
+};
+
+const CATEGORY_IDS: TemplateId[] = [
+  'home', 'moving', 'storage', 'estate',
+  'business', 'office', 'collection', 'vehicle', 'custom',
 ];
 
 function TreeNode({ node, depth }: { node: StarterNode; depth: number }) {
@@ -68,17 +64,18 @@ interface Props {
 }
 
 export default function OnboardingScreen({ user, onDone }: Props) {
+  const { t } = useTranslation();
   const [step, setStep]             = useState<Step>('category');
   const [templateId, setTemplateId] = useState<TemplateId | null>(null);
   const [previewTree, setPreviewTree] = useState<StarterNode[]>([]);
   const [error, setError]           = useState('');
   const creatingRef                 = useRef(false);
 
-  // Home answers
-  const [bedrooms, setBedrooms]       = useState(2);
-  const [bathrooms, setBathrooms]     = useState(1);
-  const [extras, setExtras]           = useState<string[]>(['Kitchen', 'Living Room', 'Garage']);
-  const [storageOpts, setStorageOpts] = useState<string[]>([]);
+  // Home answers — selectedExtraKeys stores EXTRA_SPACE_KEYS values
+  const [bedrooms, setBedrooms]             = useState(2);
+  const [bathrooms, setBathrooms]           = useState(1);
+  const [selectedExtraKeys, setSelectedExtraKeys] = useState<string[]>(['kitchen', 'livingRoom', 'garage']);
+  const [selectedStorageKeys, setSelectedStorageKeys] = useState<string[]>([]);
 
   // Home — vehicles
   const [vehicles, setVehicles] = useState(0);
@@ -93,11 +90,11 @@ export default function OnboardingScreen({ user, onDone }: Props) {
   // Collection answers
   const [collectionType, setCollectionType] = useState('');
 
-  function toggleExtra(name: string) {
-    setExtras(p => p.includes(name) ? p.filter(x => x !== name) : [...p, name]);
+  function toggleExtraKey(key: string) {
+    setSelectedExtraKeys(p => p.includes(key) ? p.filter(x => x !== key) : [...p, key]);
   }
-  function toggleStorageOpt(name: string) {
-    setStorageOpts(p => p.includes(name) ? p.filter(x => x !== name) : [...p, name]);
+  function toggleStorageKey(key: string) {
+    setSelectedStorageKeys(p => p.includes(key) ? p.filter(x => x !== key) : [...p, key]);
   }
 
   function selectTemplate(id: TemplateId) {
@@ -115,7 +112,13 @@ export default function OnboardingScreen({ user, onDone }: Props) {
   function goToPreview() {
     let tree: StarterNode[] = [];
     if (templateId === 'home')
-      tree = buildHomeTree({ bedrooms, bathrooms, extras, storage: storageOpts, vehicles });
+      tree = buildHomeTree({
+        bedrooms,
+        bathrooms,
+        extras: selectedExtraKeys.map(k => t(`onboarding.spaces.${k}`)),
+        storage: selectedStorageKeys.map(k => t(`onboarding.storage.${k}`)),
+        vehicles,
+      });
     else if (templateId === 'moving')
       tree = buildMovingTree({ bedrooms: movingBeds, includeGarage });
     else if (templateId === 'storage')
@@ -134,7 +137,7 @@ export default function OnboardingScreen({ user, onDone }: Props) {
     try {
       await writeStarterTree(user.uid, previewTree, null);
     } catch {
-      setError('Something went wrong. Please try again.');
+      setError(t('onboarding.preview.error'));
       creatingRef.current = false;
       setStep('preview');
       return;
@@ -159,7 +162,7 @@ export default function OnboardingScreen({ user, onDone }: Props) {
     return (
       <div className="ob-screen ob-center">
         <div className="ob-spinner" />
-        <p className="ob-creating-text">Setting up your locations…</p>
+        <p className="ob-creating-text">{t('onboarding.creating')}</p>
       </div>
     );
   }
@@ -183,18 +186,18 @@ export default function OnboardingScreen({ user, onDone }: Props) {
   function renderCategory() {
     return (
       <div className="ob-body">
-        <h1 className="ob-title">What are you organizing first?</h1>
-        <p className="ob-subtitle">We'll set up a quick location structure — you can always change it later.</p>
+        <h1 className="ob-title">{t('onboarding.categoryTitle')}</h1>
+        <p className="ob-subtitle">{t('onboarding.categorySubtitle')}</p>
         <div className="ob-grid">
-          {CATEGORIES.map(cat => (
+          {CATEGORY_IDS.map(id => (
             <button
-              key={cat.id}
-              className={`ob-card${cat.id === 'custom' ? ' ob-card-custom' : ''}`}
-              onClick={() => selectTemplate(cat.id)}
+              key={id}
+              className={`ob-card${id === 'custom' ? ' ob-card-custom' : ''}`}
+              onClick={() => selectTemplate(id)}
             >
-              <span className="ob-card-icon">{cat.icon}</span>
-              <span className="ob-card-label">{cat.label}</span>
-              <span className="ob-card-desc">{cat.description}</span>
+              <span className="ob-card-icon">{CATEGORY_ICONS[id]}</span>
+              <span className="ob-card-label">{t(`onboarding.categories.${id}.label`)}</span>
+              <span className="ob-card-desc">{t(`onboarding.categories.${id}.desc`)}</span>
             </button>
           ))}
         </div>
@@ -205,11 +208,11 @@ export default function OnboardingScreen({ user, onDone }: Props) {
   function renderHomeQ() {
     return (
       <div className="ob-body ob-questions">
-        <button className="ob-back" onClick={backFromQ}>← Back</button>
-        <h2 className="ob-q-title">Home Setup</h2>
+        <button className="ob-back" onClick={backFromQ}>{t('onboarding.back')}</button>
+        <h2 className="ob-q-title">{t('onboarding.homeSetup.title')}</h2>
 
         <div className="ob-field">
-          <label className="ob-label">Bedrooms</label>
+          <label className="ob-label">{t('onboarding.homeSetup.bedrooms')}</label>
           <div className="ob-stepper">
             <button onClick={() => setBedrooms(n => Math.max(1, n - 1))}>−</button>
             <span className="ob-stepper-val">{bedrooms}</span>
@@ -218,7 +221,7 @@ export default function OnboardingScreen({ user, onDone }: Props) {
         </div>
 
         <div className="ob-field">
-          <label className="ob-label">Bathrooms</label>
+          <label className="ob-label">{t('onboarding.homeSetup.bathrooms')}</label>
           <div className="ob-stepper">
             <button onClick={() => setBathrooms(n => Math.max(1, n - 1))}>−</button>
             <span className="ob-stepper-val">{bathrooms}</span>
@@ -227,31 +230,39 @@ export default function OnboardingScreen({ user, onDone }: Props) {
         </div>
 
         <div className="ob-field">
-          <label className="ob-label">Extra spaces</label>
+          <label className="ob-label">{t('onboarding.homeSetup.extraSpaces')}</label>
           <div className="ob-checkgroup">
-            {EXTRA_SPACES.map(name => (
-              <label key={name} className="ob-check">
-                <input type="checkbox" checked={extras.includes(name)} onChange={() => toggleExtra(name)} />
-                {name}
+            {EXTRA_SPACE_KEYS.map(key => (
+              <label key={key} className="ob-check">
+                <input
+                  type="checkbox"
+                  checked={selectedExtraKeys.includes(key)}
+                  onChange={() => toggleExtraKey(key)}
+                />
+                {t(`onboarding.spaces.${key}`)}
               </label>
             ))}
           </div>
         </div>
 
         <div className="ob-field">
-          <label className="ob-label">Starter storage</label>
+          <label className="ob-label">{t('onboarding.homeSetup.starterStorage')}</label>
           <div className="ob-checkgroup">
-            {STORAGE_OPTS.map(name => (
-              <label key={name} className="ob-check">
-                <input type="checkbox" checked={storageOpts.includes(name)} onChange={() => toggleStorageOpt(name)} />
-                {name}
+            {STORAGE_OPT_KEYS.map(key => (
+              <label key={key} className="ob-check">
+                <input
+                  type="checkbox"
+                  checked={selectedStorageKeys.includes(key)}
+                  onChange={() => toggleStorageKey(key)}
+                />
+                {t(`onboarding.storage.${key}`)}
               </label>
             ))}
           </div>
         </div>
 
         <div className="ob-field">
-          <label className="ob-label">Do you want to add your car(s)?</label>
+          <label className="ob-label">{t('onboarding.homeSetup.vehiclesQuestion')}</label>
           <div className="ob-size-group">
             {([0, 1, 2, 3] as const).map(n => (
               <label key={n} className={`ob-size-card${vehicles === n ? ' selected' : ''}`}>
@@ -262,14 +273,22 @@ export default function OnboardingScreen({ user, onDone }: Props) {
                   checked={vehicles === n}
                   onChange={() => setVehicles(n)}
                 />
-                <span className="ob-size-label">{n === 0 ? 'None' : n}</span>
-                <span className="ob-size-desc">{n === 0 ? 'Skip' : n === 1 ? 'vehicle' : 'vehicles'}</span>
+                <span className="ob-size-label">
+                  {n === 0 ? t('onboarding.homeSetup.noVehicles') : n}
+                </span>
+                <span className="ob-size-desc">
+                  {n === 0
+                    ? t('onboarding.homeSetup.skipVehicles')
+                    : n === 1
+                      ? t('onboarding.homeSetup.vehicleSingular')
+                      : t('onboarding.homeSetup.vehiclesPlural')}
+                </span>
               </label>
             ))}
           </div>
         </div>
 
-        <button className="ob-primary-btn" onClick={goToPreview}>Preview my locations →</button>
+        <button className="ob-primary-btn" onClick={goToPreview}>{t('onboarding.previewBtn')}</button>
       </div>
     );
   }
@@ -277,11 +296,11 @@ export default function OnboardingScreen({ user, onDone }: Props) {
   function renderMovingQ() {
     return (
       <div className="ob-body ob-questions">
-        <button className="ob-back" onClick={backFromQ}>← Back</button>
-        <h2 className="ob-q-title">Moving Setup</h2>
+        <button className="ob-back" onClick={backFromQ}>{t('onboarding.back')}</button>
+        <h2 className="ob-q-title">{t('onboarding.movingSetup.title')}</h2>
 
         <div className="ob-field">
-          <label className="ob-label">Bedrooms in the old place</label>
+          <label className="ob-label">{t('onboarding.movingSetup.bedrooms')}</label>
           <div className="ob-stepper">
             <button onClick={() => setMovingBeds(n => Math.max(1, n - 1))}>−</button>
             <span className="ob-stepper-val">{movingBeds}</span>
@@ -290,37 +309,37 @@ export default function OnboardingScreen({ user, onDone }: Props) {
         </div>
 
         <div className="ob-field">
-          <label className="ob-label">Include Garage / Storage?</label>
+          <label className="ob-label">{t('onboarding.movingSetup.includeGarage')}</label>
           <div className="ob-radio-group">
             <label className="ob-radio">
               <input type="radio" name="ob-garage" checked={includeGarage} onChange={() => setIncludeGarage(true)} />
-              Yes
+              {t('onboarding.movingSetup.yes')}
             </label>
             <label className="ob-radio">
               <input type="radio" name="ob-garage" checked={!includeGarage} onChange={() => setIncludeGarage(false)} />
-              No
+              {t('onboarding.movingSetup.no')}
             </label>
           </div>
         </div>
 
-        <button className="ob-primary-btn" onClick={goToPreview}>Preview my locations →</button>
+        <button className="ob-primary-btn" onClick={goToPreview}>{t('onboarding.previewBtn')}</button>
       </div>
     );
   }
 
   function renderStorageQ() {
-    const SIZES: { value: StorageSize; label: string; desc: string }[] = [
-      { value: 'small',  label: 'Small',  desc: 'A few zones' },
-      { value: 'medium', label: 'Medium', desc: 'Standard unit' },
-      { value: 'large',  label: 'Large',  desc: 'Large unit' },
+    const SIZES: { value: StorageSize; labelKey: string; descKey: string }[] = [
+      { value: 'small',  labelKey: 'onboarding.storageSetup.small',  descKey: 'onboarding.storageSetup.smallDesc' },
+      { value: 'medium', labelKey: 'onboarding.storageSetup.medium', descKey: 'onboarding.storageSetup.mediumDesc' },
+      { value: 'large',  labelKey: 'onboarding.storageSetup.large',  descKey: 'onboarding.storageSetup.largeDesc' },
     ];
     return (
       <div className="ob-body ob-questions">
-        <button className="ob-back" onClick={backFromQ}>← Back</button>
-        <h2 className="ob-q-title">Storage Unit Setup</h2>
+        <button className="ob-back" onClick={backFromQ}>{t('onboarding.back')}</button>
+        <h2 className="ob-q-title">{t('onboarding.storageSetup.title')}</h2>
 
         <div className="ob-field">
-          <label className="ob-label">What size is your unit?</label>
+          <label className="ob-label">{t('onboarding.storageSetup.sizeQuestion')}</label>
           <div className="ob-size-group">
             {SIZES.map(s => (
               <label key={s.value} className={`ob-size-card${storageSize === s.value ? ' selected' : ''}`}>
@@ -331,14 +350,14 @@ export default function OnboardingScreen({ user, onDone }: Props) {
                   checked={storageSize === s.value}
                   onChange={() => setStorageSize(s.value)}
                 />
-                <span className="ob-size-label">{s.label}</span>
-                <span className="ob-size-desc">{s.desc}</span>
+                <span className="ob-size-label">{t(s.labelKey)}</span>
+                <span className="ob-size-desc">{t(s.descKey)}</span>
               </label>
             ))}
           </div>
         </div>
 
-        <button className="ob-primary-btn" onClick={goToPreview}>Preview my locations →</button>
+        <button className="ob-primary-btn" onClick={goToPreview}>{t('onboarding.previewBtn')}</button>
       </div>
     );
   }
@@ -346,15 +365,15 @@ export default function OnboardingScreen({ user, onDone }: Props) {
   function renderCollectionQ() {
     return (
       <div className="ob-body ob-questions">
-        <button className="ob-back" onClick={backFromQ}>← Back</button>
-        <h2 className="ob-q-title">Collection Setup</h2>
+        <button className="ob-back" onClick={backFromQ}>{t('onboarding.back')}</button>
+        <h2 className="ob-q-title">{t('onboarding.collectionSetup.title')}</h2>
 
         <div className="ob-field">
-          <label className="ob-label">What are you collecting or organizing?</label>
+          <label className="ob-label">{t('onboarding.collectionSetup.question')}</label>
           <input
             className="ob-text-input"
             type="text"
-            placeholder="e.g. Vinyl Records, Books, Comic Books"
+            placeholder={t('onboarding.collectionSetup.placeholder')}
             value={collectionType}
             autoFocus
             onChange={e => setCollectionType(e.target.value)}
@@ -362,7 +381,7 @@ export default function OnboardingScreen({ user, onDone }: Props) {
           />
         </div>
 
-        <button className="ob-primary-btn" onClick={goToPreview}>Preview my locations →</button>
+        <button className="ob-primary-btn" onClick={goToPreview}>{t('onboarding.previewBtn')}</button>
       </div>
     );
   }
@@ -370,9 +389,9 @@ export default function OnboardingScreen({ user, onDone }: Props) {
   function renderPreview() {
     return (
       <div className="ob-body">
-        <button className="ob-back" onClick={backFromPreview}>← Back</button>
-        <h2 className="ob-q-title">Here's what we'll create</h2>
-        <p className="ob-subtitle">You can rename, add, or remove any of these later.</p>
+        <button className="ob-back" onClick={backFromPreview}>{t('onboarding.back')}</button>
+        <h2 className="ob-q-title">{t('onboarding.preview.title')}</h2>
+        <p className="ob-subtitle">{t('onboarding.preview.subtitle')}</p>
 
         <div className="ob-preview-tree">
           {previewTree.map((node, i) => (
@@ -383,10 +402,10 @@ export default function OnboardingScreen({ user, onDone }: Props) {
         {error && <p className="ob-error">{error}</p>}
 
         <button className="ob-primary-btn" onClick={handleCreate}>
-          Create my locations
+          {t('onboarding.preview.create')}
         </button>
         <button className="ob-text-link" onClick={() => setStep('category')}>
-          Choose a different template
+          {t('onboarding.preview.chooseDifferent')}
         </button>
       </div>
     );

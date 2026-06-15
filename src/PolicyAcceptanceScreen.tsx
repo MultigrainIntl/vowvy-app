@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { type User } from 'firebase/auth';
+import { useTranslation } from 'react-i18next';
 import { auth } from './firebase';
 import logoMark from './assets/logo-mark.svg';
 import './PolicyAcceptanceScreen.css';
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function PolicyAcceptanceScreen({ onAccept }: Props) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
 
   async function handleAccept() {
@@ -28,19 +30,17 @@ export default function PolicyAcceptanceScreen({ onAccept }: Props) {
         <img src={logoMark} alt="" className="pol-logo-mark" />
         <h1 className="pol-wordmark">Vowvy</h1>
 
-        <p className="pol-intro">
-          Before continuing, please review and accept Vowvy's updated policies.
-        </p>
+        <p className="pol-intro">{t('policy.intro')}</p>
 
         <div className="pol-links">
           <a href="/terms" target="_blank" rel="noopener noreferrer" className="pol-policy-link">
-            Terms of Use ↗
+            {t('policy.termsLink')} ↗
           </a>
           <a href="/privacy" target="_blank" rel="noopener noreferrer" className="pol-policy-link">
-            Privacy Policy ↗
+            {t('policy.privacyLink')} ↗
           </a>
           <a href="/acceptable-use" target="_blank" rel="noopener noreferrer" className="pol-policy-link">
-            Acceptable Use Policy ↗
+            {t('policy.aupLink')} ↗
           </a>
         </div>
 
@@ -49,11 +49,11 @@ export default function PolicyAcceptanceScreen({ onAccept }: Props) {
           onClick={handleAccept}
           disabled={busy}
         >
-          {busy ? 'Saving…' : 'I agree and continue'}
+          {busy ? t('policy.saving') : t('policy.agree')}
         </button>
 
         <button className="pol-signout-link" onClick={handleSignOut} disabled={busy}>
-          Sign out
+          {t('policy.signOut')}
         </button>
       </div>
     </div>

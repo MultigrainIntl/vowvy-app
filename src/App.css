@@ -494,3 +494,31 @@
 }
 
 .landing-cta-buttons { width: 100%; }
+
+/* Auth screen — language selector */
+
+.auth-lang-bar {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 16px 0;
+  box-sizing: border-box;
+}
+
+.auth-lang-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.auth-lang-select {
+  padding: 5px 9px;
+  border-radius: 16px;
+  border: 1px solid var(--warm-gray);
+  background: #faf8f6;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--charcoal);
+  cursor: pointer;
+  min-width: 52px;
+}

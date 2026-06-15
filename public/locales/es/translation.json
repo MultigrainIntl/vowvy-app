@@ -22,6 +22,80 @@
     "reset": {
       "enterEmail": "Ingresa tu correo arriba primero.",
       "sent": "Revisa tu correo para el enlace de restablecimiento."
+    },
+    "landing": {
+      "headline": "Por fin sabrás qué tienes, dónde está y de qué estás listo para deshacerte.",
+      "subheadline": "VOWVY te da una memoria buscable de tus cosas — en casa, en la escuela o en el trabajo. Organiza lo que tienes, encuéntralo después, compártelo con ayudantes o prepara artículos para vender.",
+      "createAccount": "Crea tu cuenta gratis",
+      "howTitle": "Cómo funciona VOWVY",
+      "howAha": "Toma una foto. VOWVY recuerda. Encuéntralo cuando lo necesites.",
+      "stepNum": "Paso {{num}}",
+      "step1": {
+        "title": "Toma una foto",
+        "desc": "Fotografía artículos, cajas, habitaciones, oficinas, materiales, muestras o colecciones."
+      },
+      "step2": {
+        "title": "VOWVY lo etiqueta",
+        "desc": "Las descripciones y etiquetas de IA facilitan encontrar las cosas."
+      },
+      "step3": {
+        "title": "Encuéntralo o compártelo después",
+        "desc": "Busca por artículo, nota, etiqueta, habitación, caja o ubicación — o compártelo con un ayudante."
+      },
+      "step4": {
+        "title": "Úsalo cuando lo necesites",
+        "desc": "Prepara artículos para vender, compártelos con ayudantes, organiza una mudanza o documenta tus pertenencias."
+      },
+      "benefitsTitle": "Lo que VOWVY te ayuda a hacer",
+      "benefitsIntro": "VOWVY te ayuda a fotografiar, organizar, encontrar, compartir, mudarte y vender las cosas que tienes — sin tratar de recordar todo por tu cuenta.",
+      "benefit1": "Recuerda qué hay en tus cajas — toma fotos antes de guardar las cosas.",
+      "benefit2": "Encuentra cosas después — busca por artículo, descripción, nota, etiqueta, habitación, caja o ubicación.",
+      "benefit3": "Organiza una mudanza o limpieza — agrupa artículos por habitación, contenedor, colección o área de almacenaje.",
+      "benefit4": "Lleva un registro de objetos de valor y recuerdos — agrega fotos, notas y detalles que no quieres olvidar.",
+      "benefit5": "Deja que la IA haga el etiquetado — VOWVY describe y etiqueta las fotos para que no tengas que escribir todo tú mismo.",
+      "benefit6": "Trabaja con ayudantes — permite que familia, asistentes o colaboradores ayuden a organizar controlando lo que pueden ver.",
+      "benefit7": "Prepara artículos para vender — selecciona fotos, genera un título y descripción, y exporta todo para publicar más fácilmente en mercados o sitios similares.",
+      "audienceTitle": "Útil en casa, en la escuela y en el trabajo",
+      "audienceIntro": "La misma idea sencilla funciona en muchas situaciones de la vida real.",
+      "audience1": {
+        "title": "Hogar y almacenaje",
+        "desc": "Recuerda qué hay en cajas, armarios, garajes, sótanos y áreas de almacenaje."
+      },
+      "audience2": {
+        "title": "Mudanzas y dormitorios",
+        "desc": "Rastrea pertenencias antes, durante y después de una mudanza."
+      },
+      "audience3": {
+        "title": "Familias y herencias",
+        "desc": "Organiza recuerdos, objetos de valor, donaciones y artículos para vender."
+      },
+      "audience4": {
+        "title": "Oficinas y espacios de trabajo",
+        "desc": "Lleva un registro de suministros, equipos, muestras y almacenaje compartido."
+      },
+      "audience5": {
+        "title": "Inmuebles y desocupaciones",
+        "desc": "Documenta habitaciones, contenidos, artículos para staging y proyectos de limpieza."
+      },
+      "audience6": {
+        "title": "Documentación para seguros",
+        "desc": "Crea un registro fotográfico de tus pertenencias — útil al preparar documentación para seguros."
+      },
+      "ctaHeading": "¿Listo para dejar de adivinar dónde están las cosas?",
+      "getStarted": "Comenzar"
+    },
+    "signup": {
+      "heading": "Empieza a recordar lo que tienes",
+      "sub": "Toma fotos, organiza tus cosas y encuéntralas después.",
+      "policyAgreement": "Acepto los <termsLink>Términos de uso</termsLink>, la <privacyLink>Política de privacidad</privacyLink> y la <aupLink>Política de uso aceptable</aupLink> de Vowvy.",
+      "creating": "Creando cuenta…",
+      "createAccount": "Crear cuenta",
+      "haveAccount": "¿Ya tienes una cuenta? Iniciar sesión"
+    },
+    "signin": {
+      "heading": "Bienvenido de nuevo",
+      "sub": "Encuentra lo que guardaste, sigue organizando o prepara artículos cuando estés listo.",
+      "newToVowvy": "¿Nuevo en Vowvy? Crea una cuenta gratis"
     }
   },
   "shared": {
@@ -181,5 +255,92 @@
     "en": "English",
     "es": "Español",
     "ptBR": "Português"
+  },
+  "policy": {
+    "intro": "Antes de continuar, revisa y acepta las políticas actualizadas de Vowvy.",
+    "termsLink": "Términos de uso",
+    "privacyLink": "Política de privacidad",
+    "aupLink": "Política de uso aceptable",
+    "agree": "Acepto y continuar",
+    "saving": "Guardando…",
+    "signOut": "Cerrar sesión"
+  },
+  "onboarding": {
+    "categoryTitle": "¿Qué estás organizando primero?",
+    "categorySubtitle": "Configuraremos una estructura de ubicación rápida — siempre puedes cambiarla después.",
+    "creating": "Configurando tus ubicaciones…",
+    "back": "← Atrás",
+    "previewBtn": "Ver mis ubicaciones →",
+    "categories": {
+      "home":       { "label": "Hogar",                    "desc": "Casa, apartamento o condominio" },
+      "moving":     { "label": "Mudanza",                  "desc": "Empacando y mudándote a un nuevo lugar" },
+      "storage":    { "label": "Bodega / Depósito",        "desc": "Organiza por zona o estante" },
+      "estate":     { "label": "Familia / Herencia",       "desc": "Pertenencias compartidas o artículos de herencia" },
+      "business":   { "label": "Negocio / Suministros",    "desc": "Inventario, herramientas y suministros" },
+      "office":     { "label": "Oficina",                  "desc": "Escritorio, archivos y equipo" },
+      "collection": { "label": "Colección / Hobby",        "desc": "En exhibición, almacenados y para vender" },
+      "vehicle":    { "label": "Vehículo / RV / Barco",    "desc": "Compartimentos, herramientas y equipo" },
+      "custom":     { "label": "Lo configuraré yo mismo",  "desc": "Empezar con pizarrón en blanco" }
+    },
+    "homeSetup": {
+      "title": "Configuración del hogar",
+      "bedrooms": "Dormitorios",
+      "bathrooms": "Baños",
+      "extraSpaces": "Espacios adicionales",
+      "starterStorage": "Almacenaje inicial",
+      "vehiclesQuestion": "¿Quieres agregar tu(s) auto(s)?",
+      "noVehicles": "Ninguno",
+      "skipVehicles": "Omitir",
+      "vehicleSingular": "vehículo",
+      "vehiclesPlural": "vehículos"
+    },
+    "spaces": {
+      "kitchen": "Cocina",
+      "livingRoom": "Sala de estar",
+      "diningRoom": "Comedor",
+      "office": "Oficina",
+      "garage": "Garaje",
+      "basement": "Sótano",
+      "attic": "Ático",
+      "laundryRoom": "Lavandería",
+      "storageRoom": "Cuarto de almacenaje",
+      "patio": "Patio / Exterior"
+    },
+    "storage": {
+      "bedroomClosets": "Armarios del dormitorio",
+      "linenCloset": "Armario de ropa blanca",
+      "pantry": "Despensa",
+      "garageShelves": "Estantes del garaje",
+      "utilityCloset": "Cuarto de servicio"
+    },
+    "movingSetup": {
+      "title": "Configuración de mudanza",
+      "bedrooms": "Dormitorios en el lugar anterior",
+      "includeGarage": "¿Incluir garaje / almacenaje?",
+      "yes": "Sí",
+      "no": "No"
+    },
+    "storageSetup": {
+      "title": "Configuración de bodega",
+      "sizeQuestion": "¿De qué tamaño es tu unidad?",
+      "small": "Pequeña",
+      "smallDesc": "Algunas zonas",
+      "medium": "Mediana",
+      "mediumDesc": "Unidad estándar",
+      "large": "Grande",
+      "largeDesc": "Unidad grande"
+    },
+    "collectionSetup": {
+      "title": "Configuración de colección",
+      "question": "¿Qué estás coleccionando u organizando?",
+      "placeholder": "p.ej. Vinilos, Libros, Cómics"
+    },
+    "preview": {
+      "title": "Esto es lo que crearemos",
+      "subtitle": "Puedes renombrar, agregar o eliminar cualquiera de estos después.",
+      "create": "Crear mis ubicaciones",
+      "chooseDifferent": "Elegir una plantilla diferente",
+      "error": "Algo salió mal. Por favor intenta de nuevo."
+    }
   }
 }
