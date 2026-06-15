@@ -14,7 +14,7 @@ A searchable memory system for physical possessions. Photograph a box or contain
 - App repo: this repo — **current with production** as of June 14, 2026
 - Website repo: MultigrainIntl/vowvy-website
 - Firebase project: vowvy-1ba5f
-- Latest main commit: 5f2a77d (Add Phase 1 multilingual support for first-time user experience)
+- Latest main commit: f4566ff (Complete multilingual translation (EN/ES/PT-BR) for all remaining user-facing screens)
 
 ## What works today
 
@@ -35,7 +35,7 @@ A searchable memory system for physical possessions. Photograph a box or contain
 - Collaborator invite and access flow (invite link, accept screen, collaborator dashboard)
 - Collaborators can add photos, edit descriptions, view owner inventory
 - iPad and iOS Safari compatibility workarounds
-- UI in English, Spanish, and Brazilian Portuguese (i18n Phase 1A + Phase 1 pre-login)
+- UI fully translated to English, Spanish, and Brazilian Portuguese — all user-facing screens (i18n complete as of June 14, 2026)
 - Container-level privacy controls:
   - Locations: Follow parent / Hide from helpers / Show to helpers visibility (stored as inherit/private/shared)
   - Containers: inherit from location, or explicitly private or shared

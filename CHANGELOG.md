@@ -2,6 +2,24 @@
 
 Newest first. Plain English: what changed and why it matters.
 
+## June 14, 2026 — Internationalization complete (all post-login screens)
+
+### Full multilingual translation for all remaining user-facing screens (commit f4566ff)
+
+- **ContainerScreen** translated: loading/not-found states, "Adding…", "Analyzing contents…", back button. Reuses existing photo/AI/delete keys.
+- **ManageScreen** translated: location and sub-location management UI, privacy pills, lock button, privacy menu options (Follow parent / Hide from helpers / Show to helpers), rename/delete/cancel/add actions, health check header (pluralized), confirmation dialogs, placeholders, empty state, unassigned section.
+- **ProfileScreen** translated: title, email/name/platform/password labels, save button, reset password button, all status messages (name updated, save failed, reset sent, reset failed).
+- **TrashScreen** translated: title, subtitle, empty state, containers/photos/notes section headers, restore/delete-forever buttons, feedback labels (restored/deleted/error), confirmation dialogs, photo count (pluralized), "from {container}" metadata. Internal `FeedbackKey` type refactored from English strings to enum keys so feedback state survives language switches.
+- **AcceptInviteScreen** translated: loading, invited/already-accepted/cant-accept states, invite body with owner name interpolation, sign-in-as email, accept/go-to-inventory/go-home buttons, all error messages.
+- **CollaboratorDashboard** translated: title, subtitle, privacy note, invite description, expiry select and buttons (reuses existing `main.invite.*` keys), revoke confirmation, collaborator list (joined date, expiry, recent activity), search placeholder and empty/no-results states. `formatExpiry()` now returns translated strings.
+- **SellThisFlow** translated: all steps — confirm (before-we-start, I understand), questions (scope radios, shipping radios, optional condition notes, photos hint), review (draft display, title/description/condition/category labels, adjust-tone rewrite buttons), platform picker, copy/post step (copy buttons, folder setup flow, download buttons, open-on-platform link, paste-link field, branding toggle, done button).
+- **ClaimBoxScreen** translated: loading, sponsored-by, track title/body, claim button, already-claimed state, done state with box ID and courtesy-of partner name, error states.
+- **Locale files** (EN / ES / PT-BR): 183 new keys added per file (263 → 446 keys). All three files structurally identical. New top-level sections: `containerScreen`, `manage`, `profile`, `trash`, `acceptInvite`, `collabDash`, `sell`, `claimBox`, plus `shared.back` and `shared.save`.
+- **AdminScreen** not translated — intentionally English-only (internal tool).
+- Build: clean TypeScript compile, 127 modules, no errors.
+
+---
+
 ## June 14, 2026 — Internationalization Phase 1 (pre-login screens)
 
 ### Multilingual first-time/signed-out experience (commit 5f2a77d)
