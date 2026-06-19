@@ -160,6 +160,7 @@
       "selectContainer": "— Select box or container —",
       "createNewContainer": "＋ Create new box or container",
       "addingTo": "Adding to: {{name}}",
+      "looseItems": "Loose Items",
       "containerNamePlaceholder": "Box or container name — e.g. Box 12, Blue bin",
       "photoPlaceholder": "Take photo or choose files",
       "photoHint": "Tap to select one or more photos",
@@ -176,12 +177,13 @@
       "noResults": "No containers match “{{query}}”."
     },
     "card": {
-      "aiProcessing": "Analyzing…",
-      "addPhoto": "Add Photo",
-      "takePhotos": "Take Photos",
+      "aiProcessing": "VOWVY is identifying what's in your photo",
+      "addItems": "Add Items",
+      "addItemsHelper": "Take or upload photos. VOWVY will help identify what matters.",
       "done": "Done",
       "printQR": "Print QR",
       "move": "Move",
+      "moveBox": "Move Box",
       "privateLabel": "Private — tap to make visible to collaborators",
       "visibleLabel": "Visible to collaborators — tap to make private"
     },
@@ -189,10 +191,14 @@
       "delete": "Delete",
       "movePhoto": "Move photo",
       "addPhoto": "Add Photo",
-      "moveBox": "Move box",
+      "moveBox": "Move Box",
       "descriptionPlaceholder": "Add a description…",
       "save": "Save",
-      "photoFailed": "Photo failed to save."
+      "photoFailed": "Photo failed to save.",
+      "aiProcessing": "VOWVY is identifying what's in your photo",
+      "aiProcessingDetail": "Looking for items, tags, and search terms.",
+      "aiError": "VOWVY couldn't identify this photo. You can still add details manually.",
+      "aiSearchTermsLabel": "Search terms used by VOWVY"
     },
     "ios": {
       "message": "Camera access requires Safari on iPhone. Tap below to open Vowvy in Safari.",
@@ -208,13 +214,13 @@
       "photosFailed": "Some photos failed to save. Please try again."
     },
     "move": {
-      "containerTitle": "Move to a different location",
-      "photoTitle": "Move to another container",
-      "containerSubtitle": "Select a destination location.",
-      "photoSubtitle": "Select a destination container.",
+      "containerTitle": "Move Box to a different location",
+      "photoTitle": "Move Photo to another container",
+      "containerSubtitle": "Select a destination location for this box.",
+      "photoSubtitle": "Select a destination container for this photo.",
       "noLocations": "No locations available. Create one in Manage first.",
-      "locationsHeading": "Locations",
-      "containersHeading": "Containers",
+      "locationsHeading": "Move to a different Location",
+      "containersHeading": "Move to another Box",
       "noDestinations": "No destinations available. Create a container or location first.",
       "cancel": "Cancel"
     },

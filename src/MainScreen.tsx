@@ -167,6 +167,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [lightboxContainerId, setLightboxContainerId] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex]             = useState(0);
   const [lightboxDescDraft, setLightboxDescDraft]     = useState('');
+  const [editingAiDesc, setEditingAiDesc] = useState(false);
+  const [aiDescDraft, setAiDescDraft] = useState('');
+  const [editingAiTags, setEditingAiTags] = useState(false);
+  const [editingAiSearchTerms, setEditingAiSearchTerms] = useState(false);
+  const [aiSearchTermsDraft, setAiSearchTermsDraft] = useState('');
+  const [aiTagsDraft, setAiTagsDraft] = useState('');
   const [lightboxAllPhotos, setLightboxAllPhotos]     = useState<PhotoItem[] | null>(null);
   const [lightboxFilterQuery, setLightboxFilterQuery] = useState('');
   const [updatingContainerId, setUpdatingContainerId] = useState<string | null>(null);
@@ -425,7 +431,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         });
       } else if (selectedContainerId === '__loose__') {
         const looseExisting = containers.find(c =>
-          c.locationId === resolvedLocationId && c.name === 'Unsorted' && !c.deletedAt
+          c.locationId === resolvedLocationId && c.name === 'Loose items' && !c.deletedAt
         );
         if (looseExisting) {
           const { url: photoUrl, storagePath } = await uploadPhoto(looseExisting.id, allFiles[0]);
@@ -448,7 +454,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           await setDoc(containerRef, {
             location: resolvedLocationName,
             locationId: resolvedLocationId,
-            name: 'Unsorted',
+            name: 'Loose items',
             photos: [photoItem],
             photoUrls: [photoUrl],
             photoStoragePaths: [storagePath],
@@ -581,6 +587,39 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     }
   }
 
+
+    async function handleSaveAiDescription(photoId: string, newDesc: string) {
+      if (!auth.currentUser || !lightboxContainerId) return;
+      await auth.currentUser.getIdToken(true);
+      const _cnt = containers.find(cc => cc.id === lightboxContainerId);
+      if (!_cnt) return;
+      const _up = (_cnt.photos ?? []).map((p: any) => p.id === photoId ? { ...p, aiDescription: newDesc } : p);
+      await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), { photos: _up });
+      setLightboxItems(prev => prev ? prev.map(p => p.id === photoId ? { ...p, aiDescription: newDesc } : p) : prev);
+    }
+
+    async function handleSaveAiSearchTerms(photoId: string, termsStr: string) {
+      if (!auth.currentUser || !lightboxContainerId) return;
+      await auth.currentUser.getIdToken(true);
+      const newTerms = termsStr.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+      const _cnt = containers.find(cc => cc.id === lightboxContainerId);
+      if (!_cnt) return;
+      const _up = (_cnt.photos ?? []).map((p: any) => p.id === photoId ? { ...p, aiSearchTerms: newTerms } : p);
+      await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), { photos: _up });
+      setLightboxItems(prev => prev ? prev.map(p => p.id === photoId ? { ...p, aiSearchTerms: newTerms } : p) : prev);
+    }
+
+    async function handleSaveAiTags(photoId: string, tagsStr: string) {
+      if (!auth.currentUser || !lightboxContainerId) return;
+      await auth.currentUser.getIdToken(true);
+      const newTags = tagsStr.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+      const _cnt = containers.find(cc => cc.id === lightboxContainerId);
+      if (!_cnt) return;
+      const _up = (_cnt.photos ?? []).map((p: any) => p.id === photoId ? { ...p, aiTags: newTags } : p);
+      await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), { photos: _up });
+      setLightboxItems(prev => prev ? prev.map(p => p.id === photoId ? { ...p, aiTags: newTags } : p) : prev);
+    }
+
   async function handleSavePhotoDescription() {
     if (!lightboxContainerId || !lightboxItems) return;
     const photo = lightboxItems[lightboxIndex];
@@ -645,7 +684,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         c.name.toLowerCase().includes(trimmedQuery) ||
         c.aiTags.some(t => t.toLowerCase().includes(trimmedQuery)) ||
         c.aiDescription.toLowerCase().includes(trimmedQuery) ||
-        c.aiSearchTerms.join(' ').toLowerCase().includes(trimmedQuery) ||
+        (c.aiSearchTerms ?? []).join(' ').toLowerCase().includes(trimmedQuery) ||
         c.notes.filter(n => !n.deletedAt).some(n => n.text.toLowerCase().includes(trimmedQuery)) ||
         c.photos.filter(p => !p.deletedAt).some(p =>
           p.description.toLowerCase().includes(trimmedQuery) ||
@@ -726,8 +765,8 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           ) : null}
         </div>
         <div className="container-meta">
-          <div className={`container-name${c.name === 'Unsorted' ? ' container-name--loose' : ''}`}>
-            {c.name === 'Unsorted' ? 'Loose items' : c.name}
+          <div className={`container-name${c.name === 'Loose items' ? ' container-name--loose' : ''}`}>
+            {(['Loose items','Loose Items','Unsorted'].includes(c.name)) ? t('main.capture.looseItems') : c.name}
             {viewingOwnerUid === user.uid && (
               <button
                 onClick={async () => {
@@ -762,33 +801,19 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           <div className="container-actions">
             <button
               className="card-action-btn"
-              onClick={() => {
-                setContinuousCapture(false);
-                setCaptureContainerId(null);
-                if (/CriOS/.test(navigator.userAgent)) { setShowIOSModal(true); return; }
-                setUpdatingContainerId(c.id);
-                updatePhotoInputRef.current?.click();
-              }}
+              onClick={() => { setPrintContainer(c); setCardMoreOpenId(null); }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-              {t('main.card.addPhoto')}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="6" width="2" height="2"/><path d="M13 3h8v8h-8V3zm1.5 1.5v5h5v-5h-5z"/><rect x="16" y="6" width="2" height="2"/><path d="M3 13h8v8H3v-8zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="16" width="2" height="2"/><rect x="13" y="13" width="2" height="2"/><rect x="16" y="13" width="2" height="2"/><rect x="19" y="13" width="2" height="2"/><rect x="13" y="16" width="2" height="2"/><rect x="19" y="16" width="2" height="2"/><rect x="13" y="19" width="2" height="2"/><rect x="16" y="19" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/></svg>
+              {t('main.card.printQR')}
             </button>
             <button
-              className={`card-action-btn${captureContainerId === c.id ? ' card-action-btn--active' : ''}`}
-              onClick={() => {
-                if (captureContainerId === c.id) {
-                  setCaptureContainerId(null);
-                  setContinuousCapture(false);
-                } else {
-                  setCaptureContainerId(c.id);
-                  setContinuousCapture(true);
-                }
-              }}
+              className="card-action-btn"
+              onClick={() => setMoveSource({ containerId: c.id, mode: 'container' })}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.776 48.776 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" /></svg>
-              {captureContainerId === c.id ? t('main.card.done') : t('main.card.takePhotos')}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
+              {t('main.card.moveBox')}
             </button>
-            {viewingOwnerUid === user.uid ? (
+            {viewingOwnerUid === user.uid && (
               <div className="card-more-wrap">
                 <button
                   className="card-action-btn"
@@ -799,13 +824,19 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 </button>
                 {cardMoreOpenId === c.id && (
                   <div className="card-more-dropdown">
-                    <button className="card-more-item" onClick={() => { setPrintContainer(c); setCardMoreOpenId(null); }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="6" width="2" height="2"/><path d="M13 3h8v8h-8V3zm1.5 1.5v5h5v-5h-5z"/><rect x="16" y="6" width="2" height="2"/><path d="M3 13h8v8H3v-8zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="16" width="2" height="2"/><rect x="13" y="13" width="2" height="2"/><rect x="16" y="13" width="2" height="2"/><rect x="19" y="13" width="2" height="2"/><rect x="13" y="16" width="2" height="2"/><rect x="19" y="16" width="2" height="2"/><rect x="13" y="19" width="2" height="2"/><rect x="16" y="19" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/></svg>
-                      {t('main.card.printQR')}
-                    </button>
-                    <button className="card-more-item" onClick={() => { setMoveSource({ containerId: c.id, mode: 'container' }); setCardMoreOpenId(null); }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
-                      {t('main.card.move')}
+                    <button
+                      className="card-more-item"
+                      onClick={() => {
+                        setContinuousCapture(false);
+                        setCaptureContainerId(null);
+                        if (/CriOS/.test(navigator.userAgent)) { setShowIOSModal(true); return; }
+                        setUpdatingContainerId(c.id);
+                        updatePhotoInputRef.current?.click();
+                        setCardMoreOpenId(null);
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+                      {t('main.card.addItems')}
                     </button>
                     <button className="card-more-item" onClick={() => { setSellContainer(c); setSellSourcePhotos(photoMatchMap.get(c.id) ?? null); setSellSourceContainerIds(null); setSellIsFromTray(false); setCardMoreOpenId(null); }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
@@ -814,14 +845,6 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   </div>
                 )}
               </div>
-            ) : (
-              <button
-                className="card-action-btn"
-                onClick={() => setMoveSource({ containerId: c.id, mode: 'container' })}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
-                {t('main.card.move')}
-              </button>
             )}
           </div>
         </div>
@@ -1123,11 +1146,33 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               }}
             >
               <option value="">{t('main.capture.selectLocation')}</option>
-              {locations.map(loc => (
-                <option key={loc.id} value={loc.id}>
-                  {getLocationPath(loc.id, locations)}
-                </option>
-              ))}
+              {(() => {
+                const rootIds = locations.filter(l => !l.parentId).map(l => l.id);
+                return rootIds.map(rootId => {
+                  const root = locations.find(l => l.id === rootId)!;
+                  const children = locations.filter(l => {
+                    let curr: any = l;
+                    while (curr && curr.parentId) {
+                      if (curr.parentId === rootId) return true;
+                      curr = locations.find(loc => loc.id === curr.parentId);
+                    }
+                    return false;
+                  });
+                  if (children.length === 0) {
+                    return <option key={root.id} value={root.id}>{root.name}</option>;
+                  }
+                  return (
+                    <optgroup key={root.id} label={root.name}>
+                      <option value={root.id}>{root.name}</option>
+                      {children.map(child => (
+                        <option key={child.id} value={child.id}>
+                          {getLocationPath(child.id, locations).split(' › ').slice(1).join(' › ')}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                });
+              })()}
               <option value="new">{t('main.capture.addNewLocation')}</option>
             </select>
 
@@ -1187,9 +1232,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             >
               <option value="">{t('main.capture.selectContainer')}</option>
               {selectedLocationId && selectedLocationId !== 'new' && (
-                <option value="__loose__">Add directly to this space</option>
+                <option value="__loose__">{t('main.capture.looseItems')}</option>
               )}
-              {containersAtLocation.filter(c => c.name !== 'Unsorted').map(c => (
+              {containersAtLocation.filter(c => c.name !== 'Loose items').map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
               <option value="new">Add a container (box, bin, drawer…)</option>
@@ -1445,20 +1490,65 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             if (photo.aiStatus === 'processing') {
               return (
                 <div className="lightbox-ai" onClick={e => e.stopPropagation()}>
-                  <span className="lightbox-ai-analyzing">Analyzing…</span>
+                  <p className="lightbox-ai-processing">{t('main.lightbox.aiProcessing')}</p>
+                  <p className="lightbox-ai-processing-detail">{t('main.lightbox.aiProcessingDetail')}</p>
                 </div>
               );
             }
             if (!photo.aiDescription && (!photo.aiTags || photo.aiTags.length === 0)) return null;
             return (
-              <div className="lightbox-ai" onClick={e => e.stopPropagation()}>
-                {photo.aiDescription && <p className="lightbox-ai-desc">{photo.aiDescription}</p>}
-                {photo.aiTags && photo.aiTags.length > 0 && (
-                  <div className="lightbox-ai-tags">
-                    {filterDisplayTags(photo.aiTags, 6).map((tag, i) => <span key={i} className="lightbox-ai-tag">{tag}</span>)}
-                  </div>
-                )}
-              </div>
+                <div className="lightbox-ai" onClick={e => e.stopPropagation()}>
+                  {photo.aiDescription !== undefined && (
+                    <div className="lightbox-ai-desc-wrap" onClick={e => e.stopPropagation()}>
+                      {editingAiDesc ? (
+                        <>
+                          <textarea className="lightbox-ai-desc-input" value={aiDescDraft} onChange={e => setAiDescDraft(e.target.value)} rows={3} autoFocus />
+                          <div className="lightbox-ai-edit-btns">
+                            <button className="lightbox-ai-save-btn" onClick={() => { handleSaveAiDescription(photo.id, aiDescDraft); setEditingAiDesc(false); }}>Save</button>
+                            <button className="lightbox-ai-cancel-btn" onClick={() => setEditingAiDesc(false)}>Cancel</button>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="lightbox-ai-desc" onClick={() => { setEditingAiDesc(true); setAiDescDraft(photo.aiDescription ?? ''); }}>{photo.aiDescription}</p>
+                      )}
+                    </div>
+                  )}
+                  {photo.aiTags && photo.aiTags.length > 0 && (
+                    <div className="lightbox-ai-tags-wrap" onClick={e => e.stopPropagation()}>
+                      {editingAiTags ? (
+                        <>
+                          <input className="lightbox-ai-tags-input" value={aiTagsDraft} onChange={e => setAiTagsDraft(e.target.value)} placeholder="tag1, tag2, tag3" autoFocus />
+                          <div className="lightbox-ai-edit-btns">
+                            <button className="lightbox-ai-save-btn" onClick={() => { handleSaveAiTags(photo.id, aiTagsDraft); setEditingAiTags(false); }}>Save</button>
+                            <button className="lightbox-ai-cancel-btn" onClick={() => setEditingAiTags(false)}>Cancel</button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="lightbox-ai-tags" onClick={() => { setEditingAiTags(true); setAiTagsDraft((photo.aiTags ?? []).join(', ')); }}>
+                          {filterDisplayTags(photo.aiTags, 6).map((tag, i) => <span key={i} className="lightbox-ai-tag">{tag}</span>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                                      <div className="lightbox-ai-search-terms-wrap" onClick={e => e.stopPropagation()}>
+                      <p className="lightbox-ai-section-label">{t('main.lightbox.aiSearchTermsLabel')}</p>
+                      {editingAiSearchTerms ? (
+                        <>
+                          <input className="lightbox-ai-tags-input" value={aiSearchTermsDraft} onChange={e => setAiSearchTermsDraft(e.target.value)} placeholder="term1, term2, term3" autoFocus />
+                          <div className="lightbox-ai-edit-btns">
+                            <button className="lightbox-ai-save-btn" onClick={() => { handleSaveAiSearchTerms(photo.id, aiSearchTermsDraft); setEditingAiSearchTerms(false); }}>Save</button>
+                            <button className="lightbox-ai-cancel-btn" onClick={() => setEditingAiSearchTerms(false)}>Cancel</button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="lightbox-ai-tags" onClick={() => { setEditingAiSearchTerms(true); setAiSearchTermsDraft((photo.aiSearchTerms ?? []).join(', ')); }}>
+                          {(photo.aiSearchTerms ?? []).length > 0
+                            ? (photo.aiSearchTerms ?? []).map((term: string, i: number) => <span key={i} className="lightbox-ai-tag lightbox-ai-search-term">{term}</span>)
+                            : <span className="lightbox-ai-empty">Tap to add search terms</span>}
+                        </div>
+                      )}
+                    </div>
+                </div>
             );
           })()}
 
@@ -1688,27 +1778,65 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     {t('main.move.noLocations')}
                   </p>
                 ) : (
-                  locations.map(loc => (
-                    <button
-                      key={loc.id}
-                      onClick={async () => {
-                        const src = containers.find(c => c.id === moveSource.containerId);
-                        if (!src) return;
-                        await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${src.id}`), {
-                          locationId: loc.id,
-                          location: getLocationPath(loc.id, locations),
-                        });
-                        setMoveSource(null);
-                      }}
-                      style={{
-                        textAlign: 'left', padding: '12px 16px', borderRadius: 10,
-                        border: '1px solid #eee', background: '#faf8f6',
-                        cursor: 'pointer', fontSize: 14, color: '#333',
-                      }}
-                    >
-                      {getLocationPath(loc.id, locations)}
-                    </button>
-                  ))
+                  (() => {
+                    const rootIds = locations.filter(l => !l.parentId).map(l => l.id);
+                    return rootIds.map(rootId => {
+                      const root = locations.find(l => l.id === rootId)!;
+                      const children = locations.filter(l => {
+                        let curr: any = l;
+                        while (curr && curr.parentId) {
+                          if (curr.parentId === rootId) return true;
+                          curr = locations.find(loc => loc.id === curr.parentId);
+                        }
+                        return false;
+                      });
+                      return (
+                        <div key={root.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                          <p style={{ margin: '4px 0', fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase' }}>{root.name}</p>
+                          <button
+                            onClick={async () => {
+                              const src = containers.find(c => c.id === moveSource.containerId);
+                              if (!src) return;
+                              await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${src.id}`), {
+                                locationId: root.id,
+                                location: root.name,
+                              });
+                              setMoveSource(null);
+                            }}
+                            style={{
+                              textAlign: 'left', padding: '10px 14px', borderRadius: 8,
+                              border: '1px solid #eee', background: '#faf8f6',
+                              cursor: 'pointer', fontSize: 13, color: '#333',
+                            }}
+                          >
+                            {root.name}
+                          </button>
+                          {children.map(child => (
+                            <button
+                              key={child.id}
+                              onClick={async () => {
+                                const src = containers.find(c => c.id === moveSource.containerId);
+                                if (!src) return;
+                                await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${src.id}`), {
+                                  locationId: child.id,
+                                  location: getLocationPath(child.id, locations),
+                                });
+                                setMoveSource(null);
+                              }}
+                              style={{
+                                textAlign: 'left', padding: '10px 14px', borderRadius: 8,
+                                border: '1px solid #eee', background: '#fff',
+                                cursor: 'pointer', fontSize: 13, color: '#555',
+                                marginLeft: 12,
+                              }}
+                            >
+                              {getLocationPath(child.id, locations).split(' › ').slice(1).join(' › ')}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    });
+                  })()
                 )
               ) : (
                 containers.filter(c => !c.deletedAt && c.id !== moveSource.containerId).length === 0 && locations.length === 0 ? (
@@ -1720,69 +1848,90 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     {locations.length > 0 && (
                       <>
                         <p style={{ margin: '4px 0', fontSize: 12, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('main.move.locationsHeading')}</p>
-                        {locations.map(loc => (
-                          <button
-                            key={loc.id}
-                            onClick={async () => {
-                              const src = containers.find(c => c.id === moveSource.containerId);
-                              if (!src || !moveSource.photoId) return;
-                              const photo = src.photos.find(p => p.id === moveSource.photoId);
-                              if (!photo) return;
-
-                              // Check if an Unsorted container already exists at this location
-                              let targetContainerId: string;
-                              const existing = containers.find(c =>
-                                c.locationId === loc.id && c.name === 'Unsorted' && !c.deletedAt
-                              );
-
-                              if (existing) {
-                                await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${existing.id}`), {
-                                  photos: [...existing.photos, photo],
-                                  photoUrls: arrayUnion(photo.url),
-                                  photoStoragePaths: arrayUnion(photo.storagePath),
-                                });
-                                targetContainerId = existing.id;
-                              } else {
-                                const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
-                                await setDoc(containerRef, {
-                                  name: 'Unsorted',
-                                  locationId: loc.id,
-                                  location: getLocationPath(loc.id, locations),
-                                  photos: [photo],
-                                  photoUrls: [photo.url],
-                                  photoStoragePaths: [photo.storagePath],
-                                  createdAt: serverTimestamp(),
-                                  deletedAt: null,
-                                  isPrivate: loc.effectiveIsPrivate,
-                                  visibility: 'inherit',
-                                  effectiveIsPrivate: loc.effectiveIsPrivate,
-                                });
-                                targetContainerId = containerRef.id;
+                        {(() => {
+                          const rootIds = locations.filter(l => !l.parentId).map(l => l.id);
+                          return rootIds.map(rootId => {
+                            const root = locations.find(l => l.id === rootId)!;
+                            const children = locations.filter(l => {
+                              let curr: any = l;
+                              while (curr && curr.parentId) {
+                                if (curr.parentId === rootId) return true;
+                                curr = locations.find(loc => loc.id === curr.parentId);
                               }
+                              return false;
+                            });
+                            const locsToRender = [root, ...children];
+                            return locsToRender.map(loc => (
+                              <button
+                                key={loc.id}
+                                onClick={async () => {
+                                  const src = containers.find(c => c.id === moveSource.containerId);
+                                  if (!src || !moveSource.photoId) return;
+                                  const photo = src.photos.find(p => p.id === moveSource.photoId);
+                                  if (!photo) return;
 
-                              // Remove photo from source and clear AI fields
-                              await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${src.id}`), {
-                                photos: src.photos.filter(p => p.id !== moveSource.photoId),
-                                photoUrls: src.photos.filter(p => p.id !== moveSource.photoId).map(p => p.url),
-                                photoStoragePaths: src.photos.filter(p => p.id !== moveSource.photoId).map(p => p.storagePath),
-                                aiDescription: '',
-                                aiTags: [],
-                                aiObjects: [],
-                                aiStatus: null,
-                              });
-                              void targetContainerId;
-                              closeLightbox();
-                              setMoveSource(null);
-                            }}
-                            style={{
-                              textAlign: 'left', padding: '12px 16px', borderRadius: 10,
-                              border: '1px solid #eee', background: '#faf8f6',
-                              cursor: 'pointer', fontSize: 14, color: '#333',
-                            }}
-                          >
-                            📍 {getLocationPath(loc.id, locations)}
-                          </button>
-                        ))}
+                                  // Check if a Loose items container already exists at this location
+                                  let targetContainerId: string;
+                                  const existing = containers.find(c =>
+                                    c.locationId === loc.id && c.name === 'Loose items' && !c.deletedAt
+                                  );
+
+                                  if (existing) {
+                                    await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${existing.id}`), {
+                                      photos: [...existing.photos, photo],
+                                      photoUrls: arrayUnion(photo.url),
+                                      photoStoragePaths: arrayUnion(photo.storagePath),
+                                    });
+                                    targetContainerId = existing.id;
+                                  } else {
+                                    const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
+                                    await setDoc(containerRef, {
+                                      name: 'Loose items',
+                                      locationId: loc.id,
+                                      location: getLocationPath(loc.id, locations),
+                                      photos: [photo],
+                                      photoUrls: [photo.url],
+                                      photoStoragePaths: [photo.storagePath],
+                                      createdAt: serverTimestamp(),
+                                      deletedAt: null,
+                                      isPrivate: loc.effectiveIsPrivate,
+                                      visibility: 'inherit',
+                                      effectiveIsPrivate: loc.effectiveIsPrivate,
+                                    });
+                                    targetContainerId = containerRef.id;
+                                  }
+
+                                  // Remove photo from source
+                                  const newSrcPhotos = src.photos.filter(p => p.id !== moveSource.photoId);
+                                  const update: any = {
+                                    photos: newSrcPhotos,
+                                    photoUrls: newSrcPhotos.map(p => p.url),
+                                    photoStoragePaths: newSrcPhotos.map(p => p.storagePath),
+                                  };
+                                  if (newSrcPhotos.length === 0) {
+                                    update.aiDescription = '';
+                                    update.aiTags = [];
+                                    update.aiObjects = [];
+                                    update.aiStatus = null;
+                                  }
+                                  await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${src.id}`), update);
+                                  void targetContainerId;
+                                  closeLightbox();
+                                  setMoveSource(null);
+                                }}
+                                style={{
+                                  textAlign: 'left', padding: '12px 16px', borderRadius: 10,
+                                  border: '1px solid #eee', background: '#faf8f6',
+                                  cursor: 'pointer', fontSize: 14, color: '#333',
+                                  marginLeft: loc.parentId ? 12 : 0,
+                                  marginBottom: 4,
+                                }}
+                              >
+                                📍 {loc.parentId ? getLocationPath(loc.id, locations).split(' › ').slice(1).join(' › ') : loc.name}
+                              </button>
+                            ));
+                          });
+                        })()}
                       </>
                     )}
                     {containers.filter(c => !c.deletedAt && c.id !== moveSource.containerId).length > 0 && (
@@ -1811,11 +1960,18 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                                     photoStoragePaths: newDestPhotos.map(p => p.storagePath),
                                   });
                                   const newSrcPhotos = src.photos.filter(p => p.id !== moveSource.photoId);
-                                  batch.update(srcRef, {
+                                  const srcUpdate: any = {
                                     photos: newSrcPhotos,
                                     photoUrls: newSrcPhotos.map(p => p.url),
                                     photoStoragePaths: newSrcPhotos.map(p => p.storagePath),
-                                  });
+                                  };
+                                  if (newSrcPhotos.length === 0) {
+                                    srcUpdate.aiDescription = '';
+                                    srcUpdate.aiTags = [];
+                                    srcUpdate.aiObjects = [];
+                                    srcUpdate.aiStatus = null;
+                                  }
+                                  batch.update(srcRef, srcUpdate);
                                 } else {
                                   const newDestPhotos = [...destPhotos, ...src.photos];
                                   batch.update(destRef, {
@@ -1825,10 +1981,10 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                                   });
                                   batch.update(srcRef, {
                                     photos: [], photoUrls: [], photoStoragePaths: [], photoUrl: null, photoStoragePath: null,
+                                    aiDescription: '', aiTags: [], aiObjects: [], aiStatus: null,
                                   });
                                 }
                                 await batch.commit();
-                                await updateDoc(srcRef, { aiDescription: '', aiTags: [], aiObjects: [], aiStatus: null });
                                 closeLightbox();
                                 setMoveSource(null);
                               }}

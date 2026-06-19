@@ -870,7 +870,7 @@
   padding: 4px;
 }
 
-/* ---- Loose items (Unsorted container displayed without its internal name) ---- */
+/* ---- Loose items (Loose items container displayed without its internal name) ---- */
 
 .container-name--loose {
   color: var(--muted-slate);
@@ -1830,3 +1830,24 @@
     padding: 7px 16px;
   }
 }
+
+/* AI metadata edit UI */
+.lightbox-ai-desc-wrap { margin-bottom: 8px; }
+.lightbox-ai-desc-input { width: 100%; padding: 6px 8px; border: 1px solid rgba(0,0,0,.2); border-radius: 6px; font-size: 13px; resize: vertical; font-family: inherit; background: var(--bg, #faf7f2); }
+.lightbox-ai-tags-wrap { margin-bottom: 6px; }
+.lightbox-ai-tags-input { width: 100%; padding: 5px 8px; border: 1px solid rgba(0,0,0,.2); border-radius: 6px; font-size: 13px; font-family: inherit; background: var(--bg, #faf7f2); }
+.lightbox-ai-tags[onClick] { cursor: pointer; }
+.lightbox-ai-edit-btns { display: flex; gap: 6px; margin-top: 4px; }
+.lightbox-ai-save-btn { padding: 4px 10px; background: #6b3a2a; color: #fff; border: none; border-radius: 5px; font-size: 12px; cursor: pointer; }
+.lightbox-ai-cancel-btn { padding: 4px 10px; background: transparent; color: #6b3a2a; border: 1px solid #6b3a2a; border-radius: 5px; font-size: 12px; cursor: pointer; }
+.lightbox-ai-desc p.lightbox-ai-desc { cursor: pointer; }
+
+/* aiSearchTerms edit section */
+.lightbox-ai-search-terms-wrap { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); }
+.lightbox-ai-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.4); margin: 0 0 5px 0; }
+.lightbox-ai-search-term { background: rgba(255,255,255,0.1); }
+.lightbox-ai-empty { font-size: 12px; color: rgba(255,255,255,0.35); font-style: italic; cursor: pointer; }
+
+/* Processing feedback */
+.lightbox-ai-processing { font-size: 14px; color: rgba(255,255,255,0.85); margin: 0 0 4px 0; font-style: normal; }
+.lightbox-ai-processing-detail { font-size: 12px; color: rgba(255,255,255,0.5); margin: 0; font-style: italic; }
