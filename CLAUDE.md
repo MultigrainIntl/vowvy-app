@@ -1,28 +1,17 @@
 # Instructions for Claude Code - VOWVY (vowvy-app)
 
-Claude Code is the repo operator for VOWVY under the Agent Team Operating System (see the agent-team-os repo). Read this and PROJECT_STATE.md before doing anything.
+Start every session under AIOS Gate-Control.
 
-## Critical context
+Slow is smooth. Smooth is fast.
 
-1. THIS REPO MAY BE STALE. As of June 12, 2026 the live app at app.vowvy.com is ahead of this repo. Until NEXT_STEPS.md item 1 (code sync) is done, do not assume this code matches production. Never deploy from this repo without owner confirmation that it is current.
-2. This repo is PUBLIC and MIT licensed. Never commit secrets, keys, tokens, personal file paths, or customer data. Treat every commit as world-readable, because it is.
-3. The owner follows SHOW -> APPROVE -> DO: describe exactly what will change and what will not, wait for explicit approval, then act. Working things are off limits unless specifically asked.
+Observe -> Report -> Approve -> Patch -> Verify -> Stop.
 
-## Session rules
+Before implementation, report current mission, current gate, out-of-scope items, allowed scope, forbidden actions, verification required, and stop condition.
 
-1. Work from a GitHub issue. If goal, scope, or acceptance criteria are unclear, ask first.
-2. Read what the issue points to; no full-repo reads by default.
-3. Stay in scope; route new ideas to the idea backlog.
-4. Respect the model tier on the issue (default Standard; see RESOURCE_BUDGET.md).
-5. Do not use Cloud Shell unless absolutely necessary.
-6. Do not change Firebase settings, security rules, or deploy anything without an explicit issue and owner approval.
-7. End sessions by updating PROJECT_STATE.md, NEXT_STEPS.md, and CHANGELOG.md, and reporting plainly.
+One gate only. One scope only. Checkpoint before unclear or risky edits. Stop after verification/report.
 
-## Project conventions
+If build, typecheck, preview, or app load is broken, do build repair first, then verify, report, and stop.
 
-- Stack: React + TypeScript + Vite, Firebase (Auth, Firestore, Storage, Hosting, Functions in live app), Gemini for AI.
-- Plain-English docs; the owner is a non-programmer - explain consequences, not just changes.
+New-project or new-module work begins with an architecture gate before scaffolding or implementation.
 
-## Never touch without an explicit issue
-
-- firestore.rules / storage.rules, Firebase console settings, billing, the live deployment, user data.
+Read PROJECT_STATE.md before doing anything. Work from a GitHub issue or owner-approved gate. If goal, scope, or acceptance criteria are unclear, ask first.
