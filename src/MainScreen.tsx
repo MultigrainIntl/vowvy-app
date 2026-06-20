@@ -185,6 +185,8 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [sellContainer, setSellContainer] = useState<ContainerForListing | null>(null);
   const [sellSourcePhotos, setSellSourcePhotos] = useState<PhotoItem[] | null>(null);
   const [sellSourceContainerIds, setSellSourceContainerIds] = useState<string[] | null>(null);
+  const [renamingContId, setRenamingContId] = useState<string | null>(null);
+  const [renamingDraft, setRenamingDraft]   = useState('');
   const [sellIsFromTray, setSellIsFromTray] = useState(false);
   const [trayPhotos, setTrayPhotos] = useState<TrayPhoto[]>([]);
   const [showTray, setShowTray] = useState(false);
@@ -745,6 +747,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     setLightboxFilterQuery('');
   }
 
+  async function handleRenameContainer() {
+    if (!renamingContId || !renamingDraft.trim()) return;
+    await updateDoc(doc(db, `users/${user.uid}/containers/${renamingContId}`), { name: renamingDraft.trim() });
+    setRenamingContId(null);
+  }
+
   function renderContainerRow(c: Container, showLocation = false) {
     const activePhotos = c.photos.filter(p => !p.deletedAt);
     const lastPhoto    = activePhotos[activePhotos.length - 1];
@@ -799,7 +807,13 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             onDelete={handleDeleteNote}
           />
           <div className="container-actions">
-            <button
+                        <button
+              className="card-action-btn"
+              onClick={() => { setRenamingContId(c.id); setRenamingDraft(c.name); }}
+            >
+              Rename
+            </button>
+<button
               className="card-action-btn"
               onClick={() => { setPrintContainer(c); setCardMoreOpenId(null); }}
             >
@@ -1347,7 +1361,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   <h2 className="location-heading">{loc}</h2>
                   <button className="delete-location-btn" onClick={() => handleDeleteLocation(loc)}>✕</button>
                 </div>
-                {grouped[loc].map(c => renderContainerRow(c))}
+                {[...grouped[loc]].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})).map(c=>renderContainerRow(c))}
               </div>
             ))
           )}
@@ -1637,6 +1651,17 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setCardMoreOpenId(null)} />
       )}
 
+      {renamingContId && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={() => setRenamingContId(null)}>
+          <div style={{background:'var(--color-bg,#fff)',padding:'1.5rem',borderRadius:'8px',minWidth:'16rem'}} onClick={e=>e.stopPropagation()}>
+            <input style={{width:'100%',padding:'.5rem',marginBottom:'.75rem',border:'1px solid #ccc',borderRadius:'4px',boxSizing:'border-box'}} value={renamingDraft} autoFocus onChange={e=>setRenamingDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleRenameContainer();if(e.key==='Escape')setRenamingContId(null);}} />
+            <div style={{display:'flex',gap:'.5rem',justifyContent:'flex-end'}}>
+              <button onClick={()=>setRenamingContId(null)}>Cancel</button>
+              <button onClick={handleRenameContainer}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
       {printContainer && (
         <QRPrintModal container={printContainer} onClose={() => setPrintContainer(null)} />
       )}

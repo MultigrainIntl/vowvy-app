@@ -8,6 +8,7 @@ import { db } from './firebase';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { navigate } from './nav';
+import QRCode from 'qrcode';
 import {
   subscribeToLocations, createLocation,
   getLocationChildren, getLocationPath, getDescendantIds,
@@ -46,6 +47,33 @@ function UnlockedIcon() {
   );
 }
 
+function ManageQRModal({ container, onClose }: { container: Container; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [tagline, setTagline] = useState(() => t('main.qr.defaultTagline'));
+  const [svgString, setSvgString] = useState('');
+  useEffect(() => {
+    const url = `https://app.vowvy.com/container/${container.id}`;
+    QRCode.toString(url, { type: 'svg', width: 200, margin: 1 })
+      .then(setSvgString)
+      .catch(() => {});
+  }, [container.id]);
+  return (
+    <div className="qr-print-overlay">
+      <div className="qr-print-controls">
+        <button className="qr-btn-print" onClick={() => window.print()}>{t('main.qr.print')}</button>
+        <button className="qr-btn-close" onClick={onClose}>{t('main.qr.close')}</button>
+      </div>
+      <div className="qr-print-card">
+        <img src={logoMark} alt="Vowvy" className="qr-logo" />
+        {svgString && <div className="qr-code" dangerouslySetInnerHTML={{ __html: svgString }} />}
+        <div className="qr-container-name">{container.name}</div>
+        <div className="qr-location">{container.location}</div>
+        <input className="qr-tagline-input" value={tagline} onChange={e => setTagline(e.target.value)} />
+      </div>
+    </div>
+  );
+}
+
 export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
   const { t } = useTranslation();
   const [locations, setLocations]     = useState<Location[]>([]);
@@ -58,6 +86,8 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
   const [addingContainerUnder, setAddingContainerUnder] = useState<string | null>(null);
   const [newContainerName, setNewContainerName]         = useState('');
   const [addingTopLevel, setAddingTopLevel]             = useState(false);
+  const [movingContId, setMovingContId]   = useState<string | null>(null);
+  const [printQrContainer, setPrintQrContainer] = useState<Container | null>(null);
   const [newTopLevelName, setNewTopLevelName]           = useState('');
   const [movingId, setMovingId]                         = useState<string | null>(null);
   const [healthOpen, setHealthOpen]                     = useState(false);
@@ -205,6 +235,17 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
     }
     const targetEffective = resolveEffective(locId, newVisibility, new Map());
     await propagateEffective(locId, newVisibility, targetEffective);
+  }
+
+  async function moveContainerToLoc(contId: string, locId: string) {
+    const newPath = getLocationPath(locId, locations);
+    await updateDoc(doc(db, `users/${user.uid}/containers/${contId}`), { locationId: locId, location: newPath });
+    setMovingContId(null);
+  }
+
+  async function deleteContainer(c: Container) {
+    if (!window.confirm(`Remove "${c.name}"?`)) return;
+    await updateDoc(doc(db, `users/${user.uid}/containers/${c.id}`), { deletedAt: serverTimestamp() });
   }
 
   function renderLocation(loc: Location, depth = 0) {
@@ -409,7 +450,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
               </div>
             )}
             {children.map(child => renderLocation(child, depth + 1))}
-            {containersHere.map(c => renderContainer(c))}
+            {[...containersHere].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})).map(c=>renderContainer(c))}
           </div>
         )}
       </div>
@@ -439,7 +480,21 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
           {isEditing ? (
             <button className="manage-btn save" onClick={() => renameContainer(c.id, editingName)}>{t('shared.save')}</button>
           ) : (
-            <button className="manage-btn edit" onClick={() => { setEditingId(c.id); setEditingName(c.name); }}>{t('manage.rename')}</button>
+            <>
+            {movingContId !== c.id && <button className="manage-btn edit" onClick={() => { setEditingId(c.id); setEditingName(c.name); }}>{t('manage.rename')}</button>}
+            <button className="manage-btn" onClick={() => setMovingContId(movingContId === c.id ? null : c.id)}>Move</button>
+            {movingContId === c.id && (
+              <>
+                <select style={{marginTop:'4px',width:'100%'}} defaultValue="" onChange={async e => { if (e.target.value) await moveContainerToLoc(c.id, e.target.value); }}>
+                  <option value="" disabled>Pick location…</option>
+                  {locations.map(loc => <option key={loc.id} value={loc.id}>{getLocationPath(loc.id, locations)}</option>)}
+                </select>
+                <button className="manage-btn" onClick={() => setMovingContId(null)}>Cancel</button>
+              </>
+            )}
+            {movingContId !== c.id && <button className="manage-btn" onClick={() => setPrintQrContainer(c)}>Print QR</button>}
+            {movingContId !== c.id && <button className="manage-btn" onClick={() => deleteContainer(c)}>Remove</button>}
+            </>
           )}
         </div>
       </div>
@@ -458,7 +513,8 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
           <span className="app-wordmark">Vowvy</span>
         </div>
         <div className="header-actions">
-          <button className="sign-out-btn" onClick={() => navigate('/')}>{t('shared.back')}</button>
+          {printQrContainer && <ManageQRModal container={printQrContainer} onClose={() => setPrintQrContainer(null)} />}
+        <button className="sign-out-btn" onClick={() => navigate('/')}>{t('shared.back')}</button>
         </div>
       </header>
 
