@@ -196,7 +196,7 @@ interface Props { user: User; initialOwnerUid?: string | null }
 
 export default function MainScreen({ user, initialOwnerUid }: Props) {
   const { t, i18n } = useTranslation();
-  const [selectedLocationId, setSelectedLocationId]   = useState('');
+  const [selectedLocationId, setSelectedLocationId]   = useState(() => new URLSearchParams(window.location.search).get('location') ?? '');
   const [selectedParentId, setSelectedParentId]       = useState<string | null>(null);
   const [newLocationName, setNewLocationName]         = useState('');
   const [selectedContainerId, setSelectedContainerId] = useState('');
@@ -757,27 +757,45 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     return acc;
   }, {});
   const locationKeys = Object.keys(grouped);
-  const sortLocationByName = (a: Location, b: Location) =>
-    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+
+  const isAutomobileLocationName = (name: string) =>
+    /\b(auto|autos|automobile|automobiles|vehicle|vehicles|car|cars|truck|trucks|van|vans|suv|jeep|bronco)\b/i.test(name);
+
+  const getSortedLocationChildren = (parentId: string | null = null): Location[] =>
+    locations
+      .filter(l => (l.parentId ?? null) === parentId)
+      .sort((a, b) => {
+        if (parentId === null) {
+          const autoA = isAutomobileLocationName(a.name) ? 1 : 0;
+          const autoB = isAutomobileLocationName(b.name) ? 1 : 0;
+          if (autoA !== autoB) return autoA - autoB;
+        }
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      });
 
   const buildLocationOptions: (parentId?: string | null) => Location[] = (parentId = null) =>
-    [...locations.filter(l => l.parentId === parentId)]
-      .sort(sortLocationByName)
+    getSortedLocationChildren(parentId)
       .flatMap(loc => [loc, ...buildLocationOptions(loc.id)]);
 
-  const getLocationDepth = (loc: Location): number => {
-    let depth = 0;
-    let current = loc.parentId ? locations.find(l => l.id === loc.parentId) : undefined;
-    while (current) {
-      depth += 1;
-      current = current.parentId ? locations.find(l => l.id === current!.parentId) : undefined;
-    }
-    return depth;
-  };
-
   const formatLocationOptionLabel = (loc: Location): string => {
-    const depth = getLocationDepth(loc);
-    return depth === 0 ? loc.name : `${'  '.repeat(Math.max(0, depth - 1))}↳ ${loc.name}`;
+    const ancestors: Location[] = [];
+    let current = loc;
+
+    while (current.parentId) {
+      const parent = locations.find(l => l.id === current.parentId);
+      if (!parent) break;
+      ancestors.unshift(parent);
+      current = parent;
+    }
+
+    if (ancestors.length === 0) return loc.name;
+
+    const gap = '\u00A0\u00A0';
+    const prefix = ancestors.map(() => `${gap}${gap}`).join('');
+
+    const siblings = getSortedLocationChildren(loc.parentId ?? null);
+    const isLast = siblings[siblings.length - 1]?.id === loc.id;
+    return `${prefix}${isLast ? '└─' : '├─'} ${loc.name}`;
   };
 
   const locationOptions = buildLocationOptions();

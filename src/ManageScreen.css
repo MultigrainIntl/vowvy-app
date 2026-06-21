@@ -599,3 +599,145 @@
   }
 }
 
+/* ---- Manage Locations location QR + mobile action collapse ---- */
+.manage-more-wrap--mobile {
+  display: none;
+  position: relative;
+}
+
+.manage-more-trigger {
+  border: 1px solid #d8c5bd;
+  background: #fff;
+  color: #6b3a2f;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 34px;
+}
+
+.manage-more-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 190px;
+  background: #fff;
+  border: 1px solid #e3d4cd;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(58, 35, 25, 0.16);
+  padding: 6px;
+}
+
+.manage-more-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #4a2f28;
+  font: inherit;
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.manage-more-item:hover,
+.manage-more-item.active {
+  background: #f7eee9;
+}
+
+.manage-more-item.danger {
+  color: #a04030;
+}
+
+.manage-more-section-label {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #8a6f65;
+  text-transform: uppercase;
+}
+
+.qr-print-overlay--set .qr-print-card {
+  margin-bottom: 14px;
+}
+
+.qr-print-set {
+  display: grid;
+  gap: 14px;
+  max-height: min(72vh, 720px);
+  overflow: auto;
+  padding: 8px;
+}
+
+.qr-print-set-heading {
+  font-weight: 800;
+  text-align: center;
+  color: #4a2f28;
+  margin: 0 0 4px;
+}
+
+.qr-tagline-static {
+  min-height: 18px;
+}
+
+@media (max-width: 767px) {
+  .manage-row {
+    align-items: flex-start;
+  }
+
+  .manage-actions {
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .manage-btn--desktop-only,
+  .loc-lock-btn.manage-btn--desktop-only,
+  .manage-privacy-wrap.manage-btn--desktop-only {
+    display: none !important;
+  }
+
+  .manage-more-wrap--mobile {
+    display: inline-flex;
+  }
+
+  .manage-more-dropdown {
+    right: 0;
+  }
+}
+
+@media print {
+  body.vowvy-qr-print-active #vowvy-qr-print-root .qr-print-printable {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  body.vowvy-qr-print-active #vowvy-qr-print-root .qr-print-set {
+    display: block !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  body.vowvy-qr-print-active #vowvy-qr-print-root .qr-print-set-heading {
+    display: block !important;
+    text-align: center !important;
+    margin: 0 0 0.2in !important;
+    color: #111 !important;
+  }
+
+  body.vowvy-qr-print-active #vowvy-qr-print-root .qr-print-set .qr-print-card {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  body.vowvy-qr-print-active #vowvy-qr-print-root .qr-print-set .qr-print-card:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+}
+
