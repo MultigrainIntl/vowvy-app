@@ -160,7 +160,6 @@
       "selectContainer": "— Select box or container —",
       "createNewContainer": "＋ Create new box or container",
       "addingTo": "Adding to: {{name}}",
-      "looseItems": "Loose Items",
       "containerNamePlaceholder": "Box or container name — e.g. Box 12, Blue bin",
       "photoPlaceholder": "Take photo or choose files",
       "photoHint": "Tap to select one or more photos",
@@ -179,7 +178,6 @@
     "card": {
       "aiProcessing": "VOWVY is identifying what's in your photo",
       "addItems": "Add Items",
-      "addItemsHelper": "Take or upload photos. VOWVY will help identify what matters.",
       "done": "Done",
       "printQR": "Print QR",
       "move": "Move",
@@ -195,10 +193,7 @@
       "descriptionPlaceholder": "Add a description…",
       "save": "Save",
       "photoFailed": "Photo failed to save.",
-      "aiProcessing": "VOWVY is identifying what's in your photo",
-      "aiProcessingDetail": "Looking for items, tags, and search terms.",
-      "aiError": "VOWVY couldn't identify this photo. You can still add details manually.",
-      "aiSearchTermsLabel": "Search terms used by VOWVY"
+      "aiProcessing": "VOWVY is identifying what's in your photo"
     },
     "ios": {
       "message": "Camera access requires Safari on iPhone. Tap below to open Vowvy in Safari.",

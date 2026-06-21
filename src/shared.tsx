@@ -21,7 +21,6 @@ export interface PhotoItem {
   aiDescription?: string;
   aiTags?: string[];
   aiObjects?: string[];
-  aiSearchTerms?: string[];
   aiStatus?: 'processing' | 'done' | 'error';
 }
 

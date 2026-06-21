@@ -170,8 +170,6 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [editingAiDesc, setEditingAiDesc] = useState(false);
   const [aiDescDraft, setAiDescDraft] = useState('');
   const [editingAiTags, setEditingAiTags] = useState(false);
-  const [editingAiSearchTerms, setEditingAiSearchTerms] = useState(false);
-  const [aiSearchTermsDraft, setAiSearchTermsDraft] = useState('');
   const [aiTagsDraft, setAiTagsDraft] = useState('');
   const [lightboxAllPhotos, setLightboxAllPhotos]     = useState<PhotoItem[] | null>(null);
   const [lightboxFilterQuery, setLightboxFilterQuery] = useState('');
@@ -600,17 +598,6 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       setLightboxItems(prev => prev ? prev.map(p => p.id === photoId ? { ...p, aiDescription: newDesc } : p) : prev);
     }
 
-    async function handleSaveAiSearchTerms(photoId: string, termsStr: string) {
-      if (!auth.currentUser || !lightboxContainerId) return;
-      await auth.currentUser.getIdToken(true);
-      const newTerms = termsStr.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
-      const _cnt = containers.find(cc => cc.id === lightboxContainerId);
-      if (!_cnt) return;
-      const _up = (_cnt.photos ?? []).map((p: any) => p.id === photoId ? { ...p, aiSearchTerms: newTerms } : p);
-      await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), { photos: _up });
-      setLightboxItems(prev => prev ? prev.map(p => p.id === photoId ? { ...p, aiSearchTerms: newTerms } : p) : prev);
-    }
-
     async function handleSaveAiTags(photoId: string, tagsStr: string) {
       if (!auth.currentUser || !lightboxContainerId) return;
       await auth.currentUser.getIdToken(true);
@@ -774,7 +761,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         </div>
         <div className="container-meta">
           <div className={`container-name${c.name === 'Loose items' ? ' container-name--loose' : ''}`}>
-            {(['Loose items','Loose Items','Unsorted'].includes(c.name)) ? t('main.capture.looseItems') : c.name}
+            {c.name}
             {viewingOwnerUid === user.uid && (
               <button
                 onClick={async () => {
@@ -1246,7 +1233,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             >
               <option value="">{t('main.capture.selectContainer')}</option>
               {selectedLocationId && selectedLocationId !== 'new' && (
-                <option value="__loose__">{t('main.capture.looseItems')}</option>
+                <option value="__loose__">Add directly to this space</option>
               )}
               {containersAtLocation.filter(c => c.name !== 'Loose items').map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -1544,24 +1531,6 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                       )}
                     </div>
                   )}
-                                      <div className="lightbox-ai-search-terms-wrap" onClick={e => e.stopPropagation()}>
-                      <p className="lightbox-ai-section-label">{t('main.lightbox.aiSearchTermsLabel')}</p>
-                      {editingAiSearchTerms ? (
-                        <>
-                          <input className="lightbox-ai-tags-input" value={aiSearchTermsDraft} onChange={e => setAiSearchTermsDraft(e.target.value)} placeholder="term1, term2, term3" autoFocus />
-                          <div className="lightbox-ai-edit-btns">
-                            <button className="lightbox-ai-save-btn" onClick={() => { handleSaveAiSearchTerms(photo.id, aiSearchTermsDraft); setEditingAiSearchTerms(false); }}>Save</button>
-                            <button className="lightbox-ai-cancel-btn" onClick={() => setEditingAiSearchTerms(false)}>Cancel</button>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="lightbox-ai-tags" onClick={() => { setEditingAiSearchTerms(true); setAiSearchTermsDraft((photo.aiSearchTerms ?? []).join(', ')); }}>
-                          {(photo.aiSearchTerms ?? []).length > 0
-                            ? (photo.aiSearchTerms ?? []).map((term: string, i: number) => <span key={i} className="lightbox-ai-tag lightbox-ai-search-term">{term}</span>)
-                            : <span className="lightbox-ai-empty">Tap to add search terms</span>}
-                        </div>
-                      )}
-                    </div>
                 </div>
             );
           })()}
