@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { type User } from 'firebase/auth';
 import {
   collection, doc, onSnapshot, updateDoc, setDoc,
@@ -47,32 +48,87 @@ function UnlockedIcon() {
   );
 }
 
+function clearQrPrintState() {
+  document.body.classList.remove('vowvy-printing-qr');
+  document.body.classList.remove('vowvy-printing-qr-main');
+  document.body.classList.remove('vowvy-printing-qr-manage');
+  document.body.classList.remove('vowvy-qr-print-active');
+
+  const existingPrintRoot = document.getElementById('vowvy-qr-print-root');
+  existingPrintRoot?.remove();
+
+  window.removeEventListener('afterprint', clearQrPrintState);
+}
+
+function requestQrPrint(scopeClass: 'vowvy-printing-qr-main' | 'vowvy-printing-qr-manage') {
+  const card = document.querySelector('.qr-print-overlay .qr-print-card');
+
+  if (!card) {
+    window.print();
+    return;
+  }
+
+  const existingPrintRoot = document.getElementById('vowvy-qr-print-root');
+  existingPrintRoot?.remove();
+
+  const printRoot = document.createElement('div');
+  printRoot.id = 'vowvy-qr-print-root';
+  printRoot.appendChild(card.cloneNode(true));
+  document.body.appendChild(printRoot);
+
+  document.body.classList.add('vowvy-printing-qr');
+  document.body.classList.add(scopeClass);
+  document.body.classList.add('vowvy-qr-print-active');
+
+  window.removeEventListener('afterprint', clearQrPrintState);
+  window.addEventListener('afterprint', clearQrPrintState);
+
+  window.print();
+}
+
 function ManageQRModal({ container, onClose }: { container: Container; onClose: () => void }) {
   const { t } = useTranslation();
   const [tagline, setTagline] = useState(() => t('main.qr.defaultTagline'));
-  const [svgString, setSvgString] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
+
   useEffect(() => {
     const url = `https://app.vowvy.com/container/${container.id}`;
-    QRCode.toString(url, { type: 'svg', width: 200, margin: 1 })
-      .then(setSvgString)
-      .catch(() => {});
+    QRCode.toDataURL(url, { width: 240, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(''));
   }, [container.id]);
-  return (
+
+  const closeQr = () => {
+    clearQrPrintState();
+    onClose();
+  };
+
+  return createPortal((
     <div className="qr-print-overlay">
       <div className="qr-print-controls">
-        <button className="qr-btn-print" onClick={() => window.print()}>{t('main.qr.print')}</button>
-        <button className="qr-btn-close" onClick={onClose}>{t('main.qr.close')}</button>
+        <button className="qr-btn-print" disabled={!qrDataUrl} onClick={() => requestQrPrint('vowvy-printing-qr-manage')}>
+          {t('main.qr.print')}
+        </button>
+        <button className="qr-btn-close" onClick={closeQr}>{t('main.qr.close')}</button>
       </div>
+
       <div className="qr-print-card">
         <img src={logoMark} alt="Vowvy" className="qr-logo" />
-        {svgString && <div className="qr-code" dangerouslySetInnerHTML={{ __html: svgString }} />}
+        <div className="qr-code">
+          {qrDataUrl && <img src={qrDataUrl} alt={`QR code for ${container.name}`} className="qr-code-img" />}
+        </div>
         <div className="qr-container-name">{container.name}</div>
         <div className="qr-location">{container.location}</div>
-        <input className="qr-tagline-input" value={tagline} onChange={e => setTagline(e.target.value)} />
+        <input
+          className="qr-tagline-input"
+          value={tagline}
+          onChange={e => setTagline(e.target.value)}
+        />
       </div>
     </div>
-  );
+  ), document.body);
 }
+
 
 export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
   const { t } = useTranslation();
@@ -517,6 +573,8 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
         <button className="sign-out-btn" onClick={() => navigate('/')}>{t('shared.back')}</button>
         </div>
       </header>
+
+      {printQrContainer && <ManageQRModal container={printQrContainer} onClose={() => setPrintQrContainer(null)} />}
 
       <div className="manage-content">
         <h2 className="manage-title">{t('manage.title')}</h2>

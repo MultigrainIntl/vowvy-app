@@ -60,29 +60,75 @@ interface TrayPhoto {
   containerName: string;
 }
 
+function clearQrPrintState() {
+  document.body.classList.remove('vowvy-printing-qr');
+  document.body.classList.remove('vowvy-printing-qr-main');
+  document.body.classList.remove('vowvy-printing-qr-manage');
+  document.body.classList.remove('vowvy-qr-print-active');
+
+  const existingPrintRoot = document.getElementById('vowvy-qr-print-root');
+  existingPrintRoot?.remove();
+
+  window.removeEventListener('afterprint', clearQrPrintState);
+}
+
+function requestQrPrint(scopeClass: 'vowvy-printing-qr-main' | 'vowvy-printing-qr-manage') {
+  const card = document.querySelector('.qr-print-overlay .qr-print-card');
+
+  if (!card) {
+    window.print();
+    return;
+  }
+
+  const existingPrintRoot = document.getElementById('vowvy-qr-print-root');
+  existingPrintRoot?.remove();
+
+  const printRoot = document.createElement('div');
+  printRoot.id = 'vowvy-qr-print-root';
+  printRoot.appendChild(card.cloneNode(true));
+  document.body.appendChild(printRoot);
+
+  document.body.classList.add('vowvy-printing-qr');
+  document.body.classList.add(scopeClass);
+  document.body.classList.add('vowvy-qr-print-active');
+
+  window.removeEventListener('afterprint', clearQrPrintState);
+  window.addEventListener('afterprint', clearQrPrintState);
+
+  window.print();
+}
+
 function QRPrintModal({ container, onClose }: { container: Container; onClose: () => void }) {
   const { t } = useTranslation();
   const [tagline, setTagline] = useState(() => t('main.qr.defaultTagline'));
-  const [svgString, setSvgString] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
 
   useEffect(() => {
     const url = `https://app.vowvy.com/container/${container.id}`;
-    QRCode.toString(url, { type: 'svg', width: 200, margin: 1 })
-      .then(setSvgString)
-      .catch(() => {});
+    QRCode.toDataURL(url, { width: 240, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(''));
   }, [container.id]);
+
+  const closeQr = () => {
+    clearQrPrintState();
+    onClose();
+  };
 
   return (
     <div className="qr-print-overlay">
       <div className="qr-print-controls">
-        <button className="qr-btn-print" onClick={() => window.print()}>{t('main.qr.print')}</button>
-        <button className="qr-btn-close" onClick={onClose}>{t('main.qr.close')}</button>
+        <button className="qr-btn-print" disabled={!qrDataUrl} onClick={() => requestQrPrint('vowvy-printing-qr-main')}>
+          {t('main.qr.print')}
+        </button>
+        <button className="qr-btn-close" onClick={closeQr}>{t('main.qr.close')}</button>
       </div>
+
       <div className="qr-print-card">
         <img src={logoMark} alt="Vowvy" className="qr-logo" />
-        {svgString && (
-          <div className="qr-code" dangerouslySetInnerHTML={{ __html: svgString }} />
-        )}
+        <div className="qr-code">
+          {qrDataUrl && <img src={qrDataUrl} alt={`QR code for ${container.name}`} className="qr-code-img" />}
+        </div>
         <div className="qr-container-name">{container.name}</div>
         <div className="qr-location">{container.location}</div>
         <input
@@ -94,6 +140,7 @@ function QRPrintModal({ container, onClose }: { container: Container; onClose: (
     </div>
   );
 }
+
 
 function relativeTime(ts: Timestamp | null): string {
   const t = i18next.t.bind(i18next);
@@ -684,6 +731,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       )
     : activeContainers
   ).filter(c => {
+    if (c.photos.filter(p => !p.deletedAt).length === 0) return false;
     // Hide private containers from collaborators
     if (viewingOwnerUid !== user.uid && c.effectiveIsPrivate) return false;
     return true;
@@ -709,6 +757,31 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     return acc;
   }, {});
   const locationKeys = Object.keys(grouped);
+  const sortLocationByName = (a: Location, b: Location) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+
+  const buildLocationOptions: (parentId?: string | null) => Location[] = (parentId = null) =>
+    [...locations.filter(l => l.parentId === parentId)]
+      .sort(sortLocationByName)
+      .flatMap(loc => [loc, ...buildLocationOptions(loc.id)]);
+
+  const getLocationDepth = (loc: Location): number => {
+    let depth = 0;
+    let current = loc.parentId ? locations.find(l => l.id === loc.parentId) : undefined;
+    while (current) {
+      depth += 1;
+      current = current.parentId ? locations.find(l => l.id === current!.parentId) : undefined;
+    }
+    return depth;
+  };
+
+  const formatLocationOptionLabel = (loc: Location): string => {
+    const depth = getLocationDepth(loc);
+    return depth === 0 ? loc.name : `${'  '.repeat(Math.max(0, depth - 1))}↳ ${loc.name}`;
+  };
+
+  const locationOptions = buildLocationOptions();
+
 
   function openLightbox(c: Container) {
     const activePhotos = c.photos.filter(p => !p.deletedAt).reverse();
@@ -794,21 +867,28 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             onDelete={handleDeleteNote}
           />
           <div className="container-actions">
-                        <button
-              className="card-action-btn"
-              onClick={() => { setRenamingContId(c.id); setRenamingDraft(c.name); }}
-            >
-              Rename
-            </button>
+                                                <button
+                          className="card-action-btn"
+                          onClick={() => {
+                            if (/CriOS/.test(navigator.userAgent)) { setShowIOSModal(true); return; }
+                            setUpdatingContainerId(null);
+                            setContinuousCapture(true);
+                            setCaptureQueue([]);
+                            setCaptureContainerId(c.id);
+                            setCardMoreOpenId(null);
+                          }}
+                          >
+                            {t('main.card.addItems')}
+                        </button>
 <button
-              className="card-action-btn"
+              className="card-action-btn card-action-btn--desktop-only"
               onClick={() => { setPrintContainer(c); setCardMoreOpenId(null); }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="6" width="2" height="2"/><path d="M13 3h8v8h-8V3zm1.5 1.5v5h5v-5h-5z"/><rect x="16" y="6" width="2" height="2"/><path d="M3 13h8v8H3v-8zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="16" width="2" height="2"/><rect x="13" y="13" width="2" height="2"/><rect x="16" y="13" width="2" height="2"/><rect x="19" y="13" width="2" height="2"/><rect x="13" y="16" width="2" height="2"/><rect x="19" y="16" width="2" height="2"/><rect x="13" y="19" width="2" height="2"/><rect x="16" y="19" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/></svg>
               {t('main.card.printQR')}
             </button>
             <button
-              className="card-action-btn"
+              className="card-action-btn card-action-btn--desktop-only"
               onClick={() => setMoveSource({ containerId: c.id, mode: 'container' })}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
@@ -824,25 +904,14 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   ⋯
                 </button>
                 {cardMoreOpenId === c.id && (
-                  <div className="card-more-dropdown">
-                    <button
-                      className="card-more-item"
-                      onClick={() => {
-                        setContinuousCapture(false);
-                        setCaptureContainerId(null);
-                        if (/CriOS/.test(navigator.userAgent)) { setShowIOSModal(true); return; }
-                        setUpdatingContainerId(c.id);
-                        updatePhotoInputRef.current?.click();
-                        setCardMoreOpenId(null);
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-                      {t('main.card.addItems')}
-                    </button>
+                                    <div className="card-more-dropdown">
+                    <button className="card-more-item card-more-item--mobile-only" onClick={() => { setMoveSource({ containerId: c.id, mode: 'container' }); setCardMoreOpenId(null); }}>{t('main.card.moveBox')}</button>
                     <button className="card-more-item" onClick={() => { setSellContainer(c); setSellSourcePhotos(photoMatchMap.get(c.id) ?? null); setSellSourceContainerIds(null); setSellIsFromTray(false); setCardMoreOpenId(null); }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
                       Sell this
                     </button>
+                    <button className="card-more-item" onClick={() => { setRenamingContId(c.id); setRenamingDraft(c.name); setCardMoreOpenId(null); }}>Rename</button>
+                    <button className="card-more-item card-more-item--mobile-only" onClick={() => { setPrintContainer(c); setCardMoreOpenId(null); }}>{t('main.card.printQR')}</button>
                   </div>
                 )}
               </div>
@@ -1147,33 +1216,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               }}
             >
               <option value="">{t('main.capture.selectLocation')}</option>
-              {(() => {
-                const rootIds = locations.filter(l => !l.parentId).map(l => l.id);
-                return rootIds.map(rootId => {
-                  const root = locations.find(l => l.id === rootId)!;
-                  const children = locations.filter(l => {
-                    let curr: any = l;
-                    while (curr && curr.parentId) {
-                      if (curr.parentId === rootId) return true;
-                      curr = locations.find(loc => loc.id === curr.parentId);
-                    }
-                    return false;
-                  });
-                  if (children.length === 0) {
-                    return <option key={root.id} value={root.id}>{root.name}</option>;
-                  }
-                  return (
-                    <optgroup key={root.id} label={root.name}>
-                      <option value={root.id}>{root.name}</option>
-                      {children.map(child => (
-                        <option key={child.id} value={child.id}>
-                          {getLocationPath(child.id, locations).split(' › ').slice(1).join(' › ')}
-                        </option>
-                      ))}
-                    </optgroup>
-                  );
-                });
-              })()}
+              {locationOptions.map(loc => (
+                <option key={loc.id} value={loc.id}>
+                  {formatLocationOptionLabel(loc)}
+                </option>
+              ))}
               <option value="new">{t('main.capture.addNewLocation')}</option>
             </select>
 
@@ -1215,9 +1262,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     onChange={e => setSelectedParentId(e.target.value || null)}
                   >
                     <option value="">{t('main.capture.topLevel')}</option>
-                    {locations.map(loc => (
+                    {locationOptions.map(loc => (
                       <option key={loc.id} value={loc.id}>
-                        {t('main.capture.insideLocation', { name: getLocationPath(loc.id, locations) })}
+                        {t('main.capture.insideLocation', { name: formatLocationOptionLabel(loc) })}
                       </option>
                     ))}
                   </select>
@@ -1846,15 +1893,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                           const rootIds = locations.filter(l => !l.parentId).map(l => l.id);
                           return rootIds.map(rootId => {
                             const root = locations.find(l => l.id === rootId)!;
-                            const children = locations.filter(l => {
-                              let curr: any = l;
-                              while (curr && curr.parentId) {
-                                if (curr.parentId === rootId) return true;
-                                curr = locations.find(loc => loc.id === curr.parentId);
-                              }
-                              return false;
-                            });
-                            const locsToRender = [root, ...children];
+                                                        const sortSubtree = (pid: string): (typeof locations[number])[] =>
+                              [...locations.filter(l => l.parentId === pid)]
+                                .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+                                .flatMap(k => [k, ...sortSubtree(k.id)]);
+                            const locsToRender = [root, ...sortSubtree(rootId)];
                             return locsToRender.map(loc => (
                               <button
                                 key={loc.id}
