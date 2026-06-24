@@ -162,7 +162,8 @@ function getLocationDescendantsSorted(parentId: string, locations: Location[]): 
 }
 
 function LocationQRModal({ location, locations, onClose }: { location: Location; locations: Location[]; onClose: () => void }) {
-  const [tagline, setTagline] = useState('Location QR');
+  const { t } = useTranslation();
+  const [tagline, setTagline] = useState(() => t('main.qr.locationTagline'));
   const [qrDataUrl, setQrDataUrl] = useState('');
 
   useEffect(() => {
@@ -182,9 +183,9 @@ function LocationQRModal({ location, locations, onClose }: { location: Location;
     <div className="qr-print-overlay">
       <div className="qr-print-controls">
         <button className="qr-btn-print" disabled={!qrDataUrl} onClick={() => requestQrPrint('vowvy-printing-qr-manage')}>
-          Print QR
+          {t('main.qr.print')}
         </button>
-        <button className="qr-btn-close" onClick={closeQr}>Close</button>
+        <button className="qr-btn-close" onClick={closeQr}>{t('main.qr.close')}</button>
       </div>
 
       <div className="qr-print-printable">
@@ -207,6 +208,7 @@ function LocationQRModal({ location, locations, onClose }: { location: Location;
 }
 
 function LocationQRSetModal({ parent, locations, onClose }: { parent: Location; locations: Location[]; onClose: () => void }) {
+  const { t } = useTranslation();
   const [cards, setCards] = useState<{ location: Location; path: string; qrDataUrl: string }[]>([]);
 
   useEffect(() => {
@@ -240,9 +242,9 @@ function LocationQRSetModal({ parent, locations, onClose }: { parent: Location; 
     <div className="qr-print-overlay qr-print-overlay--set">
       <div className="qr-print-controls">
         <button className="qr-btn-print" disabled={cards.length === 0 || cards.some(card => !card.qrDataUrl)} onClick={() => requestQrPrint('vowvy-printing-qr-manage')}>
-          Print QR
+          {t('main.qr.print')}
         </button>
-        <button className="qr-btn-close" onClick={closeQr}>Close</button>
+        <button className="qr-btn-close" onClick={closeQr}>{t('main.qr.close')}</button>
       </div>
 
       <div className="qr-print-printable qr-print-set">
@@ -272,6 +274,7 @@ function LocationQRSetModal({ parent, locations, onClose }: { parent: Location; 
 
 
 function ContainerQRSetModal({ parent, containers, locations, onClose }: { parent: Location; containers: Container[]; locations: Location[]; onClose: () => void }) {
+  const { t } = useTranslation();
   const [cards, setCards] = useState<{ container: Container; locationPath: string; qrDataUrl: string }[]>([]);
 
   useEffect(() => {
@@ -306,9 +309,9 @@ function ContainerQRSetModal({ parent, containers, locations, onClose }: { paren
     <div className="qr-print-overlay qr-print-overlay--set">
       <div className="qr-print-controls">
         <button className="qr-btn-print" disabled={containers.length === 0 || cards.length !== containers.length || cards.some(card => !card.qrDataUrl)} onClick={() => requestQrPrint('vowvy-printing-qr-manage')}>
-          Print QR
+          {t('main.qr.print')}
         </button>
-        <button className="qr-btn-close" onClick={closeQr}>Close</button>
+        <button className="qr-btn-close" onClick={closeQr}>{t('main.qr.close')}</button>
       </div>
 
       <div className="qr-print-printable qr-print-set">
@@ -356,6 +359,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
   const [printQrContainerSet, setPrintQrContainerSet] = useState<Location | null>(null);
   const [mobileActionMenuId, setMobileActionMenuId] = useState<string | null>(null);
   const [newTopLevelName, setNewTopLevelName]           = useState('');
+  const [newTopLevelParentId, setNewTopLevelParentId] = useState<string | null>(null);
   const [movingId, setMovingId]                         = useState<string | null>(null);
   const [healthOpen, setHealthOpen]                     = useState(false);
   const [menuOpenId, setMenuOpenId]                     = useState<string | null>(null);
@@ -568,18 +572,6 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
               <button className="manage-btn save" onClick={() => renameLocation(loc.id, editingName)}>{t('shared.save')}</button>
             ) : (
               <>
-                <button className="manage-btn edit" onClick={() => { setEditingId(loc.id); setEditingName(loc.name); }}>{t('manage.rename')}</button>
-                <button className="manage-btn" onClick={() => setPrintQrLocation(loc)}>Print QR</button>
-                {children.length > 0 && (
-                  <button className="manage-btn manage-btn--desktop-only" onClick={() => setPrintQrLocationSet(loc)}>Print child QRs</button>
-                )}
-                {containerSet.length > 0 && (
-                  <button className="manage-btn manage-btn--desktop-only" onClick={() => setPrintQrContainerSet(loc)}>Print container QRs</button>
-                )}
-                <button className="manage-btn edit manage-btn--desktop-only" onClick={() => {
-                  setMovingId(movingId === loc.id ? null : loc.id);
-                }}>{t('main.move.containerTitle').split(' ')[0]}</button>
-                <button className="manage-btn delete manage-btn--desktop-only" onClick={() => deleteLocation(loc.id)}>{t('manage.delete')}</button>
                 <button
                   className={`loc-lock-btn manage-btn--desktop-only${loc.effectiveIsPrivate ? ' is-private' : ''}${loc.visibility === 'inherit' ? ' is-inherit' : ''}`}
                   aria-label={lockAriaLabel}
@@ -625,18 +617,23 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                     </div>
                   )}
                 </div>
-                <button className="manage-btn add manage-btn--desktop-only" onClick={() => {
+                <button className="manage-btn add" onClick={() => {
                   setAddingUnder(loc.id);
                   setNewSubName('');
                   setExpandedIds(prev => new Set([...prev, loc.id]));
                 }}>{t('manage.addSubLocation')}</button>
-                <button className="manage-btn add manage-btn--desktop-only" onClick={() => {
+                <button className="manage-btn add" onClick={() => {
                   setAddingContainerUnder(loc.id);
                   setNewContainerName('');
                   setExpandedIds(prev => new Set([...prev, loc.id]));
                 }}>{t('manage.addContainer')}</button>
 
-                <div className="manage-more-wrap manage-more-wrap--mobile">
+                {/* LOCATION ROW INVARIANT: Every location row must ALWAYS expose:
+                    Rename, Move/re-parent, Print QR, Add sub-location, Add container.
+                    This applies to Home, rooms, Bronco, Jeep, and every location type.
+                    Vehicles are locations. Do NOT re-add manage-more-wrap--mobile here;
+                    that class hides the entire action menu on desktop (display:none). */}
+                <div className="manage-more-wrap" style={{ position: 'relative' }}>
                   <button
                     className="manage-more-trigger"
                     aria-label="More location actions"
@@ -657,9 +654,28 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                           Print container QRs
                         </button>
                       )}
+                  <button className="manage-more-item" role="menuitem" onClick={() => { setEditingId(loc.id); setEditingName(loc.name); setMobileActionMenuId(null); }}>
+                    {t('manage.rename')}
+                  </button>
+                  <button className="manage-more-item" role="menuitem" onClick={() => { setPrintQrLocation(loc); setMobileActionMenuId(null); }}>
+                    {t('main.card.printQR')}
+                  </button>
+                  {children.length > 0 && (
+                    <button className="manage-more-item" role="menuitem" onClick={() => { setPrintQrLocationSet(loc); setMobileActionMenuId(null); }}>
+                      {t('manage.printChildQRs')}
+                    </button>
+                  )}
+                  {containerSet.length > 0 && (
+                    <button className="manage-more-item" role="menuitem" onClick={() => { setPrintQrContainerSet(loc); setMobileActionMenuId(null); }}>
+                      {t('manage.printContainerQRs')}
+                    </button>
+                  )}
                       <button className="manage-more-item" role="menuitem" onClick={() => { setMovingId(movingId === loc.id ? null : loc.id); setMobileActionMenuId(null); }}>
-                        {t('main.move.containerTitle').split(' ')[0]}
+                        {t('manage.move')}
                       </button>
+                  <button className="manage-more-item danger" role="menuitem" onClick={() => { setMobileActionMenuId(null); deleteLocation(loc.id); }}>
+                    {t('manage.delete')}
+                  </button>
                       <button className="manage-more-item" role="menuitem" onClick={() => {
                         setAddingUnder(loc.id);
                         setNewSubName('');
@@ -829,8 +845,8 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
           ) : (
             <>
             {movingContId !== c.id && <button className="manage-btn edit" onClick={() => { setEditingId(c.id); setEditingName(c.name); }}>{t('manage.rename')}</button>}
-            {movingContId !== c.id && <button className="manage-btn" onClick={() => setPrintQrContainer(c)}>Print QR</button>}
-            <button className="manage-btn manage-btn--desktop-only" onClick={() => setMovingContId(movingContId === c.id ? null : c.id)}>Move</button>
+            {movingContId !== c.id && <button className="manage-btn" onClick={() => setPrintQrContainer(c)}>{t('main.card.printQR')}</button>}
+            <button className="manage-btn manage-btn--desktop-only" onClick={() => setMovingContId(movingContId === c.id ? null : c.id)}>{t('manage.move')}</button>
             {movingContId === c.id && (
               <>
                 <select style={{marginTop:'4px',width:'100%'}} defaultValue="" onChange={async e => { if (e.target.value) await moveContainerToLoc(c.id, e.target.value); }}>
@@ -840,7 +856,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                 <button className="manage-btn" onClick={() => setMovingContId(null)}>Cancel</button>
               </>
             )}
-            {movingContId !== c.id && <button className="manage-btn manage-btn--desktop-only" onClick={() => deleteContainer(c)}>Remove</button>}
+            {movingContId !== c.id && <button className="manage-btn manage-btn--desktop-only" onClick={() => deleteContainer(c)}>{t('manage.delete')}</button>}
             <div className="manage-more-wrap manage-more-wrap--mobile">
               <button
                 className="manage-more-trigger"
@@ -853,10 +869,10 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
               {mobileActionMenuId === `container-${c.id}` && (
                 <div className="manage-more-dropdown" role="menu">
                   <button className="manage-more-item" role="menuitem" onClick={() => { setMovingContId(movingContId === c.id ? null : c.id); setMobileActionMenuId(null); }}>
-                    Move
+                    {t('manage.move')}
                   </button>
                   <button className="manage-more-item danger" role="menuitem" onClick={() => { setMobileActionMenuId(null); deleteContainer(c); }}>
-                    Remove
+                    {t('manage.delete')}
                   </button>
                 </div>
               )}
@@ -934,28 +950,51 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
           </div>
         )}
         {addingTopLevel && (
-          <div className="manage-add-row">
-            <input
-              autoFocus
-              className="manage-input"
-              placeholder={t('manage.locationPlaceholder')}
-              value={newTopLevelName}
-              onChange={e => setNewTopLevelName(e.target.value)}
-              onKeyDown={async e => {
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div className="manage-add-row">
+              <input
+                autoFocus
+                className="manage-input"
+                placeholder={t('manage.locationPlaceholder')}
+                value={newTopLevelName}
+                onChange={(e) => setNewTopLevelName(e.target.value)}
+                onKeyDown={async e => {
                 if (e.key === 'Enter' && newTopLevelName.trim()) {
-                  await createLocation(user.uid, newTopLevelName.trim(), null);
+                  await createLocation(user.uid, newTopLevelName.trim(), newTopLevelParentId);
                   setAddingTopLevel(false);
                   setNewTopLevelName('');
+                  setNewTopLevelParentId(null);
                 }
-                if (e.key === 'Escape') { setAddingTopLevel(false); setNewTopLevelName(''); }
-              }}
-            />
-            <button className="manage-btn save" onClick={async () => {
-              if (!newTopLevelName.trim()) return;
-              await createLocation(user.uid, newTopLevelName.trim(), null);
-              setAddingTopLevel(false);
-              setNewTopLevelName('');
-            }}>{t('main.capture.add')}</button>
+                if (e.key === 'Escape') { setAddingTopLevel(false); setNewTopLevelName(''); setNewTopLevelParentId(null); }
+                }}
+              />
+              <button className="manage-btn save" onClick={async () => {
+                if (!newTopLevelName.trim()) return;
+                await createLocation(user.uid, newTopLevelName.trim(), newTopLevelParentId);
+                setAddingTopLevel(false);
+                setNewTopLevelName('');
+                setNewTopLevelParentId(null);
+              }}>{t('main.capture.add')}</button>
+            </div>
+            {locations.length > 0 && (
+              <select
+                className="manage-input"
+                value={newTopLevelParentId ?? ''}
+                onChange={(e) => setNewTopLevelParentId(e.target.value || null)}
+              >
+                <option value="">{t('manage.topLevel')}</option>
+                {[...locations]
+                  .sort((a, b) =>
+                    getLocationPath(a.id, locations).localeCompare(
+                      getLocationPath(b.id, locations), undefined, { numeric: true, sensitivity: 'base' }
+                    )
+                  )
+                  .map(l => (
+                    <option key={l.id} value={l.id}>{getLocationPath(l.id, locations)}</option>
+                  ))
+                }
+              </select>
+            )}
           </div>
         )}
 
