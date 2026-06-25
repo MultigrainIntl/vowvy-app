@@ -22,7 +22,8 @@ export interface PhotoItem {
   aiTags?: string[];
   aiObjects?: string[];
   aiStatus?: 'processing' | 'done' | 'error';
-}
+  aiError?: string | null;
+  aiRetryRequestedAt?: number;}
 
 export interface ContainerNote {
   id: string;
