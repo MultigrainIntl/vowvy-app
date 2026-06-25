@@ -644,16 +644,6 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                   >☰</button>
                   {mobileActionMenuId === `loc-${loc.id}` && (
                     <div className="manage-more-dropdown" role="menu">
-                      {children.length > 0 && (
-                        <button className="manage-more-item" role="menuitem" onClick={() => { setPrintQrLocationSet(loc); setMobileActionMenuId(null); }}>
-                          Print child QRs
-                        </button>
-                      )}
-                      {containerSet.length > 0 && (
-                        <button className="manage-more-item" role="menuitem" onClick={() => { setPrintQrContainerSet(loc); setMobileActionMenuId(null); }}>
-                          Print container QRs
-                        </button>
-                      )}
                   <button className="manage-more-item" role="menuitem" onClick={() => { setEditingId(loc.id); setEditingName(loc.name); setMobileActionMenuId(null); }}>
                     {t('manage.rename')}
                   </button>
@@ -703,9 +693,6 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                           {v === 'inherit' ? t('manage.followParent') : v === 'private' ? t('manage.hideFromHelpers') : t('manage.showToHelpers')}
                         </button>
                       ))}
-                      <button className="manage-more-item danger" role="menuitem" onClick={() => { setMobileActionMenuId(null); deleteLocation(loc.id); }}>
-                        {t('manage.delete')}
-                      </button>
                     </div>
                   )}
                 </div>
@@ -716,7 +703,6 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
 
         {movingId === loc.id && (() => {
           const blocked = getDescendantIds(loc.id, locations);
-          const eligible = locations.filter(l => l.id !== loc.id && !blocked.has(l.id));
           return (
             <div className="manage-add-row" style={{ marginLeft: 20 }}>
               <select
@@ -726,9 +712,27 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                 onChange={e => moveLocation(loc.id, e.target.value === '' ? null : e.target.value)}
               >
                 <option value="">{t('manage.topLevel')}</option>
-                {eligible.map(l => (
-                  <option key={l.id} value={l.id}>{getLocationPath(l.id, locations)}</option>
-                ))}
+                {(() => {
+                  // Tree-ordered re-parent options: DFS via getSortedLocationChildren,
+                  // depth-based visual indentation with branch chars. Cycle prevention
+                  // (blocked set from getDescendantIds) is preserved throughout.
+                  const opts: React.ReactElement[] = [];
+                  const visit = (parentId: string | null, depth: number) => {
+                    for (const l of getSortedLocationChildren(parentId, locations)) {
+                      if (l.id === loc.id || blocked.has(l.id)) continue;
+                      const sibs = getSortedLocationChildren(parentId, locations)
+                        .filter(s => s.id !== loc.id && !blocked.has(s.id));
+                      const isLast = sibs.length > 0 && sibs[sibs.length - 1].id === l.id;
+                      const gap = '  ';
+                      const prefix = gap.repeat(depth);
+                      const branch = depth === 0 ? '' : (isLast ? '└ ' : '├ ');
+                      opts.push(<option key={l.id} value={l.id}>{prefix}{branch}{l.name}</option>);
+                      visit(l.id, depth + 1);
+                    }
+                  };
+                  visit(null, 0);
+                  return opts;
+                })()}
               </select>
               <button className="manage-btn" onClick={() => setMovingId(null)}>{t('manage.cancel')}</button>
             </div>
@@ -851,7 +855,25 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
               <>
                 <select style={{marginTop:'4px',width:'100%'}} defaultValue="" onChange={async e => { if (e.target.value) await moveContainerToLoc(c.id, e.target.value); }}>
                   <option value="" disabled>Pick location…</option>
-                  {locations.map(loc => <option key={loc.id} value={loc.id}>{getLocationPath(loc.id, locations)}</option>)}
+                  {(() => {
+                    // Container move destination: DFS tree via getSortedLocationChildren.
+                    // Shows all locations in true parent-child order with depth indentation.
+                    // No cycle filtering needed (container can move to any location).
+                    const opts: React.ReactElement[] = [];
+                    const visit = (parentId: string | null, depth: number) => {
+                      const sibs = getSortedLocationChildren(parentId, locations);
+                      for (const l of sibs) {
+                        const isLast = sibs[sibs.length - 1]?.id === l.id;
+                        const gap = '  ';
+                        const prefix = gap.repeat(depth);
+                        const branch = depth === 0 ? '' : (isLast ? '└ ' : '├ ');
+                        opts.push(<option key={l.id} value={l.id}>{prefix}{branch}{l.name}</option>);
+                        visit(l.id, depth + 1);
+                      }
+                    };
+                    visit(null, 0);
+                    return opts;
+                  })()}
                 </select>
                 <button className="manage-btn" onClick={() => setMovingContId(null)}>Cancel</button>
               </>
