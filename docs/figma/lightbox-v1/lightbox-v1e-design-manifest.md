@@ -28,8 +28,8 @@ This frame is the canonical reference for the More bottom sheet layout.
 |---|---|---|
 | Edit Description State — v1 | `Edit Description State — v1.png` | ✅ Present |
 | Privacy Compact State — v1 | `Privacy Compact State — v1.png` | ✅ Present |
-| Collaborator Restricted State — v1 | `Collaborator Restricted State — v1.png` | ⚠️ Not uploaded to this branch |
-| Safe Error State — v1 | `Safe Error State — v1.png` | ⚠️ Not uploaded to this branch |
+| Collaborator Restricted State — v1 | `Collaborator Restricted State — v1.png` | ✅ Present |
+| Safe Error State — v1 | `Safe Error State — v1.png` | ✅ Present |
 
 > **Note:** `Current Mobile Lightbox — Reference.png` was part of the earlier reference package but is not required for this implementation gate and is not included in this upload.
 
