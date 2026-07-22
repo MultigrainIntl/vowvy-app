@@ -1851,3 +1851,12 @@
 /* Processing feedback */
 .lightbox-ai-processing { font-size: 14px; color: rgba(255,255,255,0.85); margin: 0 0 4px 0; font-style: normal; }
 .lightbox-ai-processing-detail { font-size: 12px; color: rgba(255,255,255,0.5); margin: 0; font-style: italic; }
+
+/* Rename modal */
+.rename-modal-backdrop { position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px; }
+.rename-modal { background:#fff;border-radius:12px;padding:20px;min-width:260px;max-width:340px;width:100%; }
+.rename-modal p { margin:0 0 10px;font-size:14px;font-weight:600; }
+.rename-modal-input { width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:14px;box-sizing:border-box;margin-bottom:12px; }
+.rename-modal-btns { display:flex;gap:8px;justify-content:flex-end; }
+.rename-modal-save { background:#b85c38;color:#fff;border:none;padding:7px 16px;border-radius:6px;cursor:pointer; }
+.rename-modal-cancel { background:none;border:1px solid #ccc;padding:7px 16px;border-radius:6px;cursor:pointer; }

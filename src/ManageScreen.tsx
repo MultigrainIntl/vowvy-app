@@ -62,6 +62,11 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
   const [movingId, setMovingId]                         = useState<string | null>(null);
   const [healthOpen, setHealthOpen]                     = useState(false);
   const [menuOpenId, setMenuOpenId]                     = useState<string | null>(null);
+  const [movingContainerId, setMovingContainerId] = useState<string | null>(null);
+  const [moveDestLocId, setMoveDestLocId] = useState('');
+  const [containerQrId, setContainerQrId] = useState<string | null>(null);
+  const [containerQrSvg, setContainerQrSvg] = useState<string | null>(null);
+  const [confirmDelContainerId, setConfirmDelContainerId] = useState<string | null>(null);
 
   useEffect(() => subscribeToLocations(user.uid, setLocations), [user.uid]);
 
@@ -296,6 +301,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                   ))}
                 </div>
               )}
+
             </div>
             <button className="manage-btn add" onClick={() => {
               setAddingUnder(loc.id);
@@ -409,7 +415,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
               </div>
             )}
             {children.map(child => renderLocation(child, depth + 1))}
-            {containersHere.map(c => renderContainer(c))}
+            {[...containersHere].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})).map(c => renderContainer(c))}
           </div>
         )}
       </div>
@@ -436,14 +442,38 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
           <span className="manage-name">{c.name}</span>
         )}
         <div className="manage-actions">
-          {isEditing ? (
-            <button className="manage-btn save" onClick={() => renameContainer(c.id, editingName)}>{t('shared.save')}</button>
-          ) : (
-            <button className="manage-btn edit" onClick={() => { setEditingId(c.id); setEditingName(c.name); }}>{t('manage.rename')}</button>
-          )}
-        </div>
+              {isEditing ? (
+                <button className="manage-btn save" onClick={() => renameContainer(c.id, editingName)}>{t('shared.save')}</button>
+              ) : (
+                <button className="manage-btn edit" onClick={() => { setEditingId(c.id); setEditingName(c.name); }}>{t('manage.rename')}</button>
+              )}
+              {!isEditing && (
+                <>
+                  <button className="manage-btn" onClick={() => { setMovingContainerId(c.id); setMoveDestLocId(c.locationId || ''); }}>{t('manage.move') ?? 'Move'}</button>
+                  <button className="manage-btn" onClick={() => openContainerQr(c.id)}>{t('manage.printQr') ?? 'Print QR'}</button>
+                  <button className="manage-btn manage-btn-del" onClick={() => setConfirmDelContainerId(c.id)}>{t('manage.delete') ?? 'Delete'}</button>
+                </>
+              )}
+            </div>
       </div>
     );
+  }
+
+  async function moveContainer(id: string, locId: string) {
+    if (!locId) return;
+    await updateDoc(doc(db, `users/${user.uid}/containers/${id}`), { locationId: locId });
+    setMovingContainerId(null);
+  }
+
+  async function deleteContainer(id: string) {
+    await updateDoc(doc(db, `users/${user.uid}/containers/${id}`), { deletedAt: Date.now() });
+    setConfirmDelContainerId(null);
+  }
+
+  function openContainerQr(id: string) {
+    QRCode.toString(`https://app.vowvy.com/container/${id}`, { type: 'svg', width: 200, margin: 1 })
+      .then(svg => { setContainerQrSvg(svg); setContainerQrId(id); })
+      .catch(() => {});
   }
 
   const topLevel = getLocationChildren(null, locations);
@@ -544,10 +574,47 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
         {unassigned.length > 0 && (
           <div className="manage-section">
             <h3 className="manage-subtitle">{t('manage.unassigned')}</h3>
-            {unassigned.map(c => renderContainer(c))}
+            {[...unassigned].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})).map(c => renderContainer(c))}
           </div>
         )}
       </div>
+      {movingContainerId && (
+        <div className="manage-modal-backdrop" onClick={() => setMovingContainerId(null)}>
+          <div className="manage-modal" onClick={e => e.stopPropagation()}>
+            <p><strong>Move container</strong></p>
+            <select value={moveDestLocId} onChange={e => setMoveDestLocId(e.target.value)} className="manage-select">
+              <option value="">-- Select location --</option>
+              {locations.filter((l:any)=>!l.deletedAt).map((l:any) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <div className="manage-modal-btns">
+              <button className="manage-btn save" onClick={() => moveContainer(movingContainerId, moveDestLocId)}>{t('shared.save')}</button>
+              <button className="manage-btn" onClick={() => setMovingContainerId(null)}>{t('shared.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {containerQrId && containerQrSvg && (
+        <div className="manage-modal-backdrop" onClick={() => { setContainerQrId(null); setContainerQrSvg(null); }}>
+          <div className="manage-modal" onClick={e => e.stopPropagation()}>
+            <div dangerouslySetInnerHTML={{ __html: containerQrSvg }} />
+            <div className="manage-modal-btns">
+              <button className="manage-btn save" onClick={() => window.print()}>Print QR</button>
+              <button className="manage-btn" onClick={() => { setContainerQrId(null); setContainerQrSvg(null); }}>{t('shared.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmDelContainerId && (
+        <div className="manage-modal-backdrop" onClick={() => setConfirmDelContainerId(null)}>
+          <div className="manage-modal" onClick={e => e.stopPropagation()}>
+            <p>Remove this container? Photos preserved.</p>
+            <div className="manage-modal-btns">
+              <button className="manage-btn manage-btn-del" onClick={() => deleteContainer(confirmDelContainerId)}>Remove</button>
+              <button className="manage-btn" onClick={() => setConfirmDelContainerId(null)}>{t('shared.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

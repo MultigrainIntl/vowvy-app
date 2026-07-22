@@ -100,7 +100,7 @@ export default function ContainerScreen({ user, containerId }: Props) {
     );
     try {
       await updateDoc(doc(db, `users/${user.uid}/containers/${containerId}`), {
-        photos: updatedPhotos,
+        photos: arrayUnion(photoItem),
       });
     } catch { return; }
     const remaining = activePhotos.length - 1;
@@ -123,12 +123,13 @@ export default function ContainerScreen({ user, containerId }: Props) {
   }
 
   async function handleAddPhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
+    const fileList = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!file || !auth.currentUser) return;
+    if (fileList.length === 0 || !auth.currentUser) return;
     setAdding(true);
     try {
       await auth.currentUser.getIdToken(true);
+      for (const file of fileList) {
       const compressed = await imageCompression(file, {
         maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: false, maxSizeMB: 0.5,
       });
@@ -136,13 +137,13 @@ export default function ContainerScreen({ user, containerId }: Props) {
       await uploadBytes(ref(storage, storagePath), compressed);
       const photoUrl  = await getDownloadURL(ref(storage, storagePath));
       const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
-      const updatedPhotos = [...(container?.photos ?? []), photoItem];
       await updateDoc(doc(db, `users/${user.uid}/containers/${containerId}`), {
         photos: updatedPhotos,
         photoUrls: arrayUnion(photoUrl),
         photoStoragePaths: arrayUnion(storagePath),
       });
-    } catch (e: any) {
+    }
+  } catch (e: any) {
       console.error('Add photo failed:', e?.message ?? e);
     } finally {
       setAdding(false);
@@ -176,7 +177,7 @@ export default function ContainerScreen({ user, containerId }: Props) {
           <div className="cs-photos">
             {activePhotos.map((photo, i) => (
               <div key={photo.id} className="cs-photo-wrap" onClick={() => { setLbIndex(i); setLbOpen(true); }}>
-                <ThumbImage storagePath={photo.storagePath} alt={`${t('main.card.addPhoto')} ${i + 1}`} />
+                <ThumbImage storagePath={photo.storagePath} alt={`${t('containerScreen.addPhotos')} ${i + 1}`} />
               </div>
             ))}
           </div>
@@ -188,9 +189,9 @@ export default function ContainerScreen({ user, containerId }: Props) {
             disabled={adding}
             onClick={() => updatePhotoInputRef.current?.click()}
           >
-            {adding ? t('containerScreen.adding') : t('main.card.addPhoto')}
+            {adding ? t('containerScreen.adding') : t('containerScreen.addPhotos')}
           </button>
-          <input type="file" ref={updatePhotoInputRef} className="photo-input-hidden" onChange={handleAddPhoto} />
+          <input type="file" ref={updatePhotoInputRef} className="photo-input-hidden" accept="image/*" multiple onChange={handleAddPhoto} />
         </div>
 
         {container.aiStatus === 'processing' && (
@@ -222,7 +223,7 @@ export default function ContainerScreen({ user, containerId }: Props) {
             <button className="cs-lb-close" onClick={() => setLbOpen(false)}>✕</button>
           </div>
           <div className="cs-lb-img" onClick={e => e.stopPropagation()}>
-            <ThumbImage storagePath={activePhotos[lbIndex].storagePath} alt={`${t('main.card.addPhoto')} ${lbIndex + 1}`} />
+            <ThumbImage storagePath={activePhotos[lbIndex].storagePath} alt={`${t('containerScreen.addPhotos')} ${lbIndex + 1}`} />
           </div>
           {activePhotos.length > 1 && (
             <div className="cs-lb-nav" onClick={e => e.stopPropagation()}>

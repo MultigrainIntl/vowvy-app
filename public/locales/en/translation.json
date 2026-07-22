@@ -101,7 +101,8 @@
   "shared": {
     "addNote": "Add a note…",
     "save": "Save",
-    "back": "← Back"
+    "back": "← Back",
+    "cancel": "Cancel"
   },
   "main": {
     "header": {
@@ -381,7 +382,8 @@
     "notFound": "Container not found.",
     "loading": "Loading…",
     "adding": "Adding…",
-    "analyzingContents": "Analyzing contents…"
+    "analyzingContents": "Analyzing contents…",
+    "addPhotos": "Add photos"
   },
   "manage": {
     "title": "Manage Locations",
@@ -415,7 +417,9 @@
     "unassigned": "Unassigned containers",
     "deleteLocationAlert": "You can’t delete “{{name}}” because it has sub-locations. Move or delete its sub-locations first.",
     "deleteLocationConfirm": "Delete this location? Containers inside it will become unassigned.",
-    "privacyUpdateConfirm": "This will update privacy for this location, child locations, and containers inside it. Continue?"
+    "privacyUpdateConfirm": "This will update privacy for this location, child locations, and containers inside it. Continue?",
+    "move": "Move",
+    "printQr": "Print QR"
   },
   "profile": {
     "title": "Profile",

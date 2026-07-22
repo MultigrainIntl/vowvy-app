@@ -844,6 +844,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     </button>
                   </div>
                 )}
+                <button className="card-more-item" onClick={() => { setRenamingContainerId(c.id); setRenamingDraft(c.name); setCardMoreOpenId(null); }}>
+                  {t('manage.rename')}
+                </button>
               </div>
             )}
           </div>
@@ -1641,6 +1644,18 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         <QRPrintModal container={printContainer} onClose={() => setPrintContainer(null)} />
       )}
 
+      {renamingContainerId && (
+        <div className="rename-modal-backdrop" onClick={() => setRenamingContainerId(null)}>
+          <div className="rename-modal" onClick={e => e.stopPropagation()}>
+            <p>{t('manage.rename')}:</p>
+            <input className="rename-modal-input" value={renamingDraft} onChange={e => setRenamingDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleRenameContainer(renamingContainerId, renamingDraft); if (e.key === 'Escape') setRenamingContainerId(null); }} autoFocus />
+            <div className="rename-modal-btns">
+              <button className="rename-modal-save" onClick={() => handleRenameContainer(renamingContainerId, renamingDraft)}>{t('shared.save')}</button>
+              <button className="rename-modal-cancel" onClick={() => setRenamingContainerId(null)}>{t('shared.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {showIOSModal && (
         <div className="ios-modal-backdrop" onClick={() => setShowIOSModal(false)}>
           <div className="ios-modal" onClick={e => e.stopPropagation()}>
