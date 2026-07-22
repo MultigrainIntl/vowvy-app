@@ -8,6 +8,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(ownerUid)/collaborators/$(callerUid)).data.status == 'active';
     }
 
+    function isSharedLocation(ownerUid, locationId) {
+      return locationId is string
+        && exists(/databases/$(database)/documents/users/$(ownerUid)/locations/$(locationId))
+        && get(/databases/$(database)/documents/users/$(ownerUid)/locations/$(locationId)).data.effectiveIsPrivate == false;
+    }
+
     // Owner profile document — stores onboardingCompleted / onboardingSkipped.
     // Not covered by the {document=**} wildcard below (which requires ≥1 segment after userId).
     match /users/{userId} {
@@ -24,9 +30,17 @@ service cloud.firestore {
       allow read: if request.auth != null
         && isActiveCollaborator(userId, request.auth.uid)
         && resource.data.effectiveIsPrivate != true;
-      allow write: if request.auth != null
+      allow create: if request.auth != null
         && isActiveCollaborator(userId, request.auth.uid)
-        && resource.data.effectiveIsPrivate != true;
+        && request.resource.data.effectiveIsPrivate == false
+        && isSharedLocation(userId, request.resource.data.locationId);
+      allow update: if request.auth != null
+        && isActiveCollaborator(userId, request.auth.uid)
+        && resource.data.effectiveIsPrivate == false
+        && request.resource.data.effectiveIsPrivate == false;
+      allow delete: if request.auth != null
+        && isActiveCollaborator(userId, request.auth.uid)
+        && resource.data.effectiveIsPrivate == false;
     }
 
     match /users/{userId}/containers/{containerId}/{sub=**} {

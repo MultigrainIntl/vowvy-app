@@ -15,6 +15,7 @@ import {
   getLocationChildren, getLocationPath, getDescendantIds,
   getLocationHealthIssues, type Location, type Visibility,
 } from './locations';
+import { buildEmptyContainerData } from './collaboration';
 import logoMark from './assets/logo-mark.svg';
 import './ManageScreen.css';
 
@@ -778,19 +779,13 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                   onKeyDown={async e => {
                     if (e.key === 'Enter' && newContainerName.trim()) {
                       const containerRef = doc(collection(db, `users/${user.uid}/containers`));
-                      await setDoc(containerRef, {
-                        name: newContainerName.trim(),
-                        locationId: loc.id,
-                        location: getLocationPath(loc.id, locations),
-                        photos: [],
-                        photoUrls: [],
-                        photoStoragePaths: [],
-                        createdAt: serverTimestamp(),
-                        deletedAt: null,
-                        isPrivate: loc.effectiveIsPrivate,
-                        visibility: 'inherit',
-                        effectiveIsPrivate: loc.effectiveIsPrivate,
-                      });
+                      await setDoc(containerRef, buildEmptyContainerData(
+                        newContainerName,
+                        loc.id,
+                        getLocationPath(loc.id, locations),
+                        loc.effectiveIsPrivate,
+                        serverTimestamp(),
+                      ));
                       setAddingContainerUnder(null);
                       setNewContainerName('');
                     }
@@ -800,17 +795,13 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                 <button className="manage-btn save" onClick={async () => {
                   if (!newContainerName.trim()) return;
                   const containerRef = doc(collection(db, `users/${user.uid}/containers`));
-                  await setDoc(containerRef, {
-                    name: newContainerName.trim(),
-                    locationId: loc.id,
-                    location: getLocationPath(loc.id, locations),
-                    photos: [],
-                    photoUrls: [],
-                    photoStoragePaths: [],
-                    createdAt: serverTimestamp(),
-                    deletedAt: null,
-                    isPrivate: false,
-                  });
+                  await setDoc(containerRef, buildEmptyContainerData(
+                    newContainerName,
+                    loc.id,
+                    getLocationPath(loc.id, locations),
+                    loc.effectiveIsPrivate,
+                    serverTimestamp(),
+                  ));
                   setAddingContainerUnder(null);
                   setNewContainerName('');
                 }}>{t('main.capture.add')}</button>

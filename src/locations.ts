@@ -1,6 +1,6 @@
 import {
   collection, addDoc, onSnapshot,
-  query, orderBy, serverTimestamp, Timestamp,
+  query, orderBy, serverTimestamp, Timestamp, where,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -17,22 +17,28 @@ export interface Location {
 
 export function subscribeToLocations(
   userId: string,
-  callback: (locations: Location[]) => void
+  callback: (locations: Location[]) => void,
+  sharedView = false,
+  onError?: (error: Error) => void,
 ): () => void {
   const q = query(
     collection(db, `users/${userId}/locations`),
-    orderBy('createdAt', 'asc')
+    ...(sharedView
+      ? [where('effectiveIsPrivate', '==', false)]
+      : [orderBy('createdAt', 'asc')])
   );
   return onSnapshot(q, snap => {
-    callback(snap.docs.map(d => ({
+    const locations = snap.docs.map(d => ({
       id: d.id,
       name: d.data().name ?? '',
       parentId: d.data().parentId ?? null,
       createdAt: d.data().createdAt ?? null,
       visibility: (d.data().visibility ?? 'inherit') as Visibility,
       effectiveIsPrivate: d.data().effectiveIsPrivate ?? false,
-    })));
-  });
+    }));
+    locations.sort((a, b) => (a.createdAt?.toMillis() ?? 0) - (b.createdAt?.toMillis() ?? 0));
+    callback(locations);
+  }, error => onError?.(error));
 }
 
 export async function createLocation(

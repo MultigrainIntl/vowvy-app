@@ -17,6 +17,7 @@ import { navigate } from './nav';
 import logoMark from './assets/logo-mark.svg';
 import './MainScreen.css';
 import { subscribeToLocations, createLocation, getLocationPath, type Location } from './locations';
+import { getInventoryAccessContext } from './collaboration';
 import SellThisFlow from './SellThisFlow';
 import type { ContainerForListing } from './SellThisFlow';
 
@@ -260,6 +261,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [cardMoreOpenId, setCardMoreOpenId] = useState<string | null>(null);
   const updatePhotoInputRef = useRef<HTMLInputElement>(null);
   const scrollRef           = useRef<HTMLDivElement>(null);
+  const inventoryAccess = getInventoryAccessContext(user.uid, viewingOwnerUid);
 
   // Sync description draft when lightbox photo changes
   useEffect(() => {
@@ -282,12 +284,17 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
   // Listen for locations — use viewingOwnerUid so collaborators see the owner's locations
   useEffect(() => {
+    setLocations([]);
     setLocationsLoaded(false);
     return subscribeToLocations(viewingOwnerUid, locs => {
       setLocations(locs);
       setLocationsLoaded(true);
+    }, inventoryAccess.isSharedView, error => {
+      console.error('Failed to load inventory locations', error);
+      setLocations([]);
+      setLocationsLoaded(true);
     });
-  }, [viewingOwnerUid]);
+  }, [viewingOwnerUid, inventoryAccess.isSharedView]);
 
   // Listen for people who have access to this user's inventory
   useEffect(() => {
@@ -316,15 +323,27 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
   // Container snapshot — owner sees all; collaborators only see non-private containers
   useEffect(() => {
+    setContainers([]);
+    setContainersLoaded(false);
+    setSelectedLocationId('');
+    setSelectedContainerId('');
+    setNewLocationName('');
+    setNewContainerName('');
     const col = collection(db, `users/${viewingOwnerUid}/containers`);
-    const q = viewingOwnerUid !== user.uid
-      ? query(col, where('effectiveIsPrivate', '==', false), orderBy('createdAt', 'desc'))
+    const q = inventoryAccess.isSharedView
+      ? query(col, where('effectiveIsPrivate', '==', false))
       : query(col, orderBy('createdAt', 'desc'));
     return onSnapshot(q, snap => {
-      setContainers(snap.docs.map(mapContainer));
+      setContainers(snap.docs.map(mapContainer).sort(
+        (a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)
+      ));
+      setContainersLoaded(true);
+    }, error => {
+      console.error('Failed to load inventory containers', error);
+      setContainers([]);
       setContainersLoaded(true);
     });
-  }, [viewingOwnerUid, user.uid]);
+  }, [viewingOwnerUid, inventoryAccess.isSharedView]);
 
   // Derived state
   const activeContainers = containers.filter(c => !c.deletedAt);
@@ -1426,7 +1445,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   {formatLocationOptionLabel(loc)}
                 </option>
               ))}
-              <option value="new">{t('main.capture.addNewLocation')}</option>
+              {inventoryAccess.canCreateLocation && (
+                <option value="new">{t('main.capture.addNewLocation')}</option>
+              )}
             </select>
 
             {selectedLocationId === 'new' && (
