@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('vowvy-lang', 'en'));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Vowvy' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Vowvy', exact: true })).toBeVisible();
 });
 
 test('landing page exposes account creation and sign-in', async ({ page }) => {
