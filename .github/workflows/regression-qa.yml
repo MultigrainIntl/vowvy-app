@@ -1,0 +1,45 @@
+name: Regression QA
+
+on:
+  push:
+    branches:
+      - gate3-regression-foundation
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run regression QA
+        run: npm run qa
+
+      - name: Preserve browser evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-evidence
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
