@@ -6,6 +6,7 @@ import {
   query, orderBy, writeBatch, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { appBaseUrl } from './environment';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { navigate } from './nav';
@@ -94,7 +95,7 @@ function ManageQRModal({ container, onClose }: { container: Container; onClose: 
   const [qrDataUrl, setQrDataUrl] = useState('');
 
   useEffect(() => {
-    const url = `https://app.vowvy.com/container/${container.id}`;
+    const url = `${appBaseUrl}/container/${container.id}`;
     QRCode.toDataURL(url, { width: 240, margin: 1 })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(''));
@@ -152,7 +153,7 @@ function getSortedLocationChildren(parentId: string | null, locations: Location[
 }
 
 function locationQrUrl(locationId: string) {
-  return `https://app.vowvy.com/?location=${encodeURIComponent(locationId)}`;
+  return `${appBaseUrl}/?location=${encodeURIComponent(locationId)}`;
 }
 
 function getLocationDescendantsSorted(parentId: string, locations: Location[]): Location[] {
@@ -281,7 +282,7 @@ function ContainerQRSetModal({ parent, containers, locations, onClose }: { paren
     let cancelled = false;
 
     Promise.all(containers.map(async container => {
-      const qrDataUrl = await QRCode.toDataURL(`https://app.vowvy.com/container/${container.id}`, { width: 240, margin: 1 }).catch(() => '');
+      const qrDataUrl = await QRCode.toDataURL(`${appBaseUrl}/container/${container.id}`, { width: 240, margin: 1 }).catch(() => '');
       const locationPath = container.locationId ? (getLocationPath(container.locationId, locations) || container.location) : container.location;
       return { container, locationPath, qrDataUrl };
     })).then(next => {

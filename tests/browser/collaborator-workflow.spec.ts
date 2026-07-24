@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
-const projectId = 'vowvy-1ba5f';
+const projectId = 'vowvy-emulator';
 const authBase = `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1`;
 const firestoreBase =
   `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents`;

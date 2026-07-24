@@ -29,6 +29,7 @@ extensions/firestore-send-email.env
 # Local secrets and Firebase admin credentials - never commit
 .env
 .env.*
+!.env.*.example
 service-account-key.json
 *service-account*.json
 *adminsdk*.json

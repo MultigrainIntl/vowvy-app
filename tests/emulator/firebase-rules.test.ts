@@ -25,7 +25,7 @@ import {
 } from '../../src/collaboration/firebase-lifecycle-adapter';
 import { COLLABORATOR_CAPABILITIES } from '../../src/collaboration/access-model';
 
-const projectId = 'vowvy-1ba5f';
+const projectId = 'vowvy-emulator';
 let environment: RulesTestEnvironment;
 
 const ownerUid = 'owner-1';

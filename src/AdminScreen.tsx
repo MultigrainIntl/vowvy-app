@@ -3,6 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import { type User } from 'firebase/auth';
 import { navigate } from './nav';
 import { functions } from './firebase';
+import { firebaseConfig } from './environment';
 import logoMark from './assets/logo-mark.svg';
 
 interface Props { user: User; }
@@ -20,7 +21,7 @@ interface AdminUser {
   connectedTo: string[];
 }
 
-const FIREBASE_PROJECT = 'vowvy-1ba5f';
+const FIREBASE_PROJECT = firebaseConfig.projectId;
 
 const consoleLinks = [
   { label: 'Firebase Console', href: `https://console.firebase.google.com/project/${FIREBASE_PROJECT}/overview` },
