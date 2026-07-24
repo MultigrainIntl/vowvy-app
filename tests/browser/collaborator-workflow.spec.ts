@@ -50,6 +50,9 @@ async function signIn(page: Page, account: TestAccount) {
   await page.getByPlaceholder('Email').fill(account.email);
   await page.getByPlaceholder('Password').fill(account.password);
   await page.getByRole('button', { name: 'Sign In', exact: true }).last().click();
+  await expect(
+    page.getByRole('button', { name: 'Sign In', exact: true }),
+  ).toHaveCount(0);
 }
 
 async function newEnglishContext(
@@ -86,9 +89,9 @@ test('owner invitation, collaborator acceptance, shared context, and revocation'
   const ownerPage = await ownerContext.newPage();
   await signIn(ownerPage, owner);
   await ownerPage.goto('/collaborators');
-  await ownerPage.getByRole('button', { name: /generate/i }).click();
-  const inviteLink = await ownerPage.locator('input[readonly]').inputValue();
-  expect(inviteLink).toContain('/invite/');
+  const inviteInput = ownerPage.locator('input[readonly]');
+  await expect(inviteInput).toHaveValue(/\/invite\//);
+  const inviteLink = await inviteInput.inputValue();
 
   const collaboratorContext = await newEnglishContext(browser);
   const collaboratorPage = await collaboratorContext.newPage();
