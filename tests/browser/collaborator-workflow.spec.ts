@@ -76,6 +76,8 @@ test('owner invitation, collaborator acceptance, shared context, and revocation'
     id: stringValue('shared-location'),
     name: stringValue('Shared Test Room'),
     effectiveIsPrivate: boolValue(false),
+    visibility: stringValue('shared'),
+    deletedAt: { nullValue: null },
     isDeleted: boolValue(false),
     createdAt: timestampValue(new Date()),
   }, owner.idToken);
