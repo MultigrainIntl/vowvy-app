@@ -7,7 +7,7 @@ const {
   moveCollaboratorPhotoTransaction,
 } = require('../lib/moveCollaboratorPhoto');
 
-const app = initializeApp({ projectId: 'vowvy-1ba5f' }, 'move-photo-tests');
+const app = initializeApp({ projectId: 'vowvy-emulator' }, 'move-photo-tests');
 const db = getFirestore(app);
 const ownerUid = 'owner-function-test';
 const collaboratorUid = 'collaborator-function-test';

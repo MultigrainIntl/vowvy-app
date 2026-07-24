@@ -11,6 +11,7 @@ import { httpsCallable } from 'firebase/functions';
 import imageCompression from 'browser-image-compression';
 import QRCode from 'qrcode';
 import { auth, db, storage, functions } from './firebase';
+import { appBaseUrl } from './environment';
 import { ThumbImage, LightboxImage, ContainerNotes } from './shared';
 import type { ContainerNote, PhotoItem } from './shared';
 import { navigate } from './nav';
@@ -114,7 +115,7 @@ function QRPrintModal({ container, onClose }: { container: Container; onClose: (
   const [qrDataUrl, setQrDataUrl] = useState('');
 
   useEffect(() => {
-    const url = `https://app.vowvy.com/container/${container.id}`;
+    const url = `${appBaseUrl}/container/${container.id}`;
     QRCode.toDataURL(url, { width: 240, margin: 1 })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(''));
@@ -1045,7 +1046,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
 
   async function handleCopyLink() {
-    await navigator.clipboard.writeText('https://vowvy-1ba5f.web.app');
+    await navigator.clipboard.writeText(appBaseUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }

@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import { auth } from './firebase';
+import { proxyBase } from './environment';
 
-export const PROXY_BASE = 'https://us-central1-vowvy-1ba5f.cloudfunctions.net/proxyImage';
+export const PROXY_BASE = proxyBase;
 
 export interface PhotoItem {
   id: string;

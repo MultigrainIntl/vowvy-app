@@ -17,6 +17,14 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 initializeApp();
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
+const BOOTSTRAP_UID = process.env.BOOTSTRAP_ADMIN_UID?.trim() || '';
+const ALLOWED_ORIGINS = (
+  process.env.ALLOWED_ORIGINS ||
+  'https://vowvy-staging.web.app,https://vowvy-staging.firebaseapp.com,http://localhost:5173,http://localhost:5174'
+)
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
 
 export const moveCollaboratorPhoto = onCall(async request => {
   if (!request.auth) {
@@ -223,7 +231,7 @@ export const dryRunContentReset = onCall(
 
     const db      = getFirestore();
     const auth    = getAuth();
-    const bucket  = getStorage().bucket('vowvy-1ba5f.firebasestorage.app');
+    const bucket  = getStorage().bucket();
 
     // --- Load all Auth users and Firestore collection-group data in parallel ---
     const [listResult, locSnap, containerSnap, collabSnap, inviteSnap] = await Promise.all([
@@ -351,7 +359,7 @@ export const dryRunContentReset = onCall(
 
 export const proxyImage = onRequest(
   {
-    cors: ['https://vowvy-1ba5f.web.app', 'https://app.vowvy.com', 'http://localhost:5173', 'http://localhost:5174'],
+    cors: ALLOWED_ORIGINS,
     timeoutSeconds: 30,
     memory: '256MiB',
   },
@@ -407,7 +415,7 @@ export const proxyImage = onRequest(
     }
 
     try {
-      const bucket = getStorage().bucket('vowvy-1ba5f.firebasestorage.app');
+      const bucket = getStorage().bucket();
       const file = bucket.file(path);
       const [metadata] = await file.getMetadata();
       const [buffer] = await file.download();
@@ -419,8 +427,6 @@ export const proxyImage = onRequest(
     }
   }
 );
-
-const BOOTSTRAP_UID = 'tn4kJIuUuQPjGZaufTMb65O5Gin2';
 
 export const setAdminClaim = onCall(async (request) => {
   const callerUid = request.auth?.uid;
@@ -577,7 +583,7 @@ export const uploadCollaboratorPhoto = onCall(
       throw new HttpsError('invalid-argument', 'Image exceeds 5 MB limit.');
     }
 
-    const bucket = getStorage().bucket('vowvy-1ba5f.firebasestorage.app');
+    const bucket = getStorage().bucket();
     const storagePath = `users/${ownerUid}/containers/${containerId}/photos/${Date.now()}.jpg`;
     const file = bucket.file(storagePath);
     const downloadToken = randomUUID();
