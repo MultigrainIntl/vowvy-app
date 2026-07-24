@@ -59,22 +59,23 @@ service cloud.firestore {
     }
 
     function hasAccess(ownerUid, capability) {
+      let access = get(accessPath(ownerUid)).data;
       return signedIn()
         && request.auth.uid != ownerUid
         && exists(accessPath(ownerUid))
-        && get(accessPath(ownerUid)).data.schemaVersion == 1
-        && get(accessPath(ownerUid)).data.ownerUid == ownerUid
-        && get(accessPath(ownerUid)).data.collaboratorUid == request.auth.uid
-        && get(accessPath(ownerUid)).data.status == 'active'
-        && get(accessPath(ownerUid)).data.validFromMs <= request.time.toMillis()
-        && (get(accessPath(ownerUid)).data.expiresAtMs == null
-          || request.time.toMillis() < get(accessPath(ownerUid)).data.expiresAtMs)
-        && capability in get(accessPath(ownerUid)).data.capabilities;
+        && access.schemaVersion == 1
+        && access.ownerUid == ownerUid
+        && access.collaboratorUid == request.auth.uid
+        && access.status == 'active'
+        && access.validFromMs <= request.time.toMillis()
+        && (access.expiresAtMs == null
+          || request.time.toMillis() < access.expiresAtMs)
+        && capability in access.capabilities;
     }
 
     function canonicalShared(data) {
       return data.effectiveIsPrivate == false
-        && (data.visibility == 'shared' || data.visibility == 'inherit')
+        && data.visibility in ['shared', 'inherit']
         && data.deletedAt == null;
     }
 
