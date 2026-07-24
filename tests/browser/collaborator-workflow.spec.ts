@@ -89,6 +89,11 @@ test('owner invitation, collaborator acceptance, shared context, and revocation'
   const ownerPage = await ownerContext.newPage();
   await signIn(ownerPage, owner);
   await ownerPage.goto('/collaborators');
+  const generateInvite = ownerPage.getByRole(
+    'button',
+    { name: /generate invite link/i },
+  );
+  if (await generateInvite.isVisible()) await generateInvite.click();
   const inviteInput = ownerPage.locator('input[readonly]');
   await expect(inviteInput).toHaveValue(/\/invite\//);
   const inviteLink = await inviteInput.inputValue();
