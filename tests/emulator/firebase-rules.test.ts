@@ -167,6 +167,8 @@ describe('collaborator Firebase enforcement', () => {
   });
 
   it('allows only a canonical shared-inventory query', async () => {
+    await environment.clearFirestore();
+    await seed({ expiresAtMs: Date.now() + 60_000 });
     const db = environment.authenticatedContext(collaboratorUid).firestore();
     await assertSucceeds(
       getDocs(
