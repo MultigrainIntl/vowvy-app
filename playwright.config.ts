@@ -3,7 +3,7 @@ import chromium from '@sparticuz/chromium';
 import { inflate } from '@sparticuz/chromium';
 import { join } from 'node:path';
 
-const localChromiumPath = process.env.FIRESTORE_EMULATOR_HOST
+const localChromiumPath = process.env.FIRESTORE_EMULATOR_HOST && !process.env.CI
   ? await inflate(join(
       process.cwd(),
       'node_modules/@sparticuz/chromium/bin/chromium.br',

@@ -38,6 +38,12 @@ jobs:
       - name: Install Functions dependencies
         run: npm --prefix functions ci
 
+      - name: Build Functions
+        run: npm --prefix functions run build
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
       - name: Run collaborator browser workflow
         run: npm run test:browser:collaborator
 
