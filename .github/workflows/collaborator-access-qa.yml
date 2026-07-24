@@ -41,6 +41,12 @@ jobs:
       - name: Build Functions
         run: npm --prefix functions run build
 
+      - name: Run application unit suite
+        run: npm test
+
+      - name: Build application
+        run: npm run build
+
       - name: Install browser
         run: npx playwright install --with-deps chromium
 
