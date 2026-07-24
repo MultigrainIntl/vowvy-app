@@ -107,7 +107,9 @@ test('owner invitation, collaborator acceptance, shared context, and revocation'
   await expect(collaboratorPage.getByRole('heading', { name: /you.re in/i })).toBeVisible();
   await collaboratorPage.getByRole('button', { name: /go to.*inventory/i }).click();
   await expect(collaboratorPage.getByText(/authorized shared inventory/i)).toBeVisible();
-  await expect(collaboratorPage.getByText('Shared Test Room')).toBeVisible();
+  await expect(
+    collaboratorPage.locator('option[value="shared-location"]'),
+  ).toHaveCount(1);
   await collaboratorPage.screenshot({
     path: testInfo.outputPath('shared-inventory-access.png'),
     fullPage: true,
