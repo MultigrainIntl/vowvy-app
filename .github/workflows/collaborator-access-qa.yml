@@ -55,5 +55,7 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            firestore-debug.log
+            firebase-debug.log
           if-no-files-found: warn
           retention-days: 14
