@@ -5,6 +5,7 @@ on:
     branches:
       - collaborator-access-replacement-v1
       - agent/vowvy-staging-separation-s2a
+  pull_request:
   workflow_dispatch:
 
 permissions:
