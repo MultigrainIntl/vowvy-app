@@ -71,6 +71,19 @@ service cloud.firestore {
         && capability in access.capabilities;
     }
 
+    function hasInventoryReadAccess(ownerUid) {
+      let access = get(accessPath(ownerUid)).data;
+      return signedIn()
+        && request.auth.uid != ownerUid
+        && access.schemaVersion == 1
+        && access.ownerUid == ownerUid
+        && access.collaboratorUid == request.auth.uid
+        && access.status == 'active'
+        && (access.expiresAtMs == null
+          || request.time.toMillis() < access.expiresAtMs)
+        && access.capabilities.hasAny(['inventory.read']);
+    }
+
     function canonicalShared(data) {
       return data.effectiveIsPrivate == false
         && data.visibility in ['shared', 'inherit']
@@ -168,7 +181,7 @@ service cloud.firestore {
 
     match /users/{ownerUid}/locations/{locationId} {
       allow read: if owns(ownerUid)
-        || (hasAccess(ownerUid, 'inventory.read') && canonicalShared(resource.data));
+        || (hasInventoryReadAccess(ownerUid) && canonicalShared(resource.data));
       allow create: if owns(ownerUid)
         || (hasAccess(ownerUid, 'location.create')
           && request.resource.data.createdBy == request.auth.uid
@@ -181,7 +194,7 @@ service cloud.firestore {
 
     match /users/{ownerUid}/containers/{containerId} {
       allow read: if owns(ownerUid)
-        || (hasAccess(ownerUid, 'inventory.read') && canonicalShared(resource.data));
+        || (hasInventoryReadAccess(ownerUid) && canonicalShared(resource.data));
 
       allow create: if owns(ownerUid)
         || (hasAccess(ownerUid, 'container.create')
