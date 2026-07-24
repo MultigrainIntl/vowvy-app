@@ -6,12 +6,48 @@ import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
 import { getFirestore } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
+import {
+  MoveCollaboratorPhotoFailure,
+  moveCollaboratorPhotoTransaction,
+  type MoveCollaboratorPhotoInput,
+} from './moveCollaboratorPhoto';
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 initializeApp();
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
+
+export const moveCollaboratorPhoto = onCall(async request => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+  const input = (request.data ?? {}) as MoveCollaboratorPhotoInput;
+  try {
+    await moveCollaboratorPhotoTransaction(
+      getFirestore(),
+      request.auth.uid,
+      input,
+    );
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof MoveCollaboratorPhotoFailure) {
+      const code =
+        error.reason === 'invalid-input'
+          ? 'invalid-argument'
+          : error.reason === 'permission-denied' ||
+              error.reason === 'private-container'
+            ? 'permission-denied'
+            : error.reason === 'container-not-found' ||
+                error.reason === 'photo-not-found'
+              ? 'not-found'
+              : 'already-exists';
+      throw new HttpsError(code, error.reason);
+    }
+    console.error('moveCollaboratorPhoto failed', error);
+    throw new HttpsError('internal', 'Photo move failed.');
+  }
+});
 
 // ---------------------------------------------------------------------------
 // TEMPORARY — backfill isPrivate: false on containers missing the field.

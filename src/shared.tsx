@@ -126,14 +126,19 @@ export function formatNoteDate(ts: number): string {
 
 // Pure presentational component — parent is responsible for filtering deleted notes
 // and for all Firestore writes (enables soft delete in callers).
-export function ContainerNotes({ containerId, notes, onAdd, onDelete }: {
+export function ContainerNotes({ containerId, notes, onAdd, onEdit, onDelete, canDelete = true, canEdit = false }: {
   containerId: string;
   notes: ContainerNote[];
   onAdd: (containerId: string, text: string) => Promise<void>;
+  onEdit?: (containerId: string, noteId: string, text: string) => Promise<void>;
   onDelete: (containerId: string, noteId: string) => Promise<void>;
+  canDelete?: boolean;
+  canEdit?: boolean;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
   const canSave = draft.trim().length > 0;
 
   async function handleSave() {
@@ -146,11 +151,56 @@ export function ContainerNotes({ containerId, notes, onAdd, onDelete }: {
     <div className="notes-wrap">
       {notes.map(note => (
         <div key={note.id} className="note-item">
-          <span className="note-text">
-            {note.createdAt > 0 && <span className="note-date">{formatNoteDate(note.createdAt)} — </span>}
-            {note.text}
-          </span>
-          <button className="note-delete-btn" onClick={() => onDelete(containerId, note.id)}>✕</button>
+          {editingId === note.id ? (
+            <input
+              className="notes-input"
+              value={editDraft}
+              autoFocus
+              onChange={event => setEditDraft(event.target.value)}
+              onKeyDown={async event => {
+                if (event.key === 'Escape') setEditingId(null);
+                if (
+                  event.key === 'Enter' &&
+                  editDraft.trim() &&
+                  onEdit
+                ) {
+                  await onEdit(containerId, note.id, editDraft.trim());
+                  setEditingId(null);
+                }
+              }}
+            />
+          ) : (
+            <span className="note-text">
+              {note.createdAt > 0 && <span className="note-date">{formatNoteDate(note.createdAt)} — </span>}
+              {note.text}
+            </span>
+          )}
+          {editingId === note.id && onEdit && (
+            <button
+              className="notes-save-btn"
+              disabled={!editDraft.trim()}
+              onClick={async () => {
+                await onEdit(containerId, note.id, editDraft.trim());
+                setEditingId(null);
+              }}
+            >
+              {t('shared.save')}
+            </button>
+          )}
+          {canEdit && editingId !== note.id && (
+            <button
+              className="note-delete-btn"
+              onClick={() => {
+                setEditingId(note.id);
+                setEditDraft(note.text);
+              }}
+            >
+              Edit
+            </button>
+          )}
+          {canDelete && (
+            <button className="note-delete-btn" onClick={() => onDelete(containerId, note.id)}>✕</button>
+          )}
         </div>
       ))}
       <div className="notes-input-row">

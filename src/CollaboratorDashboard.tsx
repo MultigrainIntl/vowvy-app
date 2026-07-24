@@ -1,21 +1,26 @@
 import { useState, useEffect } from 'react';
 import { type User } from 'firebase/auth';
 import {
-  collection, doc, onSnapshot, deleteDoc, updateDoc, setDoc,
-  query, where, orderBy, getDocs, Timestamp, serverTimestamp,
+  collection, onSnapshot, query, where, orderBy,
 } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { db } from './firebase';
 import { navigate } from './nav';
 import logoMark from './assets/logo-mark.svg';
 import './CollaboratorDashboard.css';
+import { createFirebaseLifecycleAdapter } from './collaboration/firebase-lifecycle-adapter';
+import {
+  observeOwnedCollaboratorAccess,
+  type OwnedCollaboratorAccess,
+} from './collaboration/firebase-session-adapter';
+import type { CollaboratorAccessRecord } from './collaboration/access-model';
 
 interface Collaborator {
   uid: string;
   displayName: string;
   email: string;
-  inviteToken: string;
-  acceptedAt: Timestamp | null;
+  access: CollaboratorAccessRecord;
+  acceptedAt: Date;
   expiresAt: Date | null;
 }
 
@@ -30,36 +35,31 @@ export default function CollaboratorDashboard({ user }: Props) {
   const [inviteCopied, setInviteCopied]       = useState(false);
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [inviteExpiry, setInviteExpiry]       = useState<number | null>(7);
+  const [actionError, setActionError] = useState('');
   const [recentActivity, setRecentActivity] = useState<{ collaboratorUid: string; containerName: string; modifiedAt: Date }[]>([]);
 
   useEffect(() => {
-    return onSnapshot(collection(db, `users/${user.uid}/collaborators`), async snap => {
-      const active = snap.docs.filter(d => d.data().status === 'active');
-      const result: Collaborator[] = await Promise.all(active.map(async d => {
-        const data = d.data();
-        let expiresAt: Date | null = null;
-        if (data.inviteToken) {
-          try {
-            const inviteSnap = await getDocs(
-              query(collection(db, 'invites'), where('__name__', '==', data.inviteToken))
-            );
-            if (!inviteSnap.empty) {
-              const inviteData = inviteSnap.docs[0].data();
-              expiresAt = inviteData.expiresAt ? inviteData.expiresAt.toDate?.() ?? null : null;
-            }
-          } catch {}
-        }
-        return {
-          uid: d.id,
-          displayName: data.displayName ?? data.email ?? 'Collaborator',
-          email: data.email ?? '',
-          inviteToken: data.inviteToken ?? '',
-          acceptedAt: data.acceptedAt ?? null,
-          expiresAt,
-        };
-      }));
-      setCollaborators(result);
-    });
+    return observeOwnedCollaboratorAccess(
+      db,
+      user.uid,
+      (records: OwnedCollaboratorAccess[]) => setCollaborators(
+        records
+          .filter(({ access }) =>
+            access.status === 'active' &&
+            (access.expiresAtMs === null || Date.now() < access.expiresAtMs))
+          .map(({ collaboratorUid, access }) => ({
+            uid: collaboratorUid,
+            displayName: `Collaborator ${collaboratorUid.slice(0, 6)}`,
+            email: '',
+            access,
+            acceptedAt: new Date(access.createdAtMs),
+            expiresAt: access.expiresAtMs === null
+              ? null
+              : new Date(access.expiresAtMs),
+          })),
+      ),
+      error => setActionError(error.message),
+    );
   }, [user.uid]);
 
   useEffect(() => {
@@ -85,20 +85,25 @@ export default function CollaboratorDashboard({ user }: Props) {
     setGeneratingInvite(true);
     try {
       const token = crypto.randomUUID();
-      const expiresAt = inviteExpiry
-        ? new Date(Date.now() + inviteExpiry * 24 * 60 * 60 * 1000)
+      const nowMs = Date.now();
+      const expiresAtMs = inviteExpiry
+        ? nowMs + inviteExpiry * 24 * 60 * 60 * 1000
         : null;
-      await setDoc(doc(db, 'invites', token), {
+      const lifecycle = createFirebaseLifecycleAdapter(db, {
+        nowMs: () => Date.now(),
+        newAccessId: () => crypto.randomUUID(),
+      });
+      await lifecycle.issueInvitation({
+        invitationId: token,
         ownerUid: user.uid,
-        ownerDisplayName: user.displayName ?? user.email?.split('@')[0] ?? 'Your host',
-        status: 'pending',
-        token,
-        createdAt: serverTimestamp(),
-        ...(expiresAt && { expiresAt }),
+        createdByUid: user.uid,
+        nowMs,
+        expiresAtMs,
       });
       setInviteLink(`${window.location.origin}/invite/${token}`);
     } catch (e) {
       console.error('Failed to generate invite link', e);
+      setActionError(e instanceof Error ? e.message : 'Unable to create invitation.');
     } finally {
       setGeneratingInvite(false);
     }
@@ -108,20 +113,21 @@ export default function CollaboratorDashboard({ user }: Props) {
     if (!window.confirm(t('collabDash.revokeConfirm', { name: c.displayName }))) return;
     setRevoking(c.uid);
     try {
-      await deleteDoc(doc(db, `users/${user.uid}/collaborators/${c.uid}`));
-      if (c.inviteToken) {
-        await updateDoc(doc(db, 'invites', c.inviteToken), { status: 'revoked' });
-      }
+      const lifecycle = createFirebaseLifecycleAdapter(db, {
+        nowMs: () => Date.now(),
+        newAccessId: () => crypto.randomUUID(),
+      });
+      await lifecycle.revokeAccess(user.uid, c.uid);
     } catch (e) {
       console.error('Failed to revoke', e);
+      setActionError(e instanceof Error ? e.message : 'Unable to revoke access.');
     } finally {
       setRevoking(null);
     }
   }
 
-  function formatDate(ts: Timestamp | null): string {
-    if (!ts) return '—';
-    return ts.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  function formatDate(date: Date): string {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   function formatExpiry(d: Date | null): string {
@@ -152,6 +158,9 @@ export default function CollaboratorDashboard({ user }: Props) {
       <div className="collab-content">
         <h2 className="collab-title">{t('collabDash.title')}</h2>
         <p className="collab-subtitle">{t('collabDash.subtitle')}</p>
+        {actionError && (
+          <p role="alert" className="collab-empty">{actionError}</p>
+        )}
 
         <div className="collab-privacy-note">
           <span className="collab-privacy-note-icon">🔒</span>

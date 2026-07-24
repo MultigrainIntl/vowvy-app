@@ -1,86 +1,340 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isActiveCollaborator(ownerUid, callerUid) {
-      return callerUid != null
-        && exists(/databases/$(database)/documents/users/$(ownerUid)/collaborators/$(callerUid))
-        && get(/databases/$(database)/documents/users/$(ownerUid)/collaborators/$(callerUid)).data.status == 'active';
+    function signedIn() {
+      return request.auth != null;
     }
 
-    // Owner profile document — stores onboardingCompleted / onboardingSkipped.
-    // Not covered by the {document=**} wildcard below (which requires ≥1 segment after userId).
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function owns(ownerUid) {
+      return signedIn() && request.auth.uid == ownerUid;
     }
 
-    // Owner has full access to their own data tree.
-    // Active collaborators can read/write containers (and their subcollections).
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function accessPath(ownerUid) {
+      return /databases/$(database)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid);
     }
 
-    match /users/{userId}/containers/{containerId} {
-      allow read: if request.auth != null
-        && isActiveCollaborator(userId, request.auth.uid)
-        && resource.data.effectiveIsPrivate != true;
-      allow write: if request.auth != null
-        && isActiveCollaborator(userId, request.auth.uid)
-        && resource.data.effectiveIsPrivate != true;
+    function invitationPath(invitationId) {
+      return /databases/$(database)/documents/invites/$(invitationId);
     }
 
-    match /users/{userId}/containers/{containerId}/{sub=**} {
-      allow read, write: if request.auth != null
-        && isActiveCollaborator(userId, request.auth.uid)
-        && get(/databases/$(database)/documents/users/$(userId)/containers/$(containerId)).data.effectiveIsPrivate != true;
+    function approvedCapabilities(capabilities) {
+      return capabilities is list
+        && capabilities.size() > 0
+        && capabilities.hasOnly([
+          'inventory.read',
+          'location.create',
+          'container.create',
+          'photo.create',
+          'note.create',
+          'note.edit',
+          'item.move'
+        ]);
     }
 
-    // Active collaborators can read owner locations (read-only — they cannot create or delete locations).
-    match /users/{userId}/locations/{locationId} {
-      allow read: if request.auth != null
-        && isActiveCollaborator(userId, request.auth.uid)
-        && resource.data.effectiveIsPrivate != true;
+    function validAccessRecord(data, ownerUid, collaboratorUid) {
+      return data.schemaVersion == 1
+        && data.accessId is string
+        && data.invitationId is string
+        && data.ownerUid == ownerUid
+        && data.collaboratorUid == collaboratorUid
+        && collaboratorUid != ownerUid
+        && approvedCapabilities(data.capabilities)
+        && data.validFromMs is number
+        && (data.expiresAtMs == null || data.expiresAtMs is number)
+        && data.createdAtMs is number
+        && data.createdByUid == ownerUid
+        && (data.supersedesAccessId == null
+          || data.supersedesAccessId is string);
     }
 
-    // Collaborators subcollection — owner manages it, collaborators can read their own doc.
-    // Recipients can also create their own doc when a valid pending invite exists.
-    match /users/{userId}/collaborators/{collaboratorId} {
-      allow read: if request.auth != null
-        && (request.auth.uid == userId || request.auth.uid == collaboratorId);
-      allow write: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null
-        && request.auth.uid == collaboratorId
-        && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteToken))
-        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteToken)).data.ownerUid == userId
-        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteToken)).data.status == 'pending';
+    function acceptedInvitationCreatesAccess(ownerUid, collaboratorUid) {
+      let invite = getAfter(invitationPath(request.resource.data.invitationId)).data;
+      return invite.status == 'accepted'
+        && invite.ownerUid == ownerUid
+        && invite.acceptedByUid == collaboratorUid
+        && invite.accessId == request.resource.data.accessId
+        && invite.capabilities == request.resource.data.capabilities
+        && invite.expiresAtMs == request.resource.data.expiresAtMs
+        && invite.supersedesAccessId == request.resource.data.supersedesAccessId;
     }
 
-    // Invites — top-level collection.
-    // Any authenticated user can read a pending invite by token (needed for accept screen).
-    // Only the owner can create/revoke.
-    // The recipient can accept (write acceptedByUid, acceptedAt, status) once — only if still pending.
+    function hasAccess(ownerUid, capability) {
+      return signedIn()
+        && request.auth.uid != ownerUid
+        && exists(accessPath(ownerUid))
+        && get(accessPath(ownerUid)).data.schemaVersion == 1
+        && get(accessPath(ownerUid)).data.ownerUid == ownerUid
+        && get(accessPath(ownerUid)).data.collaboratorUid == request.auth.uid
+        && get(accessPath(ownerUid)).data.status == 'active'
+        && get(accessPath(ownerUid)).data.validFromMs <= request.time.toMillis()
+        && (get(accessPath(ownerUid)).data.expiresAtMs == null
+          || request.time.toMillis() < get(accessPath(ownerUid)).data.expiresAtMs)
+        && capability in get(accessPath(ownerUid)).data.capabilities;
+    }
+
+    function canonicalShared(data) {
+      return data.effectiveIsPrivate == false
+        && (data.visibility == 'shared' || data.visibility == 'inherit')
+        && data.deletedAt == null;
+    }
+
+    function unchanged(field) {
+      return request.resource.data[field] == resource.data[field];
+    }
+
+    function validPhotoMoveMarker(marker, direction, counterpartContainerId) {
+      return marker is map
+        && marker.moveId is string
+        && marker.photoId is string
+        && marker.counterpartContainerId == counterpartContainerId
+        && marker.direction == direction
+        && marker.movedBy == request.auth.uid
+        && marker.movedAtMs is number;
+    }
+
+    function validPhotoMoveTicket(ownerUid, containerId, direction) {
+      let ticket = getAfter(
+        /databases/$(database)/documents/users/$(ownerUid)/photoMoves/$(request.resource.data.lastPhotoMove.moveId)
+      ).data;
+      return ticket.moveId == request.resource.data.lastPhotoMove.moveId
+        && ticket.photoId == request.resource.data.lastPhotoMove.photoId
+        && ticket.movedBy == request.auth.uid
+        && ticket.movedAtMs == request.resource.data.lastPhotoMove.movedAtMs
+        && ((direction == 'out'
+            && ticket.sourceContainerId == containerId
+            && ticket.destinationContainerId
+              == request.resource.data.lastPhotoMove.counterpartContainerId)
+          || (direction == 'in'
+            && ticket.destinationContainerId == containerId
+            && ticket.sourceContainerId
+              == request.resource.data.lastPhotoMove.counterpartContainerId));
+    }
+
+    match /users/{ownerUid} {
+      allow read, write: if owns(ownerUid);
+    }
+
+    match /users/{ownerUid}/collaboratorAccess/{collaboratorUid} {
+      allow get: if owns(ownerUid)
+        || (signedIn() && request.auth.uid == collaboratorUid);
+      allow list: if owns(ownerUid);
+      allow create: if signedIn()
+        && request.auth.uid == collaboratorUid
+        && validAccessRecord(request.resource.data, ownerUid, collaboratorUid)
+        && request.resource.data.status == 'active'
+        && request.resource.data.revokedAtMs == null
+        && request.resource.data.revokedByUid == null
+        && request.resource.data.supersedesAccessId == null
+        && acceptedInvitationCreatesAccess(ownerUid, collaboratorUid);
+      allow update: if (
+          owns(ownerUid)
+          && resource.data.status == 'active'
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'revokedAtMs', 'revokedByUid'])
+          && request.resource.data.status == 'revoked'
+          && request.resource.data.revokedByUid == ownerUid
+          && request.resource.data.revokedAtMs is number
+          && getAfter(invitationPath(resource.data.invitationId)).data.status == 'revoked'
+          && getAfter(invitationPath(resource.data.invitationId)).data.accessId == resource.data.accessId
+        ) || (
+          signedIn()
+          && request.auth.uid == collaboratorUid
+          && (resource.data.status == 'revoked' || resource.data.status == 'expired')
+          && validAccessRecord(request.resource.data, ownerUid, collaboratorUid)
+          && request.resource.data.status == 'active'
+          && request.resource.data.revokedAtMs == null
+          && request.resource.data.revokedByUid == null
+          && request.resource.data.supersedesAccessId == resource.data.accessId
+          && acceptedInvitationCreatesAccess(ownerUid, collaboratorUid)
+          && getAfter(/databases/$(database)/documents/users/$(ownerUid)/collaboratorAccessHistory/$(resource.data.accessId)).data == resource.data
+        );
+      allow delete: if false;
+    }
+
+    match /{path=**}/collaboratorAccess/{collaboratorUid} {
+      allow list: if signedIn()
+        && resource.data.collaboratorUid == request.auth.uid;
+    }
+
+    match /users/{ownerUid}/collaboratorAccessHistory/{accessId} {
+      allow read: if owns(ownerUid);
+      allow create: if signedIn()
+        && request.auth.uid == request.resource.data.collaboratorUid
+        && request.resource.data.ownerUid == ownerUid
+        && request.resource.data.accessId == accessId
+        && request.resource.data == get(/databases/$(database)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid)).data
+        && getAfter(/databases/$(database)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid)).data.supersedesAccessId == accessId;
+      allow update, delete: if false;
+    }
+
+    match /users/{ownerUid}/locations/{locationId} {
+      allow read: if owns(ownerUid)
+        || (hasAccess(ownerUid, 'inventory.read') && canonicalShared(resource.data));
+      allow create: if owns(ownerUid)
+        || (hasAccess(ownerUid, 'location.create')
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.effectiveIsPrivate == false
+          && (request.resource.data.visibility == 'shared'
+            || request.resource.data.visibility == 'inherit')
+          && request.resource.data.deletedAt == null);
+      allow update, delete: if owns(ownerUid);
+    }
+
+    match /users/{ownerUid}/containers/{containerId} {
+      allow read: if owns(ownerUid)
+        || (hasAccess(ownerUid, 'inventory.read') && canonicalShared(resource.data));
+
+      allow create: if owns(ownerUid)
+        || (hasAccess(ownerUid, 'container.create')
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.visibility == 'inherit'
+          && request.resource.data.effectiveIsPrivate == false
+          && request.resource.data.deletedAt == null
+          && request.resource.data.notes.size() == 0
+          && request.resource.data.photos.size() == 0
+          && exists(/databases/$(database)/documents/users/$(ownerUid)/locations/$(request.resource.data.locationId))
+          && canonicalShared(get(/databases/$(database)/documents/users/$(ownerUid)/locations/$(request.resource.data.locationId)).data));
+
+      allow update: if owns(ownerUid)
+        || (canonicalShared(resource.data)
+          && canonicalShared(request.resource.data)
+          && unchanged('name')
+          && unchanged('visibility')
+          && unchanged('effectiveIsPrivate')
+          && unchanged('createdBy')
+          && (
+            (hasAccess(ownerUid, 'photo.create')
+              && unchanged('notes')
+              && unchanged('locationId')
+              && unchanged('location')
+              && request.resource.data.photos.size() == resource.data.photos.size() + 1)
+            ||
+            (hasAccess(ownerUid, 'note.create')
+              && unchanged('photos')
+              && unchanged('locationId')
+              && unchanged('location')
+              && request.resource.data.notes.size() == resource.data.notes.size() + 1)
+            ||
+            (hasAccess(ownerUid, 'note.edit')
+              && unchanged('photos')
+              && unchanged('locationId')
+              && unchanged('location')
+              && request.resource.data.notes.size() == resource.data.notes.size())
+            ||
+            (hasAccess(ownerUid, 'item.move')
+              && unchanged('photos')
+              && unchanged('notes')
+              && exists(/databases/$(database)/documents/users/$(ownerUid)/locations/$(request.resource.data.locationId))
+              && canonicalShared(get(/databases/$(database)/documents/users/$(ownerUid)/locations/$(request.resource.data.locationId)).data))
+          ));
+      allow update: if canonicalShared(resource.data)
+        && canonicalShared(request.resource.data)
+        && hasAccess(ownerUid, 'item.move')
+        && unchanged('name')
+        && unchanged('visibility')
+        && unchanged('effectiveIsPrivate')
+        && unchanged('createdBy')
+        && unchanged('notes')
+        && unchanged('locationId')
+        && unchanged('location')
+        && (
+          (validPhotoMoveMarker(
+              request.resource.data.lastPhotoMove,
+              'out',
+              request.resource.data.lastPhotoMove.counterpartContainerId
+            )
+            && request.resource.data.photos.size()
+              == resource.data.photos.size() - 1
+            && resource.data.photos.hasAll(request.resource.data.photos)
+            && validPhotoMoveTicket(ownerUid, containerId, 'out'))
+          ||
+          (validPhotoMoveMarker(
+              request.resource.data.lastPhotoMove,
+              'in',
+              request.resource.data.lastPhotoMove.counterpartContainerId
+            )
+            && request.resource.data.photos.size()
+              == resource.data.photos.size() + 1
+            && request.resource.data.photos.hasAll(resource.data.photos)
+            && validPhotoMoveTicket(ownerUid, containerId, 'in'))
+        );
+      allow delete: if owns(ownerUid);
+    }
+
+    match /users/{ownerUid}/photoMoves/{moveId} {
+      allow read: if owns(ownerUid);
+      allow create: if hasAccess(ownerUid, 'item.move')
+        && request.resource.data.moveId == moveId
+        && request.resource.data.photoId is string
+        && request.resource.data.sourceContainerId is string
+        && request.resource.data.destinationContainerId is string
+        && request.resource.data.sourceContainerId
+          != request.resource.data.destinationContainerId
+        && request.resource.data.movedBy == request.auth.uid
+        && request.resource.data.movedAtMs is number
+        && getAfter(
+          /databases/$(database)/documents/users/$(ownerUid)/containers/$(request.resource.data.sourceContainerId)
+        ).data.lastPhotoMove.moveId == moveId
+        && getAfter(
+          /databases/$(database)/documents/users/$(ownerUid)/containers/$(request.resource.data.destinationContainerId)
+        ).data.lastPhotoMove.moveId == moveId;
+      allow update, delete: if false;
+    }
+
+    match /users/{ownerUid}/{document=**} {
+      allow read, write: if owns(ownerUid);
+    }
+
     match /invites/{token} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.ownerUid == request.auth.uid;
-      allow update: if request.auth != null && (
-        // Owner can update (revoke)
-        request.auth.uid == resource.data.ownerUid
-        // Recipient can accept — only if still pending and not yet accepted by someone else
-        || (resource.data.status == 'pending'
-            && request.resource.data.status == 'active'
-            && request.resource.data.acceptedByUid == request.auth.uid)
-      );
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.invitationId == token
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && approvedCapabilities(request.resource.data.capabilities)
+        && request.resource.data.acceptedAtMs == null
+        && request.resource.data.acceptedByUid == null
+        && request.resource.data.accessId == null
+        && request.resource.data.revokedAtMs == null
+        && request.resource.data.revokedByUid == null;
+      allow update: if (
+          signedIn()
+          && request.auth.uid != resource.data.ownerUid
+          && resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'acceptedAtMs', 'acceptedByUid', 'accessId'])
+          && request.resource.data.status == 'accepted'
+          && request.resource.data.acceptedByUid == request.auth.uid
+          && request.resource.data.acceptedAtMs is number
+          && request.resource.data.accessId is string
+          && request.time.toMillis() >= resource.data.validFromMs
+          && (resource.data.expiresAtMs == null
+            || request.time.toMillis() < resource.data.expiresAtMs)
+          && getAfter(/databases/$(database)/documents/users/$(resource.data.ownerUid)/collaboratorAccess/$(request.auth.uid)).data.invitationId == token
+          && getAfter(/databases/$(database)/documents/users/$(resource.data.ownerUid)/collaboratorAccess/$(request.auth.uid)).data.accessId == request.resource.data.accessId
+        ) || (
+          signedIn()
+          && request.auth.uid == resource.data.ownerUid
+          && (resource.data.status == 'pending' || resource.data.status == 'accepted')
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'revokedAtMs', 'revokedByUid'])
+          && request.resource.data.status == 'revoked'
+          && request.resource.data.revokedByUid == request.auth.uid
+          && request.resource.data.revokedAtMs is number
+          && (resource.data.status == 'pending'
+            || getAfter(/databases/$(database)/documents/users/$(resource.data.ownerUid)/collaboratorAccess/$(resource.data.acceptedByUid)).data.status == 'revoked')
+        );
+      allow delete: if false;
     }
 
-    // Partner boxes — any authenticated user can read; only unclaimed boxes can be claimed by auth users
     match /partnerBoxes/{boxId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null
+      allow read, create: if signedIn();
+      allow update: if signedIn()
         && (resource.data.claimedByUid == null
-            || resource.data.claimedByUid == request.auth.uid);
+          || resource.data.claimedByUid == request.auth.uid);
     }
-
   }
 }

@@ -1,18 +1,15 @@
 import { useState, useEffect } from 'react';
 import { type User } from 'firebase/auth';
-import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { db } from './firebase';
 import { navigate } from './nav';
+import {
+  createFirebaseLifecycleAdapter,
+  readInvitation,
+} from './collaboration/firebase-lifecycle-adapter';
+import type { CollaboratorInvitation } from './collaboration/access-lifecycle';
 import logoMark from './assets/logo-mark.svg';
 import './AcceptInviteScreen.css';
-
-interface InviteData {
-  ownerUid: string;
-  ownerDisplayName: string;
-  status: 'pending' | 'active' | 'revoked';
-  expiresAt?: Date | { toDate: () => Date } | null;
-}
 
 interface Props {
   user: User;
@@ -21,24 +18,23 @@ interface Props {
 
 export default function AcceptInviteScreen({ user, token }: Props) {
   const { t } = useTranslation();
-  const [invite, setInvite]   = useState<InviteData | null>(null);
+  const [invite, setInvite]   = useState<CollaboratorInvitation | null>(null);
   const [state, setState]     = useState<'loading' | 'ready' | 'accepting' | 'done' | 'error'>('loading');
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    getDoc(doc(db, 'invites', token)).then(snap => {
-      if (!snap.exists()) {
+    readInvitation(db, token).then(data => {
+      if (!data) {
         setErrorMsg(t('acceptInvite.errorInvalid'));
         setState('error');
         return;
       }
-      const data = snap.data() as InviteData;
       if (data.status === 'revoked') {
         setErrorMsg(t('acceptInvite.errorRevoked'));
         setState('error');
         return;
       }
-      if (data.status === 'active') {
+      if (data.status === 'accepted') {
         setErrorMsg(t('acceptInvite.errorAlreadyAccepted'));
         setState('error');
         return;
@@ -48,15 +44,11 @@ export default function AcceptInviteScreen({ user, token }: Props) {
         setState('error');
         return;
       }
-      if (data.expiresAt) {
-        const expiry = data.expiresAt instanceof Date
-          ? data.expiresAt
-          : (data.expiresAt as { toDate: () => Date }).toDate();
-        if (expiry < new Date()) {
-          setErrorMsg(t('acceptInvite.errorExpired'));
-          setState('error');
-          return;
-        }
+      if (data.status === 'expired' ||
+          (data.expiresAtMs !== null && Date.now() >= data.expiresAtMs)) {
+        setErrorMsg(t('acceptInvite.errorExpired'));
+        setState('error');
+        return;
       }
       setInvite(data);
       setState('ready');
@@ -70,19 +62,11 @@ export default function AcceptInviteScreen({ user, token }: Props) {
     if (!invite) return;
     setState('accepting');
     try {
-      await setDoc(doc(db, `users/${invite.ownerUid}/collaborators/${user.uid}`), {
-        displayName: user.displayName ?? user.email?.split('@')[0] ?? 'Collaborator',
-        email: user.email ?? '',
-        status: 'active',
-        inviteToken: token,
-        acceptedAt: serverTimestamp(),
+      const lifecycle = createFirebaseLifecycleAdapter(db, {
+        nowMs: () => Date.now(),
+        newAccessId: () => crypto.randomUUID(),
       });
-      await updateDoc(doc(db, 'invites', token), {
-        status: 'active',
-        acceptedByUid: user.uid,
-        acceptedByEmail: user.email ?? '',
-        acceptedAt: serverTimestamp(),
-      });
+      await lifecycle.acceptInvitation(token, user.uid);
       setState('done');
     } catch (e: any) {
       setErrorMsg(e?.message ?? t('acceptInvite.errorAccept'));
@@ -107,7 +91,7 @@ export default function AcceptInviteScreen({ user, token }: Props) {
             <div className="accept-icon">📦</div>
             <h1 className="accept-title">{t('acceptInvite.invitedTitle')}</h1>
             <p className="accept-body">
-              {t('acceptInvite.inviteBody', { name: invite.ownerDisplayName })}
+              {t('acceptInvite.inviteBody', { name: 'the inventory owner' })}
             </p>
             <p className="accept-signed-in-as">{t('acceptInvite.signingInAs', { email: user.email })}</p>
             <button className="accept-btn" onClick={handleAccept}>
@@ -125,7 +109,7 @@ export default function AcceptInviteScreen({ user, token }: Props) {
             <div className="accept-icon">✓</div>
             <h1 className="accept-title">{t('acceptInvite.youreInTitle')}</h1>
             <p className="accept-body">
-              {t('acceptInvite.accessGranted', { name: invite?.ownerDisplayName })}
+              {t('acceptInvite.accessGranted', { name: 'the inventory owner' })}
             </p>
             <button className="accept-btn" onClick={() => navigate(`/?owner=${invite?.ownerUid}`)}>
               {t('acceptInvite.goToInventory')}

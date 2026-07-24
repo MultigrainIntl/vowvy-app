@@ -3,8 +3,8 @@ import { signOut, type User } from 'firebase/auth';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import {
-  collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot,
-  query, orderBy, where, arrayUnion, serverTimestamp, Timestamp, runTransaction,
+  collection, doc, setDoc, getDoc, updateDoc, onSnapshot,
+  query, orderBy, arrayUnion, serverTimestamp, Timestamp, runTransaction,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
@@ -19,6 +19,14 @@ import './MainScreen.css';
 import { subscribeToLocations, createLocation, getLocationPath, type Location } from './locations';
 import SellThisFlow from './SellThisFlow';
 import type { ContainerForListing } from './SellThisFlow';
+import {
+  observeSharedInventorySessions,
+  observeOwnedCollaboratorAccess,
+  type SharedInventorySession,
+} from './collaboration/firebase-session-adapter';
+import { createFirebaseInventoryAdapter } from './collaboration/firebase-inventory-adapter';
+import { createCollaboratorInventoryService } from './collaboration/inventory-service';
+import { createFirebaseLifecycleAdapter } from './collaboration/firebase-lifecycle-adapter';
 
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
@@ -242,7 +250,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [trayPhotos, setTrayPhotos] = useState<TrayPhoto[]>([]);
   const [showTray, setShowTray] = useState(false);
   const [viewingOwnerUid, setViewingOwnerUid]         = useState(initialOwnerUid ?? user.uid);
-  const [sharedInventories, setSharedInventories]     = useState<{ ownerUid: string; ownerName: string }[]>([]);
+  const [sharedInventories, setSharedInventories]     = useState<SharedInventorySession[]>([]);
+  const [sharedSessionsLoaded, setSharedSessionsLoaded] = useState(false);
+  const [collaborationError, setCollaborationError]   = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationsLoaded, setLocationsLoaded]   = useState(false);
   const [containersLoaded, setContainersLoaded] = useState(false);
@@ -250,7 +260,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [firstLocationName, setFirstLocationName]           = useState('');
   const [creatingFirstLocation, setCreatingFirstLocation]   = useState(false);
   const [showHowItWorks, setShowHowItWorks]                 = useState(false);
-  const [collaborators, setCollaborators]     = useState<{ uid: string; displayName: string; email: string; inviteToken: string }[]>([]);
+  const [collaborators, setCollaborators]     = useState<{ uid: string; displayName: string }[]>([]);
   const [showMobileMenu, setShowMobileMenu]   = useState(false);
   const [showInvitePanel, setShowInvitePanel] = useState(false);
   const [inviteLink, setInviteLink]           = useState<string | null>(null);
@@ -268,58 +278,114 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     }
   }, [lightboxIndex, lightboxItems]);
 
-  // Listen for shared inventories (invites accepted by this user)
+  // Only verified, active and unexpired access records may select shared inventory.
   useEffect(() => {
-    const q = query(collection(db, 'invites'), where('acceptedByUid', '==', user.uid));
-    return onSnapshot(q, snap => {
-      setSharedInventories(
-        snap.docs
-          .filter(d => d.data().status === 'active')
-          .map(d => ({ ownerUid: d.data().ownerUid, ownerName: d.data().ownerDisplayName }))
-      );
-    });
+    return observeSharedInventorySessions(
+      db,
+      user.uid,
+      sessions => {
+        setSharedInventories(sessions);
+        setSharedSessionsLoaded(true);
+        setCollaborationError('');
+      },
+      error => {
+        setSharedInventories([]);
+        setSharedSessionsLoaded(true);
+        setCollaborationError(error.message);
+      },
+    );
   }, [user.uid]);
 
-  // Listen for locations — use viewingOwnerUid so collaborators see the owner's locations
+  // Owners retain the established real-time path. Collaborators load through the
+  // verified owner-aware inventory service; no URL or selector value grants access.
   useEffect(() => {
     setLocationsLoaded(false);
+    if (viewingOwnerUid !== user.uid) {
+      const shared = sharedInventories.find(
+        item => item.ownerUid === viewingOwnerUid,
+      );
+      if (!shared) {
+        setLocations([]);
+        setLocationsLoaded(true);
+        return;
+      }
+      let cancelled = false;
+      const service = createCollaboratorInventoryService(
+        shared.session,
+        createFirebaseInventoryAdapter(db, functions),
+      );
+      service.readInventory()
+        .then(result => {
+          if (cancelled) return;
+          if (!result.ok) {
+            setCollaborationError(`Shared inventory unavailable: ${result.reason}`);
+            setViewingOwnerUid(user.uid);
+            return;
+          }
+          setLocations(result.value.locations.map(location => ({
+            ...location,
+            createdAt: null,
+          })));
+          setContainers(result.value.containers.map(mapContainer));
+          setLocationsLoaded(true);
+          setContainersLoaded(true);
+        })
+        .catch(error => {
+          if (cancelled) return;
+          setCollaborationError(
+            error instanceof Error ? error.message : 'Shared inventory unavailable.',
+          );
+          setViewingOwnerUid(user.uid);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     return subscribeToLocations(viewingOwnerUid, locs => {
       setLocations(locs);
       setLocationsLoaded(true);
     });
-  }, [viewingOwnerUid]);
+  }, [viewingOwnerUid, user.uid, sharedInventories]);
 
-  // Listen for people who have access to this user's inventory
+  // Owner view of current access uses the same authoritative records as rules.
   useEffect(() => {
-    return onSnapshot(collection(db, `users/${user.uid}/collaborators`), snap => {
-      setCollaborators(
-        snap.docs
-          .filter(d => d.data().status === 'active')
-          .map(d => ({
-            uid: d.id,
-            displayName: d.data().displayName ?? d.data().email ?? 'Collaborator',
-            email: d.data().email ?? '',
-            inviteToken: d.data().inviteToken ?? '',
-          }))
-      );
-    });
+    return observeOwnedCollaboratorAccess(
+      db,
+      user.uid,
+      records => setCollaborators(
+        records
+          .filter(({ access }) =>
+            access.status === 'active' &&
+            (access.expiresAtMs === null || Date.now() < access.expiresAtMs))
+          .map(({ collaboratorUid }) => ({
+            uid: collaboratorUid,
+            displayName: `Collaborator ${collaboratorUid.slice(0, 6)}`,
+          })),
+      ),
+      error => setCollaborationError(error.message),
+    );
   }, [user.uid]);
 
-  // Fall back to own inventory if a shared one was revoked
+  // Revocation, expiration, invalid access, or an unauthorized owner URL always
+  // returns the user to their own inventory—even when the valid list is empty.
   useEffect(() => {
-    if (viewingOwnerUid !== user.uid && sharedInventories.length > 0) {
-      if (!sharedInventories.some(s => s.ownerUid === viewingOwnerUid)) {
-        setViewingOwnerUid(user.uid);
-      }
+    if (
+      viewingOwnerUid !== user.uid &&
+      sharedSessionsLoaded &&
+      !sharedInventories.some(s => s.ownerUid === viewingOwnerUid)
+    ) {
+      setViewingOwnerUid(user.uid);
+      window.history.replaceState({}, '', '/');
     }
-  }, [sharedInventories, viewingOwnerUid, user.uid]);
+  }, [sharedInventories, sharedSessionsLoaded, viewingOwnerUid, user.uid]);
 
-  // Container snapshot — owner sees all; collaborators only see non-private containers
+  // Owner container snapshot. Collaborator containers are loaded by the verified
+  // inventory service in the effect above.
   useEffect(() => {
+    if (viewingOwnerUid !== user.uid) return;
+    setContainersLoaded(false);
     const col = collection(db, `users/${viewingOwnerUid}/containers`);
-    const q = viewingOwnerUid !== user.uid
-      ? query(col, where('effectiveIsPrivate', '==', false), orderBy('createdAt', 'desc'))
-      : query(col, orderBy('createdAt', 'desc'));
+    const q = query(col, orderBy('createdAt', 'desc'));
     return onSnapshot(q, snap => {
       setContainers(snap.docs.map(mapContainer));
       setContainersLoaded(true);
@@ -363,6 +429,33 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     (selectedContainerId !== 'new' || newContainerName.trim() !== '');
   const canSave = Boolean(selectedLocationId && containerValid && photo) && !saving;
 
+  const activeSharedInventory = viewingOwnerUid === user.uid
+    ? null
+    : sharedInventories.find(item => item.ownerUid === viewingOwnerUid) ?? null;
+
+  function collaboratorInventoryService() {
+    return activeSharedInventory
+      ? createCollaboratorInventoryService(
+          activeSharedInventory.session,
+          createFirebaseInventoryAdapter(db, functions),
+        )
+      : null;
+  }
+
+  async function createLocationForActiveInventory(
+    name: string,
+    parentId: string | null,
+  ): Promise<string> {
+    if (viewingOwnerUid === user.uid) {
+      return createLocation(user.uid, name, parentId);
+    }
+    const service = collaboratorInventoryService();
+    if (!service) throw new Error('collaboration-session-unavailable');
+    const result = await service.createLocation(name, parentId);
+    if (!result.ok) throw new Error(`collaboration-location:${result.reason}`);
+    return result.value;
+  }
+
   function clearCaptureSelection() {
     if (saving) return;
     if (preview) URL.revokeObjectURL(preview);
@@ -404,10 +497,24 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       let resolvedLocationName = '';
       if (selectedLocationId === 'new') {
         if (!newLocationName.trim()) { setSaveError(t('main.errors.locationRequired')); setSaving(false); return; }
-        resolvedLocationId = await createLocation(user.uid, newLocationName.trim(), selectedParentId);
+        resolvedLocationId = await createLocationForActiveInventory(newLocationName.trim(), selectedParentId);
         resolvedLocationName = newLocationName.trim();
       } else {
         resolvedLocationName = getLocationPath(selectedLocationId, locations);
+      }
+      const service = collaboratorInventoryService();
+      if (service) {
+        const result = await service.createContainer(
+          newContainerName.trim(),
+          resolvedLocationId,
+          resolvedLocationName,
+        );
+        if (!result.ok) throw new Error(`collaboration-container:${result.reason}`);
+        setSelectedLocationId(''); setNewLocationName(''); setSelectedContainerId('');
+        setNewContainerName(''); setPhoto(null); setExtraPhotos([]); setPreview(null);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+        return;
       }
       const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
       const locEffective0 = resolvedLocationId
@@ -457,7 +564,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           setSaveError(t('main.errors.locationRequired'));
           return;
         }
-        resolvedLocationId = await createLocation(user.uid, newLocationName.trim(), selectedParentId);
+        resolvedLocationId = await createLocationForActiveInventory(newLocationName.trim(), selectedParentId);
         resolvedLocationName = newLocationName.trim();
       } else {
         resolvedLocationName = getLocationPath(selectedLocationId, locations);
@@ -496,22 +603,6 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
         const compressed = await imageCompression(file, compressOpts);
 
-        if (viewingOwnerUid !== user.uid) {
-          const ab = await compressed.arrayBuffer();
-          const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
-          const fn = httpsCallable<
-            { ownerUid: string; containerId: string; imageBase64: string; contentType: string },
-            { downloadURL: string; storagePath: string }
-          >(functions, 'uploadCollaboratorPhoto');
-          const r = await fn({
-            ownerUid: viewingOwnerUid,
-            containerId,
-            imageBase64: b64,
-            contentType: compressed.type || 'image/jpeg',
-          });
-          return { url: r.data.downloadURL, storagePath: r.data.storagePath };
-        }
-
         const storagePath = `users/${viewingOwnerUid}/containers/${containerId}/photos/${Date.now()}-${index}-${Math.random().toString(36).slice(2)}.jpg`;
         await uploadBytes(ref(storage, storagePath), compressed);
         return { url: await getDownloadURL(ref(storage, storagePath)), storagePath };
@@ -527,19 +618,43 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         const photoItem = makePhotoItem(photoUrl, storagePath);
         const nextPhotos = [...currentPhotos, photoItem];
 
-        await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), {
-          photos: nextPhotos,
-          photoUrls: arrayUnion(photoUrl),
-          photoStoragePaths: arrayUnion(storagePath),
-          lastModifiedAt: serverTimestamp(),
-          lastModifiedBy: user.uid,
-          lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
-        });
+        const service = collaboratorInventoryService();
+        if (service) {
+          const result = await service.addPhoto(containerId, photoItem);
+          if (!result.ok) throw new Error(`collaboration-photo:${result.reason}`);
+        } else {
+          await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), {
+            photos: nextPhotos,
+            photoUrls: arrayUnion(photoUrl),
+            photoStoragePaths: arrayUnion(storagePath),
+            lastModifiedAt: serverTimestamp(),
+            lastModifiedBy: user.uid,
+            lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+          });
+        }
 
         return nextPhotos;
       };
 
       if (selectedContainerId === 'new') {
+        const service = collaboratorInventoryService();
+        if (service) {
+          const created = await service.createContainer(
+            newContainerName.trim(),
+            resolvedLocationId,
+            resolvedLocationName,
+          );
+          if (!created.ok) throw new Error(`collaboration-container:${created.reason}`);
+          let currentPhotos: PhotoItem[] = [];
+          for (let i = 0; i < selectedFiles.length; i += 1) {
+            currentPhotos = await appendPhotoToExistingContainer(
+              created.value,
+              currentPhotos,
+              selectedFiles[i],
+              i,
+            );
+          }
+        } else {
         const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
         const locEffective1 = resolvedLocationId
           ? (locations.find(l => l.id === resolvedLocationId)?.effectiveIsPrivate ?? false)
@@ -569,6 +684,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         for (let i = 1; i < selectedFiles.length; i += 1) {
           currentPhotos = await appendPhotoToExistingContainer(containerRef.id, currentPhotos, selectedFiles[i], i);
         }
+        }
       } else if (selectedContainerId === '__loose__') {
         const looseExisting = containers.find(c =>
           c.locationId === resolvedLocationId && c.name === 'Loose items' && !c.deletedAt
@@ -580,6 +696,24 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             currentPhotos = await appendPhotoToExistingContainer(looseExisting.id, currentPhotos, selectedFiles[i], i);
           }
         } else {
+          const service = collaboratorInventoryService();
+          if (service) {
+            const created = await service.createContainer(
+              'Loose items',
+              resolvedLocationId,
+              resolvedLocationName,
+            );
+            if (!created.ok) throw new Error(`collaboration-container:${created.reason}`);
+            let currentPhotos: PhotoItem[] = [];
+            for (let i = 0; i < selectedFiles.length; i += 1) {
+              currentPhotos = await appendPhotoToExistingContainer(
+                created.value,
+                currentPhotos,
+                selectedFiles[i],
+                i,
+              );
+            }
+          } else {
           const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
           const locEffectiveLoose = resolvedLocationId
             ? (locations.find(l => l.id === resolvedLocationId)?.effectiveIsPrivate ?? false)
@@ -608,6 +742,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
           for (let i = 1; i < selectedFiles.length; i += 1) {
             currentPhotos = await appendPhotoToExistingContainer(containerRef.id, currentPhotos, selectedFiles[i], i);
+          }
           }
         }
       } else {
@@ -670,26 +805,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       let photoUrl: string;
       let storagePath: string;
 
-      if (viewingOwnerUid !== user.uid) {
-        const ab = await compressed.arrayBuffer();
-        const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
-        const fn = httpsCallable<
-          { ownerUid: string; containerId: string; imageBase64: string; contentType: string },
-          { downloadURL: string; storagePath: string }
-        >(functions, 'uploadCollaboratorPhoto');
-        const r = await fn({
-          ownerUid: viewingOwnerUid,
-          containerId,
-          imageBase64: b64,
-          contentType: compressed.type || 'image/jpeg',
-        });
-        photoUrl = r.data.downloadURL;
-        storagePath = r.data.storagePath;
-      } else {
-        storagePath = `users/${viewingOwnerUid}/containers/${containerId}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
-        await uploadBytes(ref(storage, storagePath), compressed);
-        photoUrl = await getDownloadURL(ref(storage, storagePath));
-      }
+      storagePath = `users/${viewingOwnerUid}/containers/${containerId}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+      await uploadBytes(ref(storage, storagePath), compressed);
+      photoUrl = await getDownloadURL(ref(storage, storagePath));
 
       const photoItem: PhotoItem = {
         id: crypto.randomUUID(),
@@ -707,14 +825,20 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
       const updatedPhotos = [...(existing?.photos ?? []), photoItem];
 
-      await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), {
-        photos: updatedPhotos,
-        photoUrls: arrayUnion(photoUrl),
-        photoStoragePaths: arrayUnion(storagePath),
-        lastModifiedAt: serverTimestamp(),
-        lastModifiedBy: user.uid,
-        lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
-      });
+      const service = collaboratorInventoryService();
+      if (service) {
+        const result = await service.addPhoto(containerId, photoItem);
+        if (!result.ok) throw new Error(`collaboration-photo:${result.reason}`);
+      } else {
+        await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), {
+          photos: updatedPhotos,
+          photoUrls: arrayUnion(photoUrl),
+          photoStoragePaths: arrayUnion(storagePath),
+          lastModifiedAt: serverTimestamp(),
+          lastModifiedBy: user.uid,
+          lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+        });
+      }
     } catch (err: any) {
       console.error('[handleUpdatePhoto] code:', err?.code, '| message:', err?.message, '| full:', err);
       setSaveError(t('main.errors.saveFailed'));
@@ -881,7 +1005,33 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     if (!auth.currentUser) return;
     await auth.currentUser.getIdToken(true);
     const note: ContainerNote = { id: crypto.randomUUID(), text, createdAt: Date.now() };
+    const service = collaboratorInventoryService();
+    if (service) {
+      const result = await service.addNote(containerId, note);
+      if (!result.ok) throw new Error(`collaboration-note:${result.reason}`);
+      return;
+    }
     await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), { notes: arrayUnion(note) });
+  }
+
+  async function handleEditNote(containerId: string, noteId: string, text: string) {
+    if (!auth.currentUser) return;
+    await auth.currentUser.getIdToken(true);
+    const service = collaboratorInventoryService();
+    if (service) {
+      const result = await service.editNote(containerId, noteId, text);
+      if (!result.ok) throw new Error(`collaboration-note-edit:${result.reason}`);
+      return;
+    }
+    const container = containers.find(c => c.id === containerId);
+    if (!container) return;
+    const notes = container.notes.map(note =>
+      note.id === noteId ? { ...note, text: text.trim() } : note
+    );
+    await updateDoc(
+      doc(db, `users/${viewingOwnerUid}/containers/${containerId}`),
+      { notes },
+    );
   }
 
   async function handleDeleteNote(containerId: string, noteId: string) {
@@ -1026,7 +1176,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     const thumbPhoto = matchedPhotos ? matchedPhotos[matchedPhotos.length - 1] : lastPhoto;
     return (
       <div key={c.id} className="container-row">
-        <button className="delete-container-btn" onClick={() => handleDeleteContainer(c)}>✕</button>
+        {viewingOwnerUid === user.uid && (
+          <button className="delete-container-btn" onClick={() => handleDeleteContainer(c)}>✕</button>
+        )}
         <div className="thumb-wrap" onClick={() => openLightbox(c)}>
           {thumbPhoto && <ThumbImage storagePath={thumbPhoto.storagePath} alt={c.name} />}
           {matchedPhotos ? (
@@ -1069,7 +1221,10 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             containerId={c.id}
             notes={c.notes.filter(n => !n.deletedAt)}
             onAdd={handleAddNote}
+            onEdit={handleEditNote}
             onDelete={handleDeleteNote}
+            canDelete={viewingOwnerUid === user.uid}
+            canEdit
           />
           <div className="container-actions">
                                                 <button
@@ -1131,16 +1286,20 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     setGeneratingInvite(true);
     try {
       const token = crypto.randomUUID();
-      const expiresAt = inviteExpiry
-        ? new Date(Date.now() + inviteExpiry * 24 * 60 * 60 * 1000)
+      const nowMs = Date.now();
+      const expiresAtMs = inviteExpiry
+        ? nowMs + inviteExpiry * 24 * 60 * 60 * 1000
         : null;
-      await setDoc(doc(db, 'invites', token), {
+      const lifecycle = createFirebaseLifecycleAdapter(db, {
+        nowMs: () => Date.now(),
+        newAccessId: () => crypto.randomUUID(),
+      });
+      await lifecycle.issueInvitation({
+        invitationId: token,
         ownerUid: user.uid,
-        ownerDisplayName: user.displayName ?? user.email?.split('@')[0] ?? 'Your host',
-        status: 'pending',
-        token,
-        createdAt: serverTimestamp(),
-        ...(expiresAt && { expiresAt }),
+        createdByUid: user.uid,
+        nowMs,
+        expiresAtMs,
       });
       setInviteLink(`${window.location.origin}/invite/${token}`);
     } catch (e) {
@@ -1150,13 +1309,14 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     }
   }
 
-  async function revokeCollaborator(collaboratorUid: string, inviteToken: string) {
+  async function revokeCollaborator(collaboratorUid: string) {
     if (!window.confirm('Remove this person\'s access?')) return;
     try {
-      await deleteDoc(doc(db, `users/${user.uid}/collaborators/${collaboratorUid}`));
-      if (inviteToken) {
-        await updateDoc(doc(db, 'invites', inviteToken), { status: 'revoked' });
-      }
+      const lifecycle = createFirebaseLifecycleAdapter(db, {
+        nowMs: () => Date.now(),
+        newAccessId: () => crypto.randomUUID(),
+      });
+      await lifecycle.revokeAccess(user.uid, collaboratorUid);
     } catch (e) {
       console.error('Failed to revoke collaborator', e);
     }
@@ -1195,7 +1355,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             >
               <option value={user.uid}>{t('main.header.myInventory')}</option>
               {sharedInventories.map(s => (
-                <option key={s.ownerUid} value={s.ownerUid}>{t('main.header.othersInventory', { name: s.ownerName })}</option>
+                <option key={s.ownerUid} value={s.ownerUid}>{t('main.header.othersInventory', { name: s.ownerLabel })}</option>
               ))}
             </select>
           )}
@@ -1281,7 +1441,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 >
                   <option value={user.uid}>{t('main.header.myInventory')}</option>
                   {sharedInventories.map(s => (
-                    <option key={s.ownerUid} value={s.ownerUid}>{t('main.header.othersInventory', { name: s.ownerName })}</option>
+                    <option key={s.ownerUid} value={s.ownerUid}>{t('main.header.othersInventory', { name: s.ownerLabel })}</option>
                   ))}
                 </select>
               </div>
@@ -1329,8 +1489,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       {/* Collaborator mode banner */}
       {viewingOwnerUid !== user.uid && (
         <div className="collab-banner">
-          {t('main.collab.banner', { name: sharedInventories.find(s => s.ownerUid === viewingOwnerUid)?.ownerName ?? 'another user' })}
+          {t('main.collab.banner', { name: sharedInventories.find(s => s.ownerUid === viewingOwnerUid)?.ownerLabel ?? 'authorized shared inventory' })}
         </div>
+      )}
+      {collaborationError && (
+        <div className="collab-banner" role="alert">{collaborationError}</div>
       )}
 
       <main className="main-content">
@@ -1444,7 +1607,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   <button
                     disabled={!newLocationName.trim() || saving}
                     onClick={async () => {
-                      const id = await createLocation(user.uid, newLocationName.trim(), selectedParentId);
+                      const id = await createLocationForActiveInventory(newLocationName.trim(), selectedParentId);
                       setSelectedLocationId(id);
                       setNewLocationName('');
                       setSelectedParentId(null);
@@ -1640,7 +1803,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               <div key={loc} className="location-group">
                 <div className="location-heading-row">
                   <h2 className="location-heading">{loc}</h2>
-                  <button className="delete-location-btn" onClick={() => handleDeleteLocation(loc)}>✕</button>
+                  {viewingOwnerUid === user.uid && (
+                    <button className="delete-location-btn" onClick={() => handleDeleteLocation(loc)}>✕</button>
+                  )}
                 </div>
                 {[...grouped[loc]].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})).map(c=>renderContainerRow(c))}
               </div>
@@ -1656,7 +1821,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       {lightboxItems && (
         <div className="lightbox-backdrop" onClick={closeLightbox}>
           <div className="lightbox-toolbar" onClick={e => e.stopPropagation()}>
-            <button className="lightbox-delete" onClick={handleDeletePhoto}>{t('main.lightbox.delete')}</button>
+            {viewingOwnerUid === user.uid && (
+              <button className="lightbox-delete" onClick={handleDeletePhoto}>{t('main.lightbox.delete')}</button>
+            )}
             <button className="lightbox-action" onClick={() => {
               if (!lightboxContainerId || !lightboxItems) return;
               setMoveSource({
@@ -2250,6 +2417,29 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                           onClick={async () => {
                             const src = containers.find(c => c.id === moveSource.containerId);
                             if (!src) return;
+                            if (viewingOwnerUid !== user.uid) {
+                              if (moveSource.mode !== 'photo' || !moveSource.photoId) {
+                                setCollaborationError('Only individual photo moves are available in shared inventory.');
+                                return;
+                              }
+                              const service = collaboratorInventoryService();
+                              if (!service) {
+                                setCollaborationError('Collaboration session unavailable.');
+                                return;
+                              }
+                              const result = await service.movePhoto(
+                                src.id,
+                                dest.id,
+                                moveSource.photoId,
+                              );
+                              if (!result.ok) {
+                                setCollaborationError(`Photo move failed: ${result.reason}`);
+                                return;
+                              }
+                              closeLightbox();
+                              setMoveSource(null);
+                              return;
+                            }
                             const srcRef  = doc(db, `users/${viewingOwnerUid}/containers/${src.id}`);
                             const destRef = doc(db, `users/${viewingOwnerUid}/containers/${dest.id}`);
                             await runTransaction(db, async (tx) => {
@@ -2287,6 +2477,45 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                           onClick={async () => {
                             const src = containers.find(c => c.id === moveSource.containerId);
                             if (!src || !moveSource.photoId) return;
+                            if (viewingOwnerUid !== user.uid) {
+                              const service = collaboratorInventoryService();
+                              if (!service) {
+                                setCollaborationError('Collaboration session unavailable.');
+                                return;
+                              }
+                              const existingLoose = containers.find(
+                                c => c.locationId === loc.id &&
+                                  c.name === 'Loose items' &&
+                                  !c.deletedAt,
+                              );
+                              let destinationId = existingLoose?.id;
+                              if (!destinationId) {
+                                const created = await service.createContainer(
+                                  'Loose items',
+                                  loc.id,
+                                  getLocationPath(loc.id, locations),
+                                );
+                                if (!created.ok) {
+                                  setCollaborationError(
+                                    `Loose-items container failed: ${created.reason}`,
+                                  );
+                                  return;
+                                }
+                                destinationId = created.value;
+                              }
+                              const moved = await service.movePhoto(
+                                src.id,
+                                destinationId,
+                                moveSource.photoId,
+                              );
+                              if (!moved.ok) {
+                                setCollaborationError(`Photo move failed: ${moved.reason}`);
+                                return;
+                              }
+                              closeLightbox();
+                              setMoveSource(null);
+                              return;
+                            }
                             const srcRef1 = doc(db, `users/${viewingOwnerUid}/containers/${src.id}`);
                             const srcSnap1 = await getDoc(srcRef1);
                             const srcPhotos1: PhotoItem[] = srcSnap1.data()?.photos ?? [];
@@ -2585,7 +2814,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   }}>
                     <span style={{ fontSize: 14, color: '#333' }}>{c.displayName}</span>
                     <button
-                      onClick={() => revokeCollaborator(c.uid, c.inviteToken)}
+                      onClick={() => revokeCollaborator(c.uid)}
                       style={{
                         padding: '4px 12px', borderRadius: 6, border: '1px solid #e0b0a0',
                         background: '#fff', color: '#a04030', fontSize: 12, cursor: 'pointer',
