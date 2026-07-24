@@ -93,7 +93,8 @@ test('owner invitation, collaborator acceptance, shared context, and revocation'
     'button',
     { name: /generate invite link/i },
   );
-  if (await generateInvite.isVisible()) await generateInvite.click();
+  await expect(generateInvite).toBeVisible();
+  await generateInvite.click();
   const inviteInput = ownerPage.locator('input[readonly]');
   await expect(inviteInput).toHaveValue(/\/invite\//);
   const inviteLink = await inviteInput.inputValue();
