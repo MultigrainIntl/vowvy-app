@@ -36,18 +36,24 @@ export function createFirebaseInventoryAdapter(
 ): InventoryServiceAdapter {
   return {
     async listLocations(ownerUid) {
-      const snapshot = await getDocs(
-        query(
-          collection(firestore, locationsPath(ownerUid)),
-          where('effectiveIsPrivate', '==', false),
-          where('visibility', 'in', ['shared', 'inherit']),
-          where('deletedAt', '==', null),
+      const snapshots = await Promise.all(
+        (['shared', 'inherit'] as const).map(visibility =>
+          getDocs(
+            query(
+              collection(firestore, locationsPath(ownerUid)),
+              where('effectiveIsPrivate', '==', false),
+              where('visibility', '==', visibility),
+              where('deletedAt', '==', null),
+            ),
+          ),
         ),
       );
-      return snapshot.docs.map(item => ({
-        id: item.id,
-        ...item.data(),
-      })) as CollaboratorLocation[];
+      return snapshots.flatMap(snapshot =>
+        snapshot.docs.map(item => ({
+          id: item.id,
+          ...item.data(),
+        })),
+      ) as CollaboratorLocation[];
     },
 
     async listContainers(ownerUid) {
