@@ -32,8 +32,17 @@ jobs:
       - name: Install browser
         run: npx playwright install --with-deps chromium
 
-      - name: Run regression QA
-        run: npm run qa
+      - name: Run unit tests
+        run: npm test
+
+      - name: Run public authentication regression
+        run: npx playwright test tests/browser/public-auth.spec.ts
+
+      - name: Run typecheck
+        run: npx tsc --noEmit
+
+      - name: Build application
+        run: npm run build
 
       - name: Preserve browser evidence on failure
         if: failure()
