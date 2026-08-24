@@ -471,6 +471,14 @@
     "privacyHeading": "Helpers only see what you’ve made visible.",
     "privacyBody": "Before inviting a helper, go to Manage Locations and make the places or containers they need visible to helpers. Hidden places and containers stay hidden — even after the helper joins.",
     "privacyTip": "💡 Want a helper to see something? Make it visible to helpers first.",
+    "compatibility": {
+      "heading": "Prepare existing inventory for sharing",
+      "description": "{{spaces}} existing spaces and {{containers}} containers need a small compatibility update before helpers can see them.",
+      "privacy": "Private and deleted items remain unchanged. Nothing is updated until you approve it.",
+      "repair": "Prepare shared inventory",
+      "repairing": "Preparing shared inventory…",
+      "confirm": "Update {{count}} existing shared records so approved helpers can see them? Private and deleted items will not be changed."
+    },
     "inviteDesc": "Generate a link and send it to a helper. They can add photos and help with the places and containers you’ve made visible to them.",
     "searchPlaceholder": "Search by name or email…",
     "noCollaborators": "No collaborators yet.",

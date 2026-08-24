@@ -21,11 +21,13 @@ import { subscribeToLocations, createLocation, getLocationPath, type Location } 
 import SellThisFlow from './SellThisFlow';
 import type { ContainerForListing } from './SellThisFlow';
 import {
+  advanceDefaultSharedInventorySelection,
   observeSharedInventorySessions,
   observeOwnedCollaboratorAccess,
   type SharedInventorySession,
 } from './collaboration/firebase-session-adapter';
 import { createFirebaseInventoryAdapter } from './collaboration/firebase-inventory-adapter';
+import { isVisibleInventoryContainer } from './collaboration/inventory-presentation';
 import { createCollaboratorInventoryService } from './collaboration/inventory-service';
 import { createFirebaseLifecycleAdapter } from './collaboration/firebase-lifecycle-adapter';
 
@@ -271,6 +273,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [cardMoreOpenId, setCardMoreOpenId] = useState<string | null>(null);
   const updatePhotoInputRef = useRef<HTMLInputElement>(null);
   const scrollRef           = useRef<HTMLDivElement>(null);
+  const defaultInventorySelectedRef = useRef(false);
 
   // Sync description draft when lightbox photo changes
   useEffect(() => {
@@ -288,6 +291,23 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         setSharedInventories(sessions);
         setSharedSessionsLoaded(true);
         setCollaborationError('');
+
+        // Returning collaborators start in their verified shared inventory,
+        // without overriding an invitation URL or a later manual choice.
+        const defaultSelection = advanceDefaultSharedInventorySelection(
+          sessions,
+          user.uid,
+          Date.now(),
+          defaultInventorySelectedRef.current,
+          initialOwnerUid,
+        );
+        defaultInventorySelectedRef.current = defaultSelection.selected;
+        const ownerUid = defaultSelection.ownerUid;
+        if (ownerUid) {
+          setViewingOwnerUid(currentOwnerUid =>
+            currentOwnerUid === user.uid ? ownerUid : currentOwnerUid,
+          );
+        }
       },
       error => {
         setSharedInventories([]);
@@ -295,7 +315,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         setCollaborationError(error.message);
       },
     );
-  }, [user.uid]);
+  }, [initialOwnerUid, user.uid]);
 
   // Owners retain the established real-time path. Collaborators load through the
   // verified owner-aware inventory service; no URL or selector value grants access.
@@ -1068,12 +1088,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         )
       )
     : activeContainers
-  ).filter(c => {
-    if (c.photos.filter(p => !p.deletedAt).length === 0) return false;
-    // Hide private containers from collaborators
-    if (viewingOwnerUid !== user.uid && c.effectiveIsPrivate) return false;
-    return true;
-  });
+  ).filter(container => isVisibleInventoryContainer(
+    container,
+    viewingOwnerUid,
+    user.uid,
+  ));
 
   const photoMatchMap = new Map<string, PhotoItem[]>();
   if (trimmedQuery) {

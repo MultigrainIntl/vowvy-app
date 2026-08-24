@@ -470,6 +470,14 @@
     "privacyHeading": "Colaboradores só veem o que você tornou visível.",
     "privacyBody": "Antes de convidar um colaborador, vá em Gerenciar locais e torne visíveis os lugares ou contêiners que ele precisa ver. Lugares e contêiners ocultos permanecem ocultos — mesmo após o colaborador entrar.",
     "privacyTip": "💡 Quer que um colaborador veja algo? Primeiro torne-o visível para colaboradores.",
+    "compatibility": {
+      "heading": "Preparar o inventário existente para compartilhamento",
+      "description": "{{spaces}} locais existentes e {{containers}} contêineres precisam de uma pequena atualização de compatibilidade para que os colaboradores possam vê-los.",
+      "privacy": "Itens privados e excluídos permanecem inalterados. Nada será atualizado sem sua aprovação.",
+      "repair": "Preparar inventário compartilhado",
+      "repairing": "Preparando inventário compartilhado…",
+      "confirm": "Atualizar {{count}} registros compartilhados existentes para que colaboradores autorizados possam vê-los? Itens privados e excluídos não serão alterados."
+    },
     "inviteDesc": "Gere um link e envie para um colaborador. Ele poderá adicionar fotos e ajudar com os lugares e contêiners que você tornou visíveis.",
     "searchPlaceholder": "Buscar por nome ou e-mail…",
     "noCollaborators": "Nenhum colaborador ainda.",

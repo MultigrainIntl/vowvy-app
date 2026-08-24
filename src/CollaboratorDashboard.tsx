@@ -14,6 +14,11 @@ import {
   type OwnedCollaboratorAccess,
 } from './collaboration/firebase-session-adapter';
 import type { CollaboratorAccessRecord } from './collaboration/access-model';
+import {
+  inspectSharedInventoryCompatibility,
+  repairSharedInventoryCompatibility,
+  type SharedInventoryCompatibilityReport,
+} from './collaboration/legacy-inventory-compatibility';
 
 interface Collaborator {
   uid: string;
@@ -37,6 +42,9 @@ export default function CollaboratorDashboard({ user }: Props) {
   const [inviteExpiry, setInviteExpiry]       = useState<number | null>(7);
   const [actionError, setActionError] = useState('');
   const [recentActivity, setRecentActivity] = useState<{ collaboratorUid: string; containerName: string; modifiedAt: Date }[]>([]);
+  const [compatibilityReport, setCompatibilityReport] =
+    useState<SharedInventoryCompatibilityReport | null>(null);
+  const [repairingInventory, setRepairingInventory] = useState(false);
 
   useEffect(() => {
     return observeOwnedCollaboratorAccess(
@@ -60,6 +68,24 @@ export default function CollaboratorDashboard({ user }: Props) {
       ),
       error => setActionError(error.message),
     );
+  }, [user.uid]);
+
+  // Read-only preview: older records are never changed without owner confirmation.
+  useEffect(() => {
+    let cancelled = false;
+    inspectSharedInventoryCompatibility(db, user.uid)
+      .then(report => {
+        if (!cancelled) setCompatibilityReport(report);
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setActionError(error instanceof Error ? error.message : 'Inventory check failed.');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [user.uid]);
 
   useEffect(() => {
@@ -126,6 +152,25 @@ export default function CollaboratorDashboard({ user }: Props) {
     }
   }
 
+  async function repairExistingSharedInventory() {
+    if (!compatibilityReport || repairingInventory) return;
+
+    const count = compatibilityReport.repairableLocations +
+      compatibilityReport.repairableContainers;
+    if (!window.confirm(t('collabDash.compatibility.confirm', { count }))) return;
+
+    setRepairingInventory(true);
+    setActionError('');
+    try {
+      await repairSharedInventoryCompatibility(db, user.uid, compatibilityReport);
+      setCompatibilityReport(await inspectSharedInventoryCompatibility(db, user.uid));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Inventory repair failed.');
+    } finally {
+      setRepairingInventory(false);
+    }
+  }
+
   function formatDate(date: Date): string {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
@@ -170,6 +215,46 @@ export default function CollaboratorDashboard({ user }: Props) {
             <p className="collab-privacy-tip">{t('collabDash.privacyTip')}</p>
           </div>
         </div>
+
+        {compatibilityReport &&
+          compatibilityReport.repairableLocations +
+            compatibilityReport.repairableContainers > 0 && (
+          <div className="collab-privacy-note" role="status">
+            <span className="collab-privacy-note-icon">🔒</span>
+            <div>
+              <p className="collab-privacy-note-heading">
+                {t('collabDash.compatibility.heading')}
+              </p>
+              <p className="collab-privacy-note-body">
+                {t('collabDash.compatibility.description', {
+                  spaces: compatibilityReport.repairableLocations,
+                  containers: compatibilityReport.repairableContainers,
+                })}
+              </p>
+              <p className="collab-privacy-tip">
+                {t('collabDash.compatibility.privacy')}
+              </p>
+              <button
+                onClick={repairExistingSharedInventory}
+                disabled={repairingInventory}
+                style={{
+                  marginTop: 10,
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: repairingInventory ? '#ccc' : '#7a3b2e',
+                  color: '#fff',
+                  fontSize: 13,
+                  cursor: repairingInventory ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {repairingInventory
+                  ? t('collabDash.compatibility.repairing')
+                  : t('collabDash.compatibility.repair')}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="collab-invite-box">
           <p style={{ margin: '0 0 12px', fontSize: 14, color: '#555' }}>

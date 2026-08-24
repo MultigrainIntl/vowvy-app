@@ -1,8 +1,22 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Location } from '../../src/locations';
 
+const firestoreMocks = vi.hoisted(() => ({
+  collection: vi.fn((_db: unknown, path: string) => ({ path })),
+  addDoc: vi.fn(async () => ({ id: 'created-location' })),
+  serverTimestamp: vi.fn(() => 'server-timestamp'),
+}));
+
 vi.mock('../../src/firebase', () => ({ db: {} }));
-vi.mock('firebase/firestore', () => ({}));
+vi.mock('firebase/firestore', () => ({
+  collection: firestoreMocks.collection,
+  addDoc: firestoreMocks.addDoc,
+  serverTimestamp: firestoreMocks.serverTimestamp,
+  onSnapshot: vi.fn(),
+  query: vi.fn(),
+  orderBy: vi.fn(),
+  Timestamp: class Timestamp {},
+}));
 
 let locations: typeof import('../../src/locations');
 
@@ -20,6 +34,44 @@ function loc(id: string, name: string, parentId: string | null): Location {
     effectiveIsPrivate: false,
   };
 }
+
+describe('owner-created shared location compatibility', () => {
+  it('includes the deletion metadata required by collaborator queries', async () => {
+    expect(await locations.createLocation('owner-1', ' Garage ')).toBe(
+      'created-location',
+    );
+
+    expect(firestoreMocks.collection).toHaveBeenCalledWith(
+      {},
+      'users/owner-1/locations',
+    );
+    expect(firestoreMocks.addDoc).toHaveBeenLastCalledWith(
+      { path: 'users/owner-1/locations' },
+      {
+        name: 'Garage',
+        parentId: null,
+        createdAt: 'server-timestamp',
+        visibility: 'inherit',
+        effectiveIsPrivate: false,
+        deletedAt: null,
+      },
+    );
+  });
+
+  it('keeps a private parent private while adding compatible deletion metadata', async () => {
+    await locations.createLocation('owner-1', ' Private shelf ', 'private-parent', true);
+
+    expect(firestoreMocks.addDoc).toHaveBeenLastCalledWith(
+      { path: 'users/owner-1/locations' },
+      expect.objectContaining({
+        name: 'Private shelf',
+        parentId: 'private-parent',
+        effectiveIsPrivate: true,
+        deletedAt: null,
+      }),
+    );
+  });
+});
 
 describe('location hierarchy regression protection', () => {
   const tree = [

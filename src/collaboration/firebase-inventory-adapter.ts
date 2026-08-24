@@ -7,6 +7,7 @@ import {
   getDocs,
   query,
   runTransaction,
+  serverTimestamp,
   updateDoc,
   where,
   type Firestore,
@@ -92,7 +93,7 @@ export function createFirebaseInventoryAdapter(
     async createLocation(ownerUid, location: NewCollaboratorLocation) {
       const created = await addDoc(
         collection(firestore, locationsPath(ownerUid)),
-        { ...location, deletedAt: null },
+        { ...location, createdAt: serverTimestamp(), deletedAt: null },
       );
       return created.id;
     },
@@ -100,7 +101,7 @@ export function createFirebaseInventoryAdapter(
     async createContainer(ownerUid, container: NewCollaboratorContainer) {
       const created = await addDoc(
         collection(firestore, containersPath(ownerUid)),
-        { ...container, deletedAt: null },
+        { ...container, createdAt: serverTimestamp(), deletedAt: null },
       );
       return created.id;
     },

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { COLLABORATOR_CAPABILITIES } from '../../src/collaboration/access-model';
-import { selectSharedInventorySessions } from '../../src/collaboration/firebase-session-adapter';
+import {
+  advanceDefaultSharedInventorySelection,
+  selectDefaultSharedInventoryOwner,
+  selectSharedInventorySessions,
+} from '../../src/collaboration/firebase-session-adapter';
 
 function access(overrides: Record<string, unknown> = {}) {
   return {
@@ -44,5 +48,135 @@ describe('shared inventory session selection', () => {
     expect(
       selectSharedInventorySessions([access()], 'collaborator-1', 1_000),
     ).toEqual([]);
+  });
+});
+
+describe('default shared inventory selection', () => {
+  it('opens the first verified owner inventory for a returning collaborator', () => {
+    const sessions = selectSharedInventorySessions(
+      [
+        access(),
+        access({ accessId: 'access-2', ownerUid: 'second-owner', createdByUid: 'second-owner' }),
+      ],
+      'collaborator-1',
+      500,
+    );
+
+    expect(
+      selectDefaultSharedInventoryOwner(sessions, 'collaborator-1', 500),
+    ).toBe('owner-123456');
+  });
+
+  it('does not select an owner when no verified inventory is available', () => {
+    expect(
+      selectDefaultSharedInventoryOwner([], 'collaborator-1', 500),
+    ).toBeNull();
+  });
+
+  it('rejects a session belonging to another signed-in user', () => {
+    const sessions = selectSharedInventorySessions(
+      [access()],
+      'collaborator-1',
+      500,
+    );
+
+    expect(
+      selectDefaultSharedInventoryOwner(sessions, 'someone-else', 500),
+    ).toBeNull();
+  });
+
+  it('rejects access that expired after the session list was loaded', () => {
+    const sessions = selectSharedInventorySessions(
+      [access()],
+      'collaborator-1',
+      500,
+    );
+
+    expect(
+      selectDefaultSharedInventoryOwner(sessions, 'collaborator-1', 1_000),
+    ).toBeNull();
+  });
+
+  it('does not select access that lacks inventory-read permission', () => {
+    const sessions = selectSharedInventorySessions(
+      [access({ capabilities: ['location.create'] })],
+      'collaborator-1',
+      500,
+    );
+
+    expect(
+      selectDefaultSharedInventoryOwner(sessions, 'collaborator-1', 500),
+    ).toBeNull();
+  });
+
+  it('skips invalid access and selects the next verified owner', () => {
+    const sessions = selectSharedInventorySessions(
+      [
+        access({ capabilities: ['location.create'] }),
+        access({ accessId: 'access-2', ownerUid: 'second-owner', createdByUid: 'second-owner' }),
+      ],
+      'collaborator-1',
+      500,
+    );
+
+    expect(
+      selectDefaultSharedInventoryOwner(sessions, 'collaborator-1', 500),
+    ).toBe('second-owner');
+  });
+
+  it('waits through an empty snapshot and selects a later verified owner', () => {
+    const firstSelection = advanceDefaultSharedInventorySelection(
+      [],
+      'collaborator-1',
+      500,
+      false,
+      null,
+    );
+    expect(firstSelection).toEqual({ ownerUid: null, selected: false });
+
+    const sessions = selectSharedInventorySessions(
+      [access()],
+      'collaborator-1',
+      500,
+    );
+    expect(advanceDefaultSharedInventorySelection(
+      sessions,
+      'collaborator-1',
+      500,
+      firstSelection.selected,
+      null,
+    )).toEqual({ ownerUid: 'owner-123456', selected: true });
+  });
+
+  it('does not override an explicit invitation owner', () => {
+    const sessions = selectSharedInventorySessions(
+      [access()],
+      'collaborator-1',
+      500,
+    );
+
+    expect(advanceDefaultSharedInventorySelection(
+      sessions,
+      'collaborator-1',
+      500,
+      false,
+      'invited-owner',
+    )).toEqual({ ownerUid: null, selected: false });
+  });
+
+  it('does not auto-select again after the first verified selection', () => {
+    const sessions = selectSharedInventorySessions(
+      [access()],
+      'collaborator-1',
+      500,
+    );
+
+    expect(advanceDefaultSharedInventorySelection(
+      sessions,
+      'collaborator-1',
+      500,
+      true,
+      null,
+    )).toEqual({ ownerUid: null, selected: true });
   });
 });

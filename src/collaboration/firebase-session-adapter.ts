@@ -26,6 +26,11 @@ export interface OwnedCollaboratorAccess {
   access: CollaboratorAccessRecord;
 }
 
+export interface DefaultSharedInventorySelection {
+  ownerUid: string | null;
+  selected: boolean;
+}
+
 function ownerLabel(ownerUid: string): string {
   return `Shared inventory ${ownerUid.slice(0, 6)}`;
 }
@@ -51,6 +56,46 @@ export function selectSharedInventorySessions(
       session: decision.session,
     }];
   });
+}
+
+export function selectDefaultSharedInventoryOwner(
+  sessions: readonly SharedInventorySession[],
+  collaboratorUid: string,
+  nowMs: number,
+): string | null {
+  for (const shared of sessions) {
+    const decision = evaluateCollaboratorAccess(
+      shared.access,
+      shared.ownerUid,
+      collaboratorUid,
+      nowMs,
+    );
+    if (decision.allowed && decision.session.capabilities.has('inventory.read')) {
+      return decision.session.ownerUid;
+    }
+  }
+
+  return null;
+}
+
+export function advanceDefaultSharedInventorySelection(
+  sessions: readonly SharedInventorySession[],
+  collaboratorUid: string,
+  nowMs: number,
+  alreadySelected: boolean,
+  initialOwnerUid: string | null | undefined,
+): DefaultSharedInventorySelection {
+  if (alreadySelected || initialOwnerUid) {
+    return { ownerUid: null, selected: alreadySelected };
+  }
+
+  const ownerUid = selectDefaultSharedInventoryOwner(
+    sessions,
+    collaboratorUid,
+    nowMs,
+  );
+
+  return { ownerUid, selected: ownerUid !== null };
 }
 
 export function observeSharedInventorySessions(
