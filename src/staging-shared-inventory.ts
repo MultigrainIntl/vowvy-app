@@ -13,6 +13,8 @@ export function activeLegacySharedInvitations(
   collaboratorUid: string,
   nowMs: number,
 ): LegacySharedInvitation[] {
+  if (!Number.isFinite(nowMs)) return [];
+
   const owners = new Set<string>();
   return values.flatMap(value => {
     if (!value || typeof value !== 'object') return [];
@@ -21,10 +23,9 @@ export function activeLegacySharedInvitations(
     if (typeof record.ownerUid !== 'string' || !record.ownerUid || record.ownerUid === collaboratorUid) return [];
     if (owners.has(record.ownerUid)) return [];
     const expiresAt = record.expiresAt as LegacySharedInvitation['expiresAt'];
-    const expiryMs = expiresAt instanceof Date
-      ? expiresAt.getTime()
-      : expiresAt?.toMillis?.() ?? expiresAt?.toDate?.().getTime() ?? null;
-    if (expiryMs !== null && expiryMs <= nowMs) return [];
+    // The legacy expiry ends the opportunity to accept an invitation. Once it
+    // was accepted, the owner's active collaborator document is authoritative.
+    // restoreSharedInventories verifies that document before granting access.
     owners.add(record.ownerUid);
     return [{
       ownerUid: record.ownerUid,

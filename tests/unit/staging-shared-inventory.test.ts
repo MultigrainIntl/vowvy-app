@@ -21,10 +21,43 @@ describe('existing shared inventory restoration', () => {
     ], 'collaborator-a', 100)).toEqual([{ ...active, expiresAt: undefined }]);
   });
 
-  it('skips invitations that already expired', () => {
+  it('retains accepted active access after the invitation link itself expires', () => {
     expect(activeLegacySharedInvitations([
       { ...active, expiresAt: { toMillis: () => 100 } },
-    ], 'collaborator-a', 100)).toEqual([]);
+    ], 'collaborator-a', 101)).toEqual([{
+      ...active,
+      expiresAt: expect.objectContaining({ toMillis: expect.any(Function) }),
+    }]);
+  });
+
+  it('restores all three distinct active owners despite expired legacy invitation links', () => {
+    const expired = { toMillis: () => 100 };
+
+    expect(activeLegacySharedInvitations([
+      { ...active, ownerDisplayName: 'hmckelligott', expiresAt: { toMillis: () => 300 } },
+      {
+        ...active,
+        ownerUid: 'test-owner',
+        ownerDisplayName: 'george+vowvytest',
+        expiresAt: expired,
+      },
+      {
+        ...active,
+        ownerUid: 'joseph-owner',
+        ownerDisplayName: 'josephjlibriz',
+        expiresAt: expired,
+      },
+      { ...active, ownerUid: 'pending-owner', status: 'pending', expiresAt: expired },
+      { ...active, ownerUid: 'revoked-owner', status: 'revoked', expiresAt: expired },
+    ], 'collaborator-a', 200).map(invitation => invitation.ownerDisplayName)).toEqual([
+      'hmckelligott',
+      'george+vowvytest',
+      'josephjlibriz',
+    ]);
+  });
+
+  it('rejects invalid clock values while preserving valid accepted invitations', () => {
+    expect(activeLegacySharedInvitations([active], 'collaborator-a', Number.NaN)).toEqual([]);
   });
 
   it('deduplicates repeated invitations without dropping genuinely different shared owners', () => {
