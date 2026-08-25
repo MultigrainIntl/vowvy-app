@@ -298,7 +298,7 @@ describe('collaborator Firebase enforcement', () => {
           photos: [{
             id: 'photo-1',
             url: 'https://example.test/photo.jpg',
-            storagePath: `users/${ownerUid}/containers/container-1/photo.jpg`,
+            storagePath: `users/${ownerUid}/containers/container-1/photos/photo.jpg`,
             description: '',
             createdAt: 1,
             addedBy: ownerUid,
@@ -336,7 +336,7 @@ describe('collaborator Firebase enforcement', () => {
       uploadBytes(
         ref(
           storage,
-          `users/${ownerUid}/containers/container-1/photo.jpg`,
+          `users/${ownerUid}/containers/container-1/photos/photo.jpg`,
         ),
         image,
         { contentType: 'image/jpeg' },
@@ -346,7 +346,7 @@ describe('collaborator Firebase enforcement', () => {
       uploadBytes(
         ref(
           storage,
-          `users/${ownerUid}/containers/private-container/photo.jpg`,
+          `users/${ownerUid}/containers/private-container/photos/private-photo.jpg`,
         ),
         image,
         { contentType: 'image/jpeg' },
@@ -354,9 +354,78 @@ describe('collaborator Firebase enforcement', () => {
     );
   });
 
+  it('denies collaborator uploads outside the application photo directory', async () => {
+    const storage = environment.authenticatedContext(collaboratorUid).storage();
+    await assertFails(
+      uploadBytes(
+        ref(storage, `users/${ownerUid}/containers/container-1/legacy-photo.jpg`),
+        new Uint8Array([1, 2, 3]),
+        { contentType: 'image/jpeg' },
+      ),
+    );
+  });
+
+  it('rejects non-image collaborator uploads in the application photo directory', async () => {
+    const storage = environment.authenticatedContext(collaboratorUid).storage();
+    await assertFails(
+      uploadBytes(
+        ref(storage, `users/${ownerUid}/containers/container-1/photos/unsafe.txt`),
+        new Uint8Array([1, 2, 3]),
+        { contentType: 'text/plain' },
+      ),
+    );
+  });
+
+  it('rejects uploads when photo creation is not an active collaborator capability', async () => {
+    const storage = environment.authenticatedContext(collaboratorUid).storage();
+
+    for (const [name, overrides] of [
+      ['revoked', { status: 'revoked' }],
+      ['expired', { expiresAtMs: 1 }],
+      ['missing-capability', { capabilities: ['inventory.read'] }],
+    ] as const) {
+      await seed(overrides);
+      await assertFails(
+        uploadBytes(
+          ref(storage, `users/${ownerUid}/containers/container-1/photos/${name}.jpg`),
+          new Uint8Array([1, 2, 3]),
+          { contentType: 'image/jpeg' },
+        ),
+      );
+    }
+  });
+
+  it('rejects collaborator uploads to deleted containers', async () => {
+    await environment.withSecurityRulesDisabled(async context => {
+      await updateDoc(
+        doc(context.firestore(), `users/${ownerUid}/containers/container-1`),
+        { deletedAt: 1 },
+      );
+    });
+    const storage = environment.authenticatedContext(collaboratorUid).storage();
+    await assertFails(
+      uploadBytes(
+        ref(storage, `users/${ownerUid}/containers/container-1/photos/deleted.jpg`),
+        new Uint8Array([1, 2, 3]),
+        { contentType: 'image/jpeg' },
+      ),
+    );
+  });
+
+  it('preserves owner uploads to the application photo directory', async () => {
+    const storage = environment.authenticatedContext(ownerUid).storage();
+    await assertSucceeds(
+      uploadBytes(
+        ref(storage, `users/${ownerUid}/containers/container-1/photos/owner.jpg`),
+        new Uint8Array([1, 2, 3]),
+        { contentType: 'image/jpeg' },
+      ),
+    );
+  });
+
   it('denies storage reads after revocation', async () => {
     const ownerStorage = environment.authenticatedContext(ownerUid).storage();
-    const path = `users/${ownerUid}/containers/container-1/photo.jpg`;
+    const path = `users/${ownerUid}/containers/container-1/photos/revoked-read.jpg`;
     await uploadBytes(ref(ownerStorage, path), new Uint8Array([1]), {
       contentType: 'image/jpeg',
     });

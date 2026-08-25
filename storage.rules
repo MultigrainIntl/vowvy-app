@@ -17,7 +17,7 @@ service firebase.storage {
         && 'photo.create' in firestore.get(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid)).data.capabilities;
     }
 
-    match /users/{ownerUid}/containers/{containerId}/{fileName} {
+    match /users/{ownerUid}/containers/{containerId}/photos/{fileName} {
       allow read: if owns(ownerUid)
         || (hasPhotoAccess(ownerUid)
           && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.effectiveIsPrivate == false
