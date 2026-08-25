@@ -7,7 +7,6 @@ import {
   query, orderBy, arrayUnion, serverTimestamp, Timestamp, runTransaction,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { httpsCallable } from 'firebase/functions';
 import imageCompression from 'browser-image-compression';
 import QRCode from 'qrcode';
 import { auth, db, storage, functions } from './firebase';
@@ -30,6 +29,10 @@ import { createFirebaseInventoryAdapter } from './collaboration/firebase-invento
 import { isVisibleInventoryContainer } from './collaboration/inventory-presentation';
 import { createCollaboratorInventoryService } from './collaboration/inventory-service';
 import { createFirebaseLifecycleAdapter } from './collaboration/firebase-lifecycle-adapter';
+import {
+  persistCapturedPhoto,
+  saveCapturedPhotoQueue,
+} from './collaboration/photo-workflows';
 
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
@@ -1898,34 +1901,35 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     const compressed = await imageCompression(file, {
                       maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: false, maxSizeMB: 0.5,
                     });
-                    let photoUrl: string;
-                    let storagePath: string;
-                    if (viewingOwnerUid !== user.uid) {
-                      const ab = await compressed.arrayBuffer();
-                      const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
-                      const fn = httpsCallable<{ ownerUid: string; containerId: string; imageBase64: string; contentType: string }, { downloadURL: string; storagePath: string }>(functions, 'uploadCollaboratorPhoto');
-                      const r = await fn({ ownerUid: viewingOwnerUid, containerId: lightboxContainerId, imageBase64: b64, contentType: 'image/jpeg' });
-                      photoUrl = r.data.downloadURL;
-                      storagePath = r.data.storagePath;
-                    } else {
-                      storagePath = `users/${viewingOwnerUid}/containers/${lightboxContainerId}/photos/${Date.now()}.jpg`;
-                      await uploadBytes(ref(storage, storagePath), compressed);
-                      photoUrl = await getDownloadURL(ref(storage, storagePath));
-                    }
+                    const storagePath = `users/${viewingOwnerUid}/containers/${lightboxContainerId}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+                    await uploadBytes(ref(storage, storagePath), compressed);
+                    const photoUrl = await getDownloadURL(ref(storage, storagePath));
                     const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
-                    await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), {
-                      photos: arrayUnion(photoItem),
-                      photoUrls: arrayUnion(photoUrl),
-                      photoStoragePaths: arrayUnion(storagePath),
-                      lastModifiedAt: serverTimestamp(),
-                      lastModifiedBy: user.uid,
-                      lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+                    const collaborator = collaboratorInventoryService();
+                    await persistCapturedPhoto({
+                      containerId: lightboxContainerId,
+                      photo: photoItem,
+                      existingPhotos: containers.find(item => item.id === lightboxContainerId)?.photos ?? [],
+                      collaborator,
+                      writeOwnedPhotos: async () => {
+                        await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), {
+                          photos: arrayUnion(photoItem),
+                          photoUrls: arrayUnion(photoUrl),
+                          photoStoragePaths: arrayUnion(storagePath),
+                          lastModifiedAt: serverTimestamp(),
+                          lastModifiedBy: user.uid,
+                          lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+                        });
+                      },
                     });
                     // Update lightboxItems immediately so the new photo appears without
                     // closing and reopening the lightbox. Prepend because the array is
                     // newest-first (matches the .reverse() in openLightbox).
                     setLightboxItems(prev => prev ? [photoItem, ...prev] : [photoItem]);
                     setLightboxIndex(0);
+                    if (collaborator) {
+                      await refreshCollaboratorInventory(collaborator);
+                    }
                     setTimeout(() => {
                       if (scrollRef.current) scrollRef.current.scrollLeft = 0;
                     }, 0);
@@ -2266,68 +2270,61 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
                 await auth.currentUser.getIdToken(true);
 
-                const existing = containers.find(c => c.id === captureContainerId);
-                let currentPhotos: PhotoItem[] = [...(existing?.photos ?? [])];
+                const targetContainerId = captureContainerId;
+                const existing = containers.find(c => c.id === targetContainerId);
+                const collaborator = collaboratorInventoryService();
 
-                for (let i = 0; i < captureQueue.length; i += 1) {
-                  const file = captureQueue[i];
-                  setSaveProgressText(`Saving ${i + 1} of ${captureQueue.length} photo${captureQueue.length === 1 ? '' : 's'}…`);
-
-                  const compressed = await imageCompression(file, {
-                    maxWidthOrHeight: 1600,
-                    initialQuality: 0.85,
-                    useWebWorker: false,
-                    maxSizeMB: 0.5,
-                  });
-
-                  let photoUrl: string;
-                  let storagePath: string;
-
-                  if (viewingOwnerUid !== user.uid) {
-                    const ab = await compressed.arrayBuffer();
-                    const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
-                    const fn = httpsCallable<
-                      { ownerUid: string; containerId: string; imageBase64: string; contentType: string },
-                      { downloadURL: string; storagePath: string }
-                    >(functions, 'uploadCollaboratorPhoto');
-                    const r = await fn({
-                      ownerUid: viewingOwnerUid,
-                      containerId: captureContainerId,
-                      imageBase64: b64,
-                      contentType: compressed.type || 'image/jpeg',
+                await saveCapturedPhotoQueue<File, PhotoItem>({
+                  files: captureQueue,
+                  existingPhotos: existing?.photos ?? [],
+                  onProgress: (current, total) => {
+                    setSaveProgressText(`Saving ${current} of ${total} photo${total === 1 ? '' : 's'}…`);
+                  },
+                  createPhoto: async (file, index) => {
+                    const compressed = await imageCompression(file, {
+                      maxWidthOrHeight: 1600,
+                      initialQuality: 0.85,
+                      useWebWorker: false,
+                      maxSizeMB: 0.5,
                     });
-                    photoUrl = r.data.downloadURL;
-                    storagePath = r.data.storagePath;
-                  } else {
-                    storagePath = `users/${viewingOwnerUid}/containers/${captureContainerId}/photos/${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.jpg`;
+                    const storagePath = `users/${viewingOwnerUid}/containers/${targetContainerId}/photos/${Date.now()}-${index}-${Math.random().toString(36).slice(2)}.jpg`;
                     await uploadBytes(ref(storage, storagePath), compressed);
-                    photoUrl = await getDownloadURL(ref(storage, storagePath));
-                  }
+                    const photoUrl = await getDownloadURL(ref(storage, storagePath));
 
-                  const photoItem: PhotoItem = {
-                    id: crypto.randomUUID(),
-                    url: photoUrl,
-                    storagePath,
-                    description: '',
-                    createdAt: Date.now(),
-                    addedBy: user.uid,
-                    addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
-                    moderationStatus: 'pending',
-                    moderationCheckedAt: null,
-                    moderationProvider: null,
-                    moderationReason: null,
-                  };
+                    return {
+                      id: crypto.randomUUID(),
+                      url: photoUrl,
+                      storagePath,
+                      description: '',
+                      createdAt: Date.now(),
+                      addedBy: user.uid,
+                      addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+                      moderationStatus: 'pending',
+                      moderationCheckedAt: null,
+                      moderationProvider: null,
+                      moderationReason: null,
+                    };
+                  },
+                  persistPhoto: (photoItem, currentPhotos) => persistCapturedPhoto({
+                    containerId: targetContainerId,
+                    photo: photoItem,
+                    existingPhotos: currentPhotos,
+                    collaborator,
+                    writeOwnedPhotos: async nextPhotos => {
+                      await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${targetContainerId}`), {
+                        photos: nextPhotos,
+                        photoUrls: arrayUnion(photoItem.url),
+                        photoStoragePaths: arrayUnion(photoItem.storagePath),
+                        lastModifiedAt: serverTimestamp(),
+                        lastModifiedBy: user.uid,
+                        lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+                      });
+                    },
+                  }),
+                });
 
-                  currentPhotos = [...currentPhotos, photoItem];
-
-                  await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${captureContainerId}`), {
-                    photos: currentPhotos,
-                    photoUrls: arrayUnion(photoUrl),
-                    photoStoragePaths: arrayUnion(storagePath),
-                    lastModifiedAt: serverTimestamp(),
-                    lastModifiedBy: user.uid,
-                    lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
-                  });
+                if (collaborator) {
+                  await refreshCollaboratorInventory(collaborator);
                 }
 
                 setCaptureQueue([]);

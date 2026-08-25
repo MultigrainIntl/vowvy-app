@@ -6,6 +6,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import {
+  arrayUnion,
   collection,
   collectionGroup,
   doc,
@@ -352,6 +353,37 @@ describe('collaborator Firebase enforcement', () => {
         { contentType: 'image/jpeg' },
       ),
     );
+  });
+
+  it('persists every Add Items batch photo through the real collaborator workflow', async () => {
+    const context = environment.authenticatedContext(collaboratorUid);
+    const storage = context.storage();
+    const db = context.firestore();
+    const containerRef = doc(db, `users/${ownerUid}/containers/container-1`);
+
+    for (const index of [0, 1, 2]) {
+      const storagePath =
+        `users/${ownerUid}/containers/container-1/photos/capture-${index}.jpg`;
+      await assertSucceeds(
+        uploadBytes(ref(storage, storagePath), new Uint8Array([index + 1]), {
+          contentType: 'image/jpeg',
+        }),
+      );
+      await assertSucceeds(
+        updateDoc(containerRef, {
+          photos: arrayUnion({
+            id: `capture-${index}`,
+            url: `https://example.test/capture-${index}.jpg`,
+            storagePath,
+            description: '',
+            createdAt: index + 1,
+            addedBy: collaboratorUid,
+          }),
+        }),
+      );
+    }
+
+    expect((await getDoc(containerRef)).data()?.photos).toHaveLength(3);
   });
 
   it('denies collaborator uploads outside the application photo directory', async () => {
