@@ -251,7 +251,7 @@ export default function TrashScreen({ user }: Props) {
             {visiblePhotos.map(tp => (
               <div key={tp.photo.storagePath} className="trash-item">
                 <div className="trash-thumb">
-                  <ThumbImage storagePath={tp.photo.storagePath} alt={tp.photo.description || t('trash.photoFallback')} />
+                  <ThumbImage storagePath={tp.photo.storagePath} url={tp.photo.url} alt={tp.photo.description || t('trash.photoFallback')} />
                 </div>
                 <div className="trash-item-info">
                   <div className="trash-item-name">{tp.photo.description || t('trash.photoFallback')}</div>

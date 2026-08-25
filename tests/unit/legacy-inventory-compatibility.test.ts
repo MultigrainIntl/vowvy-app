@@ -81,6 +81,12 @@ describe('legacy shared inventory classification', () => {
     expect(classifyLegacySharedInventoryRecord({ ...shared, deletedAt: 123 })).toBe('deleted');
     expect(classifyLegacySharedInventoryRecord({ ...shared, effectiveIsPrivate: true })).toBe('private');
     expect(classifyLegacySharedInventoryRecord({ ...shared, visibility: 'private' })).toBe('private');
+    expect(classifyLegacySharedInventoryRecord({ isPrivate: true })).toBe('private');
+    expect(classifyLegacySharedInventoryRecord({ isPrivate: false })).toBe('repairable');
+    expect(classifyLegacySharedInventoryRecord({
+      isPrivate: false,
+      deletedAt: null,
+    })).toBe('repairable');
     expect(classifyLegacySharedInventoryRecord({ visibility: 'inherit' })).toBe('unsafe');
     expect(classifyLegacySharedInventoryRecord({ effectiveIsPrivate: false })).toBe('unsafe');
   });
@@ -128,7 +134,7 @@ describe('owner-scoped shared inventory compatibility repair', () => {
     expect(firestoreMocks.writes).toEqual([]);
   });
 
-  it('adds only the missing deletion field while preserving all existing data', async () => {
+  it('adds only missing compatibility fields while preserving all existing data', async () => {
     record('locations', 'garage', { ...shared, name: 'Garage' });
     record('containers', 'toolbox', { ...shared, name: 'Toolbox', locationId: 'garage' });
 
@@ -142,13 +148,81 @@ describe('owner-scoped shared inventory compatibility repair', () => {
     });
     expect(firestoreMocks.writes).toEqual([
       { path: 'users/owner-1/locations/garage', data: { deletedAt: null } },
-      { path: 'users/owner-1/containers/toolbox', data: { deletedAt: null } },
+      {
+        path: 'users/owner-1/containers/toolbox',
+        data: {
+          deletedAt: null,
+          createdBy: ownerUid,
+          notes: [],
+          photos: [],
+        },
+      },
     ]);
     expect(firestoreMocks.records.get('users/owner-1/locations/garage')).toEqual({
       ...shared,
       name: 'Garage',
       deletedAt: null,
     });
+  });
+
+  it('repairs explicitly nonprivate legacy locations and containers lacking modern sharing fields', async () => {
+    record('locations', 'garage', {
+      isPrivate: false,
+      name: 'Garage',
+      deletedAt: null,
+    });
+    record('containers', 'bike-bag', {
+      isPrivate: false,
+      name: 'Red Bike bag',
+      locationId: 'garage',
+      deletedAt: null,
+      photos: [{ id: 'photo-1', url: 'existing-photo' }],
+    });
+
+    const report = await inspectSharedInventoryCompatibility(firestore, ownerUid);
+    const result = await repairSharedInventoryCompatibility(firestore, ownerUid, report);
+
+    expect(result).toMatchObject({ repairedLocations: 1, repairedContainers: 1 });
+    expect(firestoreMocks.writes).toEqual([
+      {
+        path: 'users/owner-1/locations/garage',
+        data: { effectiveIsPrivate: false, visibility: 'inherit' },
+      },
+      {
+        path: 'users/owner-1/containers/bike-bag',
+        data: {
+          effectiveIsPrivate: false,
+          visibility: 'inherit',
+          createdBy: ownerUid,
+          notes: [],
+        },
+      },
+    ]);
+    expect(firestoreMocks.records.get('users/owner-1/containers/bike-bag')).toMatchObject({
+      isPrivate: false,
+      name: 'Red Bike bag',
+      locationId: 'garage',
+      photos: [{ id: 'photo-1', url: 'existing-photo' }],
+      effectiveIsPrivate: false,
+      visibility: 'inherit',
+      deletedAt: null,
+    });
+  });
+
+  it('does not infer that ambiguous or explicitly private legacy records can be shared', async () => {
+    record('locations', 'garage', { ...shared, deletedAt: null });
+    record('containers', 'ambiguous', { locationId: 'garage' });
+    record('containers', 'private', {
+      isPrivate: true,
+      locationId: 'garage',
+    });
+
+    const report = await inspectSharedInventoryCompatibility(firestore, ownerUid);
+
+    expect(report.repairableContainers).toBe(0);
+    expect(report.unsafeRecordsSkipped).toBe(1);
+    expect(report.privateRecordsSkipped).toBe(1);
+    expect(firestoreMocks.writes).toEqual([]);
   });
 
   it('never applies one owner’s preview to a different owner', async () => {

@@ -350,6 +350,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           setContainers(result.value.containers.map(mapContainer));
           setLocationsLoaded(true);
           setContainersLoaded(true);
+          setCollaborationError('');
         })
         .catch(error => {
           if (cancelled) return;
@@ -463,6 +464,24 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       : null;
   }
 
+  async function refreshCollaboratorInventory(
+    service: ReturnType<typeof createCollaboratorInventoryService>,
+  ): Promise<void> {
+    const refreshed = await service.readInventory();
+    if (!refreshed.ok) {
+      throw new Error(`collaboration-refresh:${refreshed.reason}`);
+    }
+
+    setLocations(refreshed.value.locations.map(location => ({
+      ...location,
+      createdAt: null,
+    })));
+    setContainers(refreshed.value.containers.map(mapContainer));
+    setLocationsLoaded(true);
+    setContainersLoaded(true);
+    setCollaborationError('');
+  }
+
   async function createLocationForActiveInventory(
     name: string,
     parentId: string | null,
@@ -474,6 +493,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     if (!service) throw new Error('collaboration-session-unavailable');
     const result = await service.createLocation(name, parentId);
     if (!result.ok) throw new Error(`collaboration-location:${result.reason}`);
+    await refreshCollaboratorInventory(service);
     return result.value;
   }
 
@@ -531,6 +551,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           resolvedLocationName,
         );
         if (!result.ok) throw new Error(`collaboration-container:${result.reason}`);
+        await refreshCollaboratorInventory(service);
         setSelectedLocationId(''); setNewLocationName(''); setSelectedContainerId('');
         setNewContainerName(''); setPhoto(null); setExtraPhotos([]); setPreview(null);
         setSaved(true);
@@ -775,6 +796,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         }
       }
 
+      const sharedService = collaboratorInventoryService();
+      if (sharedService) {
+        await refreshCollaboratorInventory(sharedService);
+      }
+
       if (preview) URL.revokeObjectURL(preview);
       setPhoto(null);
       setExtraPhotos([]);
@@ -850,6 +876,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       if (service) {
         const result = await service.addPhoto(containerId, photoItem);
         if (!result.ok) throw new Error(`collaboration-photo:${result.reason}`);
+        await refreshCollaboratorInventory(service);
       } else {
         await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), {
           photos: updatedPhotos,
@@ -1030,6 +1057,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     if (service) {
       const result = await service.addNote(containerId, note);
       if (!result.ok) throw new Error(`collaboration-note:${result.reason}`);
+      await refreshCollaboratorInventory(service);
       return;
     }
     await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), { notes: arrayUnion(note) });
@@ -1042,6 +1070,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     if (service) {
       const result = await service.editNote(containerId, noteId, text);
       if (!result.ok) throw new Error(`collaboration-note-edit:${result.reason}`);
+      await refreshCollaboratorInventory(service);
       return;
     }
     const container = containers.find(c => c.id === containerId);
@@ -1200,7 +1229,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           <button className="delete-container-btn" onClick={() => handleDeleteContainer(c)}>✕</button>
         )}
         <div className="thumb-wrap" onClick={() => openLightbox(c)}>
-          {thumbPhoto && <ThumbImage storagePath={thumbPhoto.storagePath} alt={c.name} />}
+          {thumbPhoto && <ThumbImage storagePath={thumbPhoto.storagePath} url={thumbPhoto.url} alt={c.name} />}
           {matchedPhotos ? (
             <span className="photo-count photo-count--match">
               {matchedPhotos.length === 1 ? '1 match' : `${matchedPhotos.length} matches`}
@@ -1933,7 +1962,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           >
             {lightboxItems.map((item, i) => (
               <div key={item.id} className="lightbox-slide">
-                <LightboxImage storagePath={item.storagePath} alt={`Photo ${i + 1}`} />
+                <LightboxImage storagePath={item.storagePath} url={item.url} alt={`Photo ${i + 1}`} />
               </div>
             ))}
           </div>
@@ -2673,7 +2702,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   {trayPhotos.map((tp, i) => (
                     <div key={`${tp.photo.id}-${i}`} className="tray-item">
                       <div className="tray-item-thumb">
-                        <ThumbImage storagePath={tp.photo.storagePath} alt={tp.containerName} />
+                        <ThumbImage storagePath={tp.photo.storagePath} url={tp.photo.url} alt={tp.containerName} />
                       </div>
                       <div className="tray-item-meta">
                         <span className="tray-item-container">{tp.containerName}</span>

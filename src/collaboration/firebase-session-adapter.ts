@@ -49,9 +49,14 @@ export function selectSharedInventorySessions(
       nowMs,
     );
     if (!decision.allowed) return [];
+    const preservedOwnerName = (value as CollaboratorAccessRecord & {
+      ownerDisplayName?: unknown;
+    }).ownerDisplayName;
     return [{
       ownerUid: value.ownerUid,
-      ownerLabel: ownerLabel(value.ownerUid),
+      ownerLabel: typeof preservedOwnerName === 'string' && preservedOwnerName.trim()
+        ? preservedOwnerName.trim()
+        : ownerLabel(value.ownerUid),
       access: value,
       session: decision.session,
     }];

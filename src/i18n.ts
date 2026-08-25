@@ -14,7 +14,7 @@ i18next
     ns: ['translation'],
     defaultNS: 'translation',
     backend: {
-      loadPath: '/locales/{{lng}}/{{ns}}.json',
+      loadPath: '/locales/{{lng}}/{{ns}}.json?v=20260824-shared-inventory',
     },
     detection: {
       order: ['localStorage', 'navigator'],

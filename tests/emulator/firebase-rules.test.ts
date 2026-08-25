@@ -166,11 +166,47 @@ describe('collaborator Firebase enforcement', () => {
     );
   });
 
+  it('allows the exact shared-location and owned-access queries used by the application', async () => {
+    const collaboratorDb = environment.authenticatedContext(collaboratorUid).firestore();
+
+    for (const visibility of ['shared', 'inherit']) {
+      await assertSucceeds(
+        getDocs(
+          query(
+            collection(collaboratorDb, `users/${ownerUid}/locations`),
+            where('effectiveIsPrivate', '==', false),
+            where('visibility', '==', visibility),
+            where('deletedAt', '==', null),
+          ),
+        ),
+      );
+    }
+
+    await assertSucceeds(
+      getDocs(collection(
+        collaboratorDb,
+        `users/${collaboratorUid}/collaboratorAccess`,
+      )),
+    );
+  });
+
   it('allows only a canonical shared-inventory query', async () => {
     await environment.clearFirestore();
     await seed({ expiresAtMs: Date.now() + 60_000 });
+    await environment.withSecurityRulesDisabled(async context => {
+      const adminDb = context.firestore();
+      for (const [id, name] of [
+        ['red-bike-bag', 'Red Bike bag'],
+        ['bike-gear', 'Bike Gear'],
+      ] as const) {
+        await setDoc(
+          doc(adminDb, `users/${ownerUid}/containers/${id}`),
+          container({ name }),
+        );
+      }
+    });
     const db = environment.authenticatedContext(collaboratorUid).firestore();
-    await assertSucceeds(
+    const visibleContainers = await assertSucceeds(
       getDocs(
         query(
           collection(db, `users/${ownerUid}/containers`),
@@ -180,6 +216,11 @@ describe('collaborator Firebase enforcement', () => {
         ),
       ),
     );
+    expect(visibleContainers.docs.map(item => item.data().name).sort()).toEqual([
+      'Bike Gear',
+      'Kitchen box',
+      'Red Bike bag',
+    ]);
     await assertFails(
       getDocs(collection(db, `users/${ownerUid}/containers`)),
     );

@@ -623,7 +623,7 @@ export default function SellThisFlow({ user, container, sourcePhotos, sourceCont
               <div className="sell-photo-thumbs">
                 {(sourcePhotos ?? container.photos.filter(p => !p.deletedAt)).map(p => (
                   <div key={p.id} className="sell-photo-thumb">
-                    <ThumbImage storagePath={p.storagePath} alt="Listing photo" />
+                    <ThumbImage storagePath={p.storagePath} url={p.url} alt="Listing photo" />
                   </div>
                 ))}
               </div>

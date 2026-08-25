@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import {
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useTranslation, Trans } from 'react-i18next';
 import { auth, db } from './firebase';
+import { hasExistingInventoryImport, signInWithExistingInventory } from './staging-existing-account';
 import logoMark from './assets/logo-mark.svg';
 
 const CURRENT_POLICY_VERSION = '2026-06-13';
@@ -27,7 +27,7 @@ function friendlyError(code: string, t: (key: string) => string): string {
 
 export default function AuthScreen() {
   const { t, i18n } = useTranslation();
-  const [mode, setMode]           = useState<AuthMode>('welcome');
+  const [mode, setMode]           = useState<AuthMode>(hasExistingInventoryImport() ? 'signin' : 'welcome');
   const [email, setEmail]         = useState('');
   const [password, setPassword]   = useState('');
   const [error, setError]         = useState('');
@@ -70,7 +70,7 @@ export default function AuthScreen() {
     setError('');
     setBusy(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithExistingInventory(email, password);
     } catch (e: any) {
       setError(friendlyError(e.code, t));
     } finally {

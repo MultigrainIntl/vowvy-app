@@ -249,6 +249,10 @@
       "addPhotoFailed": "Error al agregar foto: {{message}}",
       "photoFailed": "No se pudo guardar la foto.",
       "somePhotosFailed": "Algunas fotos no se pudieron guardar. Por favor intenta de nuevo."
+    },
+    "tray": {
+      "sell": "Vender",
+      "sellHeading": "Articulos para vender"
     }
   },
   "language": {

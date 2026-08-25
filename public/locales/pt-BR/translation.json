@@ -249,6 +249,10 @@
       "addPhotoFailed": "Falha ao adicionar foto: {{message}}",
       "photoFailed": "Falha ao salvar a foto.",
       "somePhotosFailed": "Algumas fotos falharam ao salvar. Por favor tente novamente."
+    },
+    "tray": {
+      "sell": "Vender",
+      "sellHeading": "Itens para vender"
     }
   },
   "language": {

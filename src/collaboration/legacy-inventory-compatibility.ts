@@ -38,10 +38,22 @@ function safeDocumentId(value: string): boolean {
   return value.length > 0 && !value.includes('/');
 }
 
+function missingContainerCompatibilityFields(
+  data: Record<string, unknown>,
+): boolean {
+  return data.createdBy === undefined ||
+    data.notes === undefined ||
+    data.photos === undefined;
+}
+
 export function classifyLegacySharedInventoryRecord(
   data: Record<string, unknown>,
 ): RecordClassification {
-  if (data.effectiveIsPrivate === true || data.visibility === 'private') {
+  if (
+    data.effectiveIsPrivate === true ||
+    data.isPrivate === true ||
+    data.visibility === 'private'
+  ) {
     return 'private';
   }
 
@@ -49,14 +61,22 @@ export function classifyLegacySharedInventoryRecord(
     return 'deleted';
   }
 
-  if (
-    data.effectiveIsPrivate !== false ||
-    (data.visibility !== 'shared' && data.visibility !== 'inherit')
-  ) {
+  const explicitlyLegacyShared = data.isPrivate === false;
+  const effectiveVisibilityKnown = data.effectiveIsPrivate === false ||
+    (data.effectiveIsPrivate === undefined && explicitlyLegacyShared);
+  const sharingModeKnown = data.visibility === 'shared' ||
+    data.visibility === 'inherit' ||
+    (data.visibility === undefined && explicitlyLegacyShared);
+
+  if (!effectiveVisibilityKnown || !sharingModeKnown) {
     return 'unsafe';
   }
 
-  return data.deletedAt === undefined ? 'repairable' : 'ready';
+  return data.effectiveIsPrivate === undefined ||
+    data.visibility === undefined ||
+    data.deletedAt === undefined
+    ? 'repairable'
+    : 'ready';
 }
 
 export async function inspectSharedInventoryCompatibility(
@@ -90,7 +110,12 @@ export async function inspectSharedInventoryCompatibility(
   ] as const) {
     for (const record of snapshot.docs) {
       const data = record.data();
-      const classification = classifyLegacySharedInventoryRecord(data);
+      const baseClassification = classifyLegacySharedInventoryRecord(data);
+      const classification = kind === 'containers' &&
+        baseClassification === 'ready' &&
+        missingContainerCompatibilityFields(data)
+        ? 'repairable'
+        : baseClassification;
 
       if (classification === 'private') {
         report.privateRecordsSkipped += 1;
@@ -168,10 +193,15 @@ export async function repairSharedInventoryCompatibility(
         `users/${ownerUid}/${candidate.collection}/${candidate.id}`,
       );
       const record = await transaction.get(recordRef);
-      if (
-        !record.exists() ||
-        classifyLegacySharedInventoryRecord(record.data()) !== 'repairable'
-      ) {
+      if (!record.exists()) {
+        return false;
+      }
+      const recordData = record.data();
+      const classification = classifyLegacySharedInventoryRecord(recordData);
+      const containerMetadataNeedsRepair = candidate.collection === 'containers' &&
+        classification === 'ready' &&
+        missingContainerCompatibilityFields(recordData);
+      if (classification !== 'repairable' && !containerMetadataNeedsRepair) {
         return false;
       }
 
@@ -190,7 +220,30 @@ export async function repairSharedInventoryCompatibility(
         }
       }
 
-      transaction.update(recordRef, { deletedAt: null });
+      const current = record.data();
+      const compatibilityFields: Record<string, unknown> = {};
+      if (current.effectiveIsPrivate === undefined) {
+        compatibilityFields.effectiveIsPrivate = false;
+      }
+      if (current.visibility === undefined) {
+        compatibilityFields.visibility = 'inherit';
+      }
+      if (current.deletedAt === undefined) {
+        compatibilityFields.deletedAt = null;
+      }
+      if (candidate.collection === 'containers') {
+        if (current.createdBy === undefined) {
+          compatibilityFields.createdBy = ownerUid;
+        }
+        if (current.notes === undefined) {
+          compatibilityFields.notes = [];
+        }
+        if (current.photos === undefined) {
+          compatibilityFields.photos = [];
+        }
+      }
+
+      transaction.update(recordRef, compatibilityFields);
       return true;
     });
 

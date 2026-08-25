@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import { auth } from './firebase';
-import { proxyBase } from './environment';
+import { firebaseConfig, proxyBase } from './environment';
+import { stagingDirectPhotoUrl } from './staging-photo';
 
 export const PROXY_BASE = proxyBase;
 
@@ -33,12 +34,18 @@ export interface ContainerNote {
   deletedAt?: number;
 }
 
-export function ThumbImage({ storagePath, alt }: { storagePath: string; alt: string }) {
+export function ThumbImage({ storagePath, url, alt }: { storagePath: string; url?: string; alt: string }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [failed, setFailed]   = useState(false);
   const [err, setErr]         = useState('');
+  const directUrl = stagingDirectPhotoUrl(firebaseConfig.projectId, url);
 
   useEffect(() => {
+    if (directUrl) {
+      setBlobUrl(directUrl);
+      setFailed(false);
+      return;
+    }
     let objectUrl: string | null = null;
     let cancelled = false;
     const proxyUrl = `${PROXY_BASE}?path=${encodeURIComponent(storagePath)}`;
@@ -65,7 +72,7 @@ export function ThumbImage({ storagePath, alt }: { storagePath: string; alt: str
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [storagePath]);
+  }, [storagePath, directUrl]);
 
   if (failed) {
     return (
@@ -80,11 +87,17 @@ export function ThumbImage({ storagePath, alt }: { storagePath: string; alt: str
   return <img src={blobUrl} alt={alt} className="container-thumb" />;
 }
 
-export function LightboxImage({ storagePath, alt }: { storagePath: string; alt: string }) {
+export function LightboxImage({ storagePath, url, alt }: { storagePath: string; url?: string; alt: string }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [failed, setFailed]   = useState(false);
+  const directUrl = stagingDirectPhotoUrl(firebaseConfig.projectId, url);
 
   useEffect(() => {
+    if (directUrl) {
+      setBlobUrl(directUrl);
+      setFailed(false);
+      return;
+    }
     let objectUrl: string | null = null;
     let cancelled = false;
     const proxyUrl = `${PROXY_BASE}?path=${encodeURIComponent(storagePath)}`;
@@ -110,7 +123,7 @@ export function LightboxImage({ storagePath, alt }: { storagePath: string; alt: 
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [storagePath]);
+  }, [storagePath, directUrl]);
 
   if (failed) return <div className="lightbox-img" style={{ background: '#fee', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />;
   if (!blobUrl) return <div className="lightbox-img" style={{ background: '#f0ece8' }} />;

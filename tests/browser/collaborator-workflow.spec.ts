@@ -84,11 +84,40 @@ test('owner invitation, collaborator acceptance, shared context, and revocation'
     isDeleted: boolValue(false),
     createdAt: timestampValue(new Date()),
   }, owner.idToken);
+  for (const [id, name, legacy] of [
+    ['work-bench', 'Work bench', false],
+    ['red-bike-bag', 'Red Bike bag', true],
+    ['bike-gear', 'Bike Gear', true],
+  ] as const) {
+    await writeDocument(`users/${owner.uid}/containers/${id}`, {
+      name: stringValue(name),
+      locationId: stringValue('shared-location'),
+      location: stringValue('Shared Test Room'),
+      isPrivate: boolValue(false),
+      deletedAt: { nullValue: null },
+      photos: { arrayValue: { values: [] } },
+      createdAt: timestampValue(new Date()),
+      ...(legacy ? {} : {
+        effectiveIsPrivate: boolValue(false),
+        visibility: stringValue('inherit'),
+        createdBy: stringValue(owner.uid),
+        notes: { arrayValue: { values: [] } },
+      }),
+    }, owner.idToken);
+  }
 
   const ownerContext = await newEnglishContext(browser);
   const ownerPage = await ownerContext.newPage();
   await signIn(ownerPage, owner);
   await ownerPage.goto('/collaborators');
+  const prepareLegacyInventory = ownerPage.getByRole(
+    'button',
+    { name: /prepare shared inventory/i },
+  );
+  await expect(prepareLegacyInventory).toBeVisible();
+  ownerPage.once('dialog', dialog => dialog.accept());
+  await prepareLegacyInventory.click();
+  await expect(prepareLegacyInventory).toHaveCount(0);
   const generateInvite = ownerPage.getByRole(
     'button',
     { name: /generate invite link/i },
@@ -110,6 +139,10 @@ test('owner invitation, collaborator acceptance, shared context, and revocation'
   await expect(
     collaboratorPage.locator('option[value="shared-location"]'),
   ).toHaveCount(1);
+  await expect(collaboratorPage.getByText('Work bench', { exact: true })).toBeVisible();
+  await expect(collaboratorPage.getByText('Red Bike bag', { exact: true })).toBeVisible();
+  await expect(collaboratorPage.getByText('Bike Gear', { exact: true })).toBeVisible();
+  await expect(collaboratorPage.getByRole('alert')).toHaveCount(0);
   await collaboratorPage.screenshot({
     path: testInfo.outputPath('shared-inventory-access.png'),
     fullPage: true,

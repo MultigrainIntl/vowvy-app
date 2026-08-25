@@ -250,6 +250,10 @@
       "addPhotoFailed": "Add photo failed: {{message}}",
       "photoFailed": "Photo failed to save.",
       "somePhotosFailed": "Some photos failed to save. Please try again."
+    },
+    "tray": {
+      "sell": "Sell",
+      "sellHeading": "Items to sell"
     }
   },
   "language": {
