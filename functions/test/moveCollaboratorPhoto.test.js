@@ -84,6 +84,26 @@ test('trusted transaction moves exactly one photo atomically', async () => {
   assert.equal(destination.data().lastModifiedBy, collaboratorUid);
 });
 
+test('preserves existing production collaborator photo moves', async () => {
+  await seed();
+  await db.doc(`users/${ownerUid}/collaboratorAccess/${collaboratorUid}`).delete();
+  await db.doc(`users/${ownerUid}/collaborators/${collaboratorUid}`)
+    .set({ status: 'active', inviteToken: 'legacy-invite' });
+  await moveCollaboratorPhotoTransaction(db, collaboratorUid, input, 100);
+  const destination = await db.doc(`users/${ownerUid}/containers/destination`).get();
+  assert.equal(destination.data().photos.length, 1);
+});
+
+test('canonical revocation always overrides a leftover legacy record', async () => {
+  await seed({ status: 'revoked' });
+  await db.doc(`users/${ownerUid}/collaborators/${collaboratorUid}`)
+    .set({ status: 'active', inviteToken: 'legacy-invite' });
+  await rejectsWith(
+    'permission-denied',
+    () => moveCollaboratorPhotoTransaction(db, collaboratorUid, input, 100),
+  );
+});
+
 test('denies expired and revoked access without changing either container', async () => {
   for (const accessOverrides of [
     { expiresAtMs: 100 },

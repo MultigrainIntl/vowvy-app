@@ -66,7 +66,10 @@ export default function AcceptInviteScreen({ user, token }: Props) {
         nowMs: () => Date.now(),
         newAccessId: () => crypto.randomUUID(),
       });
-      await lifecycle.acceptInvitation(token, user.uid);
+      await lifecycle.acceptInvitation(token, user.uid, {
+        displayName: user.displayName ?? user.email?.split('@')[0] ?? '',
+        email: user.email ?? '',
+      });
       setState('done');
     } catch (e: any) {
       setErrorMsg(e?.message ?? t('acceptInvite.errorAccept'));
@@ -91,7 +94,9 @@ export default function AcceptInviteScreen({ user, token }: Props) {
             <div className="accept-icon">📦</div>
             <h1 className="accept-title">{t('acceptInvite.invitedTitle')}</h1>
             <p className="accept-body">
-              {t('acceptInvite.inviteBody', { name: 'the inventory owner' })}
+              {t('acceptInvite.inviteBody', {
+                name: invite.ownerDisplayName || 'the inventory owner',
+              })}
             </p>
             <p className="accept-signed-in-as">{t('acceptInvite.signingInAs', { email: user.email })}</p>
             <button className="accept-btn" onClick={handleAccept}>
@@ -109,7 +114,9 @@ export default function AcceptInviteScreen({ user, token }: Props) {
             <div className="accept-icon">✓</div>
             <h1 className="accept-title">{t('acceptInvite.youreInTitle')}</h1>
             <p className="accept-body">
-              {t('acceptInvite.accessGranted', { name: 'the inventory owner' })}
+              {t('acceptInvite.accessGranted', {
+                name: invite?.ownerDisplayName || 'the inventory owner',
+              })}
             </p>
             <button className="accept-btn" onClick={() => navigate(`/?owner=${invite?.ownerUid}`)}>
               {t('acceptInvite.goToInventory')}

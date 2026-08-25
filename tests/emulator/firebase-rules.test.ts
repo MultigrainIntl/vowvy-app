@@ -14,6 +14,7 @@ import {
   getDocs,
   query,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
 } from 'firebase/firestore';
@@ -108,6 +109,40 @@ async function seed(dataOverrides: Record<string, unknown> = {}) {
   });
 }
 
+async function seedLegacy(status = 'active') {
+  await environment.clearFirestore();
+  await environment.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await Promise.all([
+      setDoc(doc(db, `users/${ownerUid}/collaborators/${collaboratorUid}`), {
+        status,
+        inviteToken: 'legacy-invite',
+        displayName: 'George',
+        email: 'george@example.test',
+      }),
+      setDoc(doc(db, 'invites/legacy-invite'), {
+        ownerUid,
+        ownerDisplayName: 'Joseph Librizzi',
+        status,
+        acceptedByUid: collaboratorUid,
+        expiresAt: Timestamp.fromMillis(1),
+      }),
+      setDoc(doc(db, `users/${ownerUid}/locations/location-1`), {
+        name: 'Legacy room',
+        parentId: null,
+        effectiveIsPrivate: false,
+      }),
+      setDoc(doc(db, `users/${ownerUid}/containers/container-1`), {
+        name: 'Legacy box',
+        locationId: 'location-1',
+        location: 'Legacy room',
+        effectiveIsPrivate: false,
+        photos: [],
+      }),
+    ]);
+  });
+}
+
 beforeAll(async () => {
   environment = await initializeTestEnvironment({
     projectId,
@@ -134,6 +169,50 @@ afterAll(async () => {
 });
 
 describe('collaborator Firebase enforcement', () => {
+  it('preserves existing collaborators and inventory after the invitation link expires', async () => {
+    await seedLegacy();
+    const db = environment.authenticatedContext(collaboratorUid).firestore();
+    await assertSucceeds(getDoc(doc(db, `users/${ownerUid}/collaborators/${collaboratorUid}`)));
+    await assertSucceeds(getDoc(doc(db, `users/${ownerUid}/locations/location-1`)));
+    await assertSucceeds(getDoc(doc(db, `users/${ownerUid}/containers/container-1`)));
+    await assertSucceeds(getDocs(query(
+      collection(db, 'invites'),
+      where('acceptedByUid', '==', collaboratorUid),
+    )));
+    await assertSucceeds(getDocs(query(
+      collection(db, `users/${ownerUid}/containers`),
+      where('effectiveIsPrivate', '==', false),
+    )));
+  });
+
+  it('preserves existing collaborator photo uploads while refusing unrelated users', async () => {
+    await seedLegacy();
+    const storage = environment.authenticatedContext(collaboratorUid).storage();
+    await assertSucceeds(uploadBytes(
+      ref(storage, `users/${ownerUid}/containers/container-1/photos/legacy.jpg`),
+      new Uint8Array([1, 2]),
+      { contentType: 'image/jpeg' },
+    ));
+    const stranger = environment.authenticatedContext('stranger').storage();
+    await assertFails(uploadBytes(
+      ref(stranger, `users/${ownerUid}/containers/container-1/photos/stranger.jpg`),
+      new Uint8Array([1]),
+      { contentType: 'image/jpeg' },
+    ));
+  });
+
+  it('does not restore a legacy collaborator after canonical access was revoked', async () => {
+    await seedLegacy();
+    await environment.withSecurityRulesDisabled(async context => {
+      await setDoc(
+        doc(context.firestore(), `users/${ownerUid}/collaboratorAccess/${collaboratorUid}`),
+        access({ status: 'revoked' }),
+      );
+    });
+    const db = environment.authenticatedContext(collaboratorUid).firestore();
+    await assertFails(getDoc(doc(db, `users/${ownerUid}/containers/container-1`)));
+  });
+
   it('allows shared reads and denies private reads', async () => {
     const db = environment.authenticatedContext(collaboratorUid).firestore();
     await assertSucceeds(
@@ -528,12 +607,58 @@ describe('trusted collaborator lifecycle transactions', () => {
       collaboratorUid,
       status: 'active',
       capabilities: COLLABORATOR_CAPABILITIES,
+      expiresAtMs: null,
     });
     expect(invitationSnapshot.data()).toMatchObject({
       status: 'accepted',
       acceptedByUid: collaboratorUid,
       accessId: 'access-accept',
     });
+  });
+
+  it('accepts an existing pending production invitation without migrating its data', async () => {
+    await environment.clearFirestore();
+    const now = Date.now();
+    await environment.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'invites/legacy-pending'), {
+        ownerUid,
+        ownerDisplayName: 'Joseph Librizzi',
+        status: 'pending',
+        expiresAt: Timestamp.fromMillis(now + 60_000),
+      });
+    });
+    const collaboratorDb = environment.authenticatedContext(collaboratorUid).firestore();
+    await createFirebaseLifecycleAdapter(
+      collaboratorDb,
+      clock(now, ['legacy-unused']),
+    ).acceptInvitation('legacy-pending', collaboratorUid, {
+      displayName: 'George',
+      email: 'george@example.test',
+    });
+    const record = await getDoc(doc(
+      collaboratorDb,
+      `users/${ownerUid}/collaborators/${collaboratorUid}`,
+    ));
+    expect(record.data()).toMatchObject({
+      status: 'active',
+      displayName: 'George',
+      email: 'george@example.test',
+      inviteToken: 'legacy-pending',
+    });
+  });
+
+  it('allows owners to revoke existing production collaborator records', async () => {
+    await seedLegacy();
+    const ownerDb = environment.authenticatedContext(ownerUid).firestore();
+    await createFirebaseLifecycleAdapter(ownerDb, clock(Date.now(), []))
+      .revokeAccess(ownerUid, collaboratorUid);
+    const oldAccess = await getDoc(doc(
+      ownerDb,
+      `users/${ownerUid}/collaborators/${collaboratorUid}`,
+    ));
+    const invite = await getDoc(doc(ownerDb, 'invites/legacy-invite'));
+    expect(oldAccess.data()?.status).toBe('revoked');
+    expect(invite.data()?.status).toBe('revoked');
   });
 
   it('rejects manufactured access without a matching invitation transaction', async () => {

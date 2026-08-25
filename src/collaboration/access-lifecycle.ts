@@ -22,6 +22,7 @@ export interface CollaboratorInvitation {
   capabilities: CollaboratorCapability[];
   validFromMs: number;
   expiresAtMs: number | null;
+  accessExpiresAtMs?: number | null;
   createdAtMs: number;
   createdByUid: string;
   acceptedAtMs: number | null;
@@ -30,6 +31,7 @@ export interface CollaboratorInvitation {
   revokedAtMs: number | null;
   revokedByUid: string | null;
   supersedesAccessId: string | null;
+  ownerDisplayName?: string;
 }
 
 export type LifecycleResult<T> =
@@ -53,8 +55,10 @@ export interface IssueInvitationInput {
   nowMs: number;
   validFromMs?: number;
   expiresAtMs: number | null;
+  accessExpiresAtMs?: number | null;
   capabilities?: CollaboratorCapability[];
   supersedesAccessId?: string | null;
+  ownerDisplayName?: string;
 }
 
 export interface AcceptInvitationInput {
@@ -62,6 +66,8 @@ export interface AcceptInvitationInput {
   collaboratorUid: string;
   accessId: string;
   nowMs: number;
+  collaboratorDisplayName?: string;
+  collaboratorEmail?: string;
 }
 
 export interface AcceptedInvitation {
@@ -119,6 +125,10 @@ export function isCollaboratorInvitation(
     (invitation.expiresAtMs !== null &&
       (!isFiniteTimestamp(invitation.expiresAtMs) ||
         invitation.expiresAtMs <= invitation.validFromMs)) ||
+    (invitation.accessExpiresAtMs !== undefined &&
+      invitation.accessExpiresAtMs !== null &&
+      (!isFiniteTimestamp(invitation.accessExpiresAtMs) ||
+        invitation.accessExpiresAtMs <= invitation.validFromMs)) ||
     !isFiniteTimestamp(invitation.createdAtMs) ||
     !isNonEmptyString(invitation.createdByUid) ||
     (invitation.acceptedAtMs !== null &&
@@ -177,6 +187,7 @@ export function issueCollaboratorInvitation(
     capabilities: [...capabilities],
     validFromMs,
     expiresAtMs: input.expiresAtMs,
+    accessExpiresAtMs: input.accessExpiresAtMs ?? null,
     createdAtMs: input.nowMs,
     createdByUid: input.createdByUid,
     acceptedAtMs: null,
@@ -185,6 +196,9 @@ export function issueCollaboratorInvitation(
     revokedAtMs: null,
     revokedByUid: null,
     supersedesAccessId: input.supersedesAccessId ?? null,
+    ...(input.ownerDisplayName?.trim()
+      ? { ownerDisplayName: input.ownerDisplayName.trim() }
+      : {}),
   };
 
   if (
@@ -245,12 +259,21 @@ export function acceptCollaboratorInvitation(
     status: 'active',
     capabilities: [...invitation.capabilities],
     validFromMs: input.nowMs,
-    expiresAtMs: invitation.expiresAtMs,
+    expiresAtMs: invitation.accessExpiresAtMs ?? null,
     createdAtMs: input.nowMs,
     createdByUid: invitation.ownerUid,
     revokedAtMs: null,
     revokedByUid: null,
     supersedesAccessId: invitation.supersedesAccessId,
+    ...(invitation.ownerDisplayName?.trim()
+      ? { ownerDisplayName: invitation.ownerDisplayName.trim() }
+      : {}),
+    ...(input.collaboratorDisplayName?.trim()
+      ? { collaboratorDisplayName: input.collaboratorDisplayName.trim() }
+      : {}),
+    ...(input.collaboratorEmail?.trim()
+      ? { collaboratorEmail: input.collaboratorEmail.trim() }
+      : {}),
   };
 
   const acceptedInvitation: CollaboratorInvitation = {

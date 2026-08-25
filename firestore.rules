@@ -13,6 +13,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid);
     }
 
+    function legacyAccessPath(ownerUid) {
+      return /databases/$(database)/documents/users/$(ownerUid)/collaborators/$(request.auth.uid);
+    }
+
     function invitationPath(invitationId) {
       return /databases/$(database)/documents/invites/$(invitationId);
     }
@@ -54,40 +58,50 @@ service cloud.firestore {
         && invite.acceptedByUid == collaboratorUid
         && invite.accessId == request.resource.data.accessId
         && invite.capabilities == request.resource.data.capabilities
-        && invite.expiresAtMs == request.resource.data.expiresAtMs
+        && invite.get('accessExpiresAtMs', null)
+          == request.resource.data.expiresAtMs
         && invite.supersedesAccessId == request.resource.data.supersedesAccessId;
     }
 
-    function hasAccess(ownerUid, capability) {
-      let access = get(accessPath(ownerUid)).data;
+    function hasCanonicalAccess(ownerUid, capability) {
       return signedIn()
         && request.auth.uid != ownerUid
-        && access.schemaVersion == 1
-        && access.ownerUid == ownerUid
-        && access.collaboratorUid == request.auth.uid
-        && access.status == 'active'
-        && (access.expiresAtMs == null
-          || request.time.toMillis() < access.expiresAtMs)
-        && capability in access.capabilities;
+        && exists(accessPath(ownerUid))
+        && get(accessPath(ownerUid)).data.schemaVersion == 1
+        && get(accessPath(ownerUid)).data.ownerUid == ownerUid
+        && get(accessPath(ownerUid)).data.collaboratorUid == request.auth.uid
+        && get(accessPath(ownerUid)).data.status == 'active'
+        && (get(accessPath(ownerUid)).data.expiresAtMs == null
+          || request.time.toMillis() < get(accessPath(ownerUid)).data.expiresAtMs)
+        && capability in get(accessPath(ownerUid)).data.capabilities;
+    }
+
+    function hasLegacyAccess(ownerUid) {
+      return signedIn()
+        && request.auth.uid != ownerUid
+        && !exists(accessPath(ownerUid))
+        && exists(legacyAccessPath(ownerUid))
+        && get(legacyAccessPath(ownerUid)).data.status == 'active';
+    }
+
+    function hasAccess(ownerUid, capability) {
+      return hasCanonicalAccess(ownerUid, capability) || hasLegacyAccess(ownerUid);
     }
 
     function hasInventoryReadAccess(ownerUid) {
-      let access = get(accessPath(ownerUid)).data;
-      return signedIn()
-        && request.auth.uid != ownerUid
-        && access.schemaVersion == 1
-        && access.ownerUid == ownerUid
-        && access.collaboratorUid == request.auth.uid
-        && access.status == 'active'
-        && (access.expiresAtMs == null
-          || request.time.toMillis() < access.expiresAtMs)
-        && access.capabilities.hasAny(['inventory.read']);
+      return hasAccess(ownerUid, 'inventory.read');
     }
 
     function canonicalShared(data) {
       return data.effectiveIsPrivate == false
         && data.visibility in ['shared', 'inherit']
         && data.deletedAt == null;
+    }
+
+    function legacyShared(data) {
+      return data.effectiveIsPrivate == false
+        && data.get('visibility', 'inherit') in ['shared', 'inherit']
+        && data.get('deletedAt', null) == null;
     }
 
     function unchanged(field) {
@@ -124,6 +138,19 @@ service cloud.firestore {
 
     match /users/{ownerUid} {
       allow read, write: if owns(ownerUid);
+    }
+
+    match /users/{ownerUid}/collaborators/{collaboratorUid} {
+      allow get: if owns(ownerUid)
+        || (signedIn() && request.auth.uid == collaboratorUid);
+      allow list: if owns(ownerUid);
+      allow create: if signedIn()
+        && request.auth.uid == collaboratorUid
+        && request.resource.data.status == 'active'
+        && request.resource.data.inviteToken is string
+        && getAfter(invitationPath(request.resource.data.inviteToken)).data.ownerUid == ownerUid
+        && getAfter(invitationPath(request.resource.data.inviteToken)).data.status == 'active'
+        && getAfter(invitationPath(request.resource.data.inviteToken)).data.acceptedByUid == collaboratorUid;
     }
 
     match /users/{ownerUid}/collaboratorAccess/{collaboratorUid} {
@@ -181,7 +208,9 @@ service cloud.firestore {
 
     match /users/{ownerUid}/locations/{locationId} {
       allow read: if owns(ownerUid)
-        || (hasInventoryReadAccess(ownerUid) && canonicalShared(resource.data));
+        || (hasCanonicalAccess(ownerUid, 'inventory.read')
+          && canonicalShared(resource.data))
+        || (hasLegacyAccess(ownerUid) && legacyShared(resource.data));
       allow create: if owns(ownerUid)
         || (hasAccess(ownerUid, 'location.create')
           && request.resource.data.createdBy == request.auth.uid
@@ -194,7 +223,9 @@ service cloud.firestore {
 
     match /users/{ownerUid}/containers/{containerId} {
       allow read: if owns(ownerUid)
-        || (hasInventoryReadAccess(ownerUid) && canonicalShared(resource.data));
+        || (hasCanonicalAccess(ownerUid, 'inventory.read')
+          && canonicalShared(resource.data))
+        || (hasLegacyAccess(ownerUid) && legacyShared(resource.data));
 
       allow create: if owns(ownerUid)
         || (hasAccess(ownerUid, 'container.create')
@@ -299,7 +330,8 @@ service cloud.firestore {
 
     match /invites/{token} {
       allow get: if signedIn();
-      allow list: if false;
+      allow list: if signedIn()
+        && resource.data.acceptedByUid == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.schemaVersion == 1
         && request.resource.data.invitationId == token
@@ -329,15 +361,32 @@ service cloud.firestore {
           && getAfter(/databases/$(database)/documents/users/$(resource.data.ownerUid)/collaboratorAccess/$(request.auth.uid)).data.accessId == request.resource.data.accessId
         ) || (
           signedIn()
+          && request.auth.uid != resource.data.ownerUid
+          && resource.data.get('schemaVersion', 0) != 1
+          && resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'acceptedByUid', 'acceptedByEmail', 'acceptedAt'])
+          && request.resource.data.status == 'active'
+          && request.resource.data.acceptedByUid == request.auth.uid
+          && (resource.data.get('expiresAt', null) == null
+            || request.time < resource.data.expiresAt)
+          && getAfter(/databases/$(database)/documents/users/$(resource.data.ownerUid)/collaborators/$(request.auth.uid)).data.status == 'active'
+          && getAfter(/databases/$(database)/documents/users/$(resource.data.ownerUid)/collaborators/$(request.auth.uid)).data.inviteToken == token
+        ) || (
+          signedIn()
           && request.auth.uid == resource.data.ownerUid
-          && (resource.data.status == 'pending' || resource.data.status == 'accepted')
+          && (resource.data.status == 'pending' || resource.data.status == 'accepted'
+            || resource.data.status == 'active')
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'revokedAtMs', 'revokedByUid'])
           && request.resource.data.status == 'revoked'
           && request.resource.data.revokedByUid == request.auth.uid
           && request.resource.data.revokedAtMs is number
           && (resource.data.status == 'pending'
-            || getAfter(/databases/$(database)/documents/users/$(resource.data.ownerUid)/collaboratorAccess/$(resource.data.acceptedByUid)).data.status == 'revoked')
+            || (resource.data.status == 'accepted'
+              && getAfter(/databases/$(database)/documents/users/$(resource.data.ownerUid)/collaboratorAccess/$(resource.data.acceptedByUid)).data.status == 'revoked')
+            || (resource.data.status == 'active'
+              && getAfter(/databases/$(database)/documents/users/$(resource.data.ownerUid)/collaborators/$(resource.data.acceptedByUid)).data.status == 'revoked'))
         );
       allow delete: if false;
     }

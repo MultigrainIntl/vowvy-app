@@ -29,6 +29,9 @@ export interface CollaboratorAccessRecord {
   revokedAtMs: number | null;
   revokedByUid: string | null;
   supersedesAccessId: string | null;
+  ownerDisplayName?: string;
+  collaboratorDisplayName?: string;
+  collaboratorEmail?: string;
 }
 
 export interface CollaboratorSession {

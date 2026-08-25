@@ -5,7 +5,7 @@ service firebase.storage {
       return request.auth != null && request.auth.uid == ownerUid;
     }
 
-    function hasPhotoAccess(ownerUid) {
+    function hasCanonicalPhotoAccess(ownerUid) {
       return request.auth != null
         && request.auth.uid != ownerUid
         && firestore.exists(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid))
@@ -17,15 +17,24 @@ service firebase.storage {
         && 'photo.create' in firestore.get(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid)).data.capabilities;
     }
 
+    function hasPhotoAccess(ownerUid) {
+      return hasCanonicalPhotoAccess(ownerUid)
+        || (request.auth != null
+          && request.auth.uid != ownerUid
+          && !firestore.exists(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid))
+          && firestore.exists(/databases/(default)/documents/users/$(ownerUid)/collaborators/$(request.auth.uid))
+          && firestore.get(/databases/(default)/documents/users/$(ownerUid)/collaborators/$(request.auth.uid)).data.status == 'active');
+    }
+
     match /users/{ownerUid}/containers/{containerId}/photos/{fileName} {
       allow read: if owns(ownerUid)
         || (hasPhotoAccess(ownerUid)
           && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.effectiveIsPrivate == false
-          && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.deletedAt == null);
+          && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.get('deletedAt', null) == null);
       allow create: if owns(ownerUid)
         || (hasPhotoAccess(ownerUid)
           && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.effectiveIsPrivate == false
-          && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.deletedAt == null
+          && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.get('deletedAt', null) == null
           && request.resource.size < 20 * 1024 * 1024
           && request.resource.contentType.matches('image/.*'));
       allow update, delete: if owns(ownerUid);

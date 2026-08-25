@@ -336,7 +336,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       let cancelled = false;
       const service = createCollaboratorInventoryService(
         shared.session,
-        createFirebaseInventoryAdapter(db, functions),
+        createFirebaseInventoryAdapter(db, functions, {
+          legacyCompatible: shared.source === 'legacy',
+        }),
       );
       service.readInventory()
         .then(result => {
@@ -382,9 +384,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           .filter(({ access }) =>
             access.status === 'active' &&
             (access.expiresAtMs === null || Date.now() < access.expiresAtMs))
-          .map(({ collaboratorUid }) => ({
+          .map(({ collaboratorUid, displayName }) => ({
             uid: collaboratorUid,
-            displayName: `Collaborator ${collaboratorUid.slice(0, 6)}`,
+            displayName,
           })),
       ),
       error => setCollaborationError(error.message),
@@ -462,7 +464,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     return activeSharedInventory
       ? createCollaboratorInventoryService(
           activeSharedInventory.session,
-          createFirebaseInventoryAdapter(db, functions),
+          createFirebaseInventoryAdapter(db, functions, {
+            legacyCompatible: activeSharedInventory.source === 'legacy',
+          }),
         )
       : null;
   }
@@ -1352,6 +1356,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         createdByUid: user.uid,
         nowMs,
         expiresAtMs,
+        ownerDisplayName: user.displayName ?? user.email?.split('@')[0] ?? '',
       });
       setInviteLink(`${window.location.origin}/invite/${token}`);
     } catch (e) {

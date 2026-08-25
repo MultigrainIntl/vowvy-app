@@ -35,7 +35,7 @@ function pendingInvitation(
 
 function activeAccess(): CollaboratorAccessRecord {
   const result = acceptCollaboratorInvitation({
-    invitation: pendingInvitation(),
+    invitation: pendingInvitation({ accessExpiresAtMs: NOW + 10_000 }),
     collaboratorUid: 'collaborator-1',
     accessId: 'access-1',
     nowMs: NOW + 1,
@@ -112,6 +112,54 @@ describe('collaborator access lifecycle', () => {
     expect(result.value.access.capabilities).toEqual(
       COLLABORATOR_CAPABILITIES,
     );
+  });
+
+  it('expires only the invitation link unless an access expiration is explicitly requested', () => {
+    const accepted = acceptCollaboratorInvitation({
+      invitation: pendingInvitation(),
+      collaboratorUid: 'collaborator-1',
+      accessId: 'access-unlimited',
+      nowMs: NOW + 1,
+    });
+    expect(accepted.ok).toBe(true);
+    if (!accepted.ok) return;
+    expect(accepted.value.invitation.expiresAtMs).toBe(NOW + 10_000);
+    expect(accepted.value.access.expiresAtMs).toBeNull();
+    expect(evaluateCollaboratorAccess(
+      accepted.value.access,
+      'owner-1',
+      'collaborator-1',
+      NOW + 20_000,
+    ).allowed).toBe(true);
+  });
+
+  it('preserves explicitly limited access and both participant names', () => {
+    const issued = issueCollaboratorInvitation({
+      invitationId: 'named-invite',
+      ownerUid: 'owner-1',
+      createdByUid: 'owner-1',
+      nowMs: NOW,
+      expiresAtMs: NOW + 1_000,
+      accessExpiresAtMs: NOW + 20_000,
+      ownerDisplayName: 'Joseph Librizzi',
+    });
+    if (!issued.ok) throw new Error('Named invitation was not issued');
+    const accepted = acceptCollaboratorInvitation({
+      invitation: issued.value,
+      collaboratorUid: 'collaborator-1',
+      accessId: 'named-access',
+      nowMs: NOW + 1,
+      collaboratorDisplayName: 'George',
+      collaboratorEmail: 'george@example.test',
+    });
+    expect(accepted.ok).toBe(true);
+    if (!accepted.ok) return;
+    expect(accepted.value.access).toMatchObject({
+      expiresAtMs: NOW + 20_000,
+      ownerDisplayName: 'Joseph Librizzi',
+      collaboratorDisplayName: 'George',
+      collaboratorEmail: 'george@example.test',
+    });
   });
 
   it('rejects acceptance before start, at expiration, and after acceptance', () => {

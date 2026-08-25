@@ -11,6 +11,7 @@ import {
   moveCollaboratorPhotoTransaction,
   type MoveCollaboratorPhotoInput,
 } from './moveCollaboratorPhoto';
+import { allowsSharedPhotoAccess, resolveAllowedOrigins } from './collaboratorAccess';
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -18,13 +19,10 @@ initializeApp();
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 const BOOTSTRAP_UID = process.env.BOOTSTRAP_ADMIN_UID?.trim() || '';
-const ALLOWED_ORIGINS = (
-  process.env.ALLOWED_ORIGINS ||
-  'https://vowvy-staging.web.app,https://vowvy-staging.firebaseapp.com,http://localhost:5173,http://localhost:5174'
-)
-  .split(',')
-  .map(origin => origin.trim())
-  .filter(Boolean);
+const ALLOWED_ORIGINS = resolveAllowedOrigins(
+  process.env.GCLOUD_PROJECT,
+  process.env.ALLOWED_ORIGINS,
+);
 
 export const moveCollaboratorPhoto = onCall(async request => {
   if (!request.auth) {
@@ -390,12 +388,19 @@ export const proxyImage = onRequest(
         return;
       }
       const db = getFirestore();
-      // Check if caller is an active collaborator of the path owner
-      const collabDoc = await db
-        .collection('users').doc(pathOwnerUid)
-        .collection('collaborators').doc(uid)
-        .get();
-      if (!collabDoc.exists || collabDoc.data()?.status !== 'active') {
+      const [current, previous] = await Promise.all([
+        db.collection('users').doc(pathOwnerUid)
+          .collection('collaboratorAccess').doc(uid).get(),
+        db.collection('users').doc(pathOwnerUid)
+          .collection('collaborators').doc(uid).get(),
+      ]);
+      if (!allowsSharedPhotoAccess(
+        current.exists ? current.data() : null,
+        previous.exists ? previous.data() : null,
+        pathOwnerUid,
+        uid,
+        'inventory.read',
+      )) {
         res.status(403).send('Forbidden');
         return;
       }

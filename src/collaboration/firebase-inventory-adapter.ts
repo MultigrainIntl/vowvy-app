@@ -34,9 +34,26 @@ function containersPath(ownerUid: string) {
 export function createFirebaseInventoryAdapter(
   firestore: Firestore,
   functions?: Functions,
+  options: { legacyCompatible?: boolean } = {},
 ): InventoryServiceAdapter {
   return {
     async listLocations(ownerUid) {
+      if (options.legacyCompatible) {
+        const snapshots = await getDocs(query(
+          collection(firestore, locationsPath(ownerUid)),
+          where('effectiveIsPrivate', '==', false),
+        ));
+        return snapshots.docs.flatMap(item => {
+          const value = item.data();
+          if (value.visibility === 'private' || value.deletedAt != null) return [];
+          return [{
+            id: item.id,
+            ...value,
+            visibility: value.visibility ?? 'inherit',
+            deletedAt: value.deletedAt ?? null,
+          } as CollaboratorLocation];
+        });
+      }
       const snapshots = await Promise.all(
         (['shared', 'inherit'] as const).map(visibility =>
           getDocs(
@@ -58,6 +75,24 @@ export function createFirebaseInventoryAdapter(
     },
 
     async listContainers(ownerUid) {
+      if (options.legacyCompatible) {
+        const snapshots = await getDocs(query(
+          collection(firestore, containersPath(ownerUid)),
+          where('effectiveIsPrivate', '==', false),
+        ));
+        return snapshots.docs.flatMap(item => {
+          const value = item.data();
+          if (value.visibility === 'private' || value.deletedAt != null) return [];
+          return [{
+            id: item.id,
+            ...value,
+            visibility: value.visibility ?? 'inherit',
+            deletedAt: value.deletedAt ?? null,
+            notes: value.notes ?? [],
+            photos: value.photos ?? [],
+          } as CollaboratorContainer];
+        });
+      }
       const snapshot = await getDocs(
         query(
           collection(firestore, containersPath(ownerUid)),
@@ -155,7 +190,6 @@ export function createFirebaseInventoryAdapter(
       sourceContainerId,
       destinationContainerId,
       photoId,
-      _movedBy,
     ) {
       if (!functions) throw new Error('functions-unavailable');
       const move = httpsCallable<

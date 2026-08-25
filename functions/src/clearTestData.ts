@@ -22,6 +22,10 @@ if (!projectId) {
   console.error('FIREBASE_PROJECT_ID must be set explicitly.');
   process.exit(1);
 }
+if (projectId !== 'vowvy-staging' && projectId !== 'vowvy-emulator') {
+  console.error('Refusing destructive cleanup outside the staging project or local emulator.');
+  process.exit(1);
+}
 
 initializeApp({ projectId });
 const db = getFirestore();

@@ -3,6 +3,7 @@ import {
   getDoc,
   runTransaction,
   setDoc,
+  Timestamp,
   type Firestore,
 } from 'firebase/firestore';
 import {
@@ -26,6 +27,7 @@ export interface FirebaseLifecycleAdapter {
   acceptInvitation(
     invitationId: string,
     collaboratorUid: string,
+    identity?: { displayName?: string; email?: string },
   ): Promise<{ ownerUid: string; accessId: string }>;
   revokeInvitation(invitationId: string, ownerUid: string): Promise<void>;
   revokeAccess(
@@ -65,7 +67,7 @@ export function createFirebaseLifecycleAdapter(
       return result.value;
     },
 
-    async acceptInvitation(invitationId, collaboratorUid) {
+    async acceptInvitation(invitationId, collaboratorUid, identity = {}) {
       if (!invitationId.trim() || !collaboratorUid.trim()) {
         throw lifecycleError('invalid-input');
       }
@@ -82,11 +84,47 @@ export function createFirebaseLifecycleAdapter(
           throw lifecycleError('invitation-not-found');
         }
 
+        const invitationData = invitationSnapshot.data();
+        if (!isCollaboratorInvitation(invitationData)) {
+          const legacy = normalizeLegacyInvitation(invitationData, invitationId);
+          if (!legacy) throw lifecycleError('invalid-invitation');
+          if (legacy.ownerUid === collaboratorUid) throw lifecycleError('identity-mismatch');
+          if (legacy.expiresAtMs !== null && clock.nowMs() >= legacy.expiresAtMs) {
+            throw lifecycleError('expired');
+          }
+          const previousRef = doc(
+            firestore,
+            `users/${legacy.ownerUid}/collaborators/${collaboratorUid}`,
+          );
+          const previousSnapshot = await transaction.get(previousRef);
+          if (previousSnapshot.exists() && previousSnapshot.data().status === 'active') {
+            throw lifecycleError('active-access-exists');
+          }
+          const acceptedAt = Timestamp.fromMillis(clock.nowMs());
+          transaction.set(previousRef, {
+            displayName: identity.displayName?.trim() ||
+              identity.email?.trim() || `Collaborator ${collaboratorUid.slice(0, 6)}`,
+            email: identity.email?.trim() || '',
+            status: 'active',
+            inviteToken: invitationId,
+            acceptedAt,
+          });
+          transaction.update(invitationRef, {
+            status: 'active',
+            acceptedByUid: collaboratorUid,
+            acceptedByEmail: identity.email?.trim() || '',
+            acceptedAt,
+          });
+          return { ownerUid: legacy.ownerUid, accessId: `legacy:${legacy.ownerUid}:${collaboratorUid}` };
+        }
+
         const accepted = acceptCollaboratorInvitation({
-          invitation: invitationSnapshot.data(),
+          invitation: invitationData,
           collaboratorUid,
           accessId,
           nowMs: clock.nowMs(),
+          collaboratorDisplayName: identity.displayName,
+          collaboratorEmail: identity.email,
         });
         if (!accepted.ok) throw lifecycleError(accepted.reason);
 
@@ -154,7 +192,31 @@ export function createFirebaseLifecycleAdapter(
       await runTransaction(firestore, async transaction => {
         const currentSnapshot = await transaction.get(currentRef);
         if (!currentSnapshot.exists()) {
-          throw lifecycleError('access-not-found');
+          const previousRef = doc(
+            firestore,
+            `users/${ownerUid}/collaborators/${collaboratorUid}`,
+          );
+          const previousSnapshot = await transaction.get(previousRef);
+          const previous = previousSnapshot.data();
+          if (!previousSnapshot.exists() || previous?.status !== 'active' ||
+            typeof previous.inviteToken !== 'string') {
+            throw lifecycleError('access-not-found');
+          }
+          const previousInvitationRef = doc(
+            firestore,
+            invitationPath(previous.inviteToken),
+          );
+          const previousInvitation = await transaction.get(previousInvitationRef);
+          if (!previousInvitation.exists() || previousInvitation.data().status !== 'active') {
+            throw lifecycleError('invitation-not-found');
+          }
+          transaction.update(previousRef, { status: 'revoked' });
+          transaction.update(previousInvitationRef, {
+            status: 'revoked',
+            revokedAtMs: clock.nowMs(),
+            revokedByUid: ownerUid,
+          });
+          return;
         }
         const current = currentSnapshot.data();
         if (!isCollaboratorAccessRecord(current)) {
@@ -199,5 +261,45 @@ export async function readInvitation(
     return null;
   }
   const invitation = snapshot.data();
-  return isCollaboratorInvitation(invitation) ? invitation : null;
+  return isCollaboratorInvitation(invitation)
+    ? invitation
+    : normalizeLegacyInvitation(invitation, invitationId);
+}
+
+export function normalizeLegacyInvitation(
+  value: unknown,
+  invitationId: string,
+): CollaboratorInvitation | null {
+  if (!value || typeof value !== 'object' || !invitationId.trim()) return null;
+  const invitation = value as Record<string, unknown>;
+  if (invitation.status !== 'pending' ||
+    typeof invitation.ownerUid !== 'string' || !invitation.ownerUid.trim()) {
+    return null;
+  }
+  const expiry = invitation.expiresAt;
+  let expiresAtMs: number | null = null;
+  if (expiry !== undefined && expiry !== null) {
+    if (expiry instanceof Date) expiresAtMs = expiry.getTime();
+    else if (typeof expiry === 'object' && 'toMillis' in expiry &&
+      typeof (expiry as { toMillis?: unknown }).toMillis === 'function') {
+      expiresAtMs = (expiry as { toMillis: () => number }).toMillis();
+    } else return null;
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs <= 0) return null;
+  }
+  const created = invitation.createdAt;
+  const createdAtMs = created && typeof created === 'object' && 'toMillis' in created &&
+    typeof (created as { toMillis?: unknown }).toMillis === 'function'
+    ? (created as { toMillis: () => number }).toMillis()
+    : 0;
+  const issued = issueCollaboratorInvitation({
+    invitationId,
+    ownerUid: invitation.ownerUid,
+    createdByUid: invitation.ownerUid,
+    nowMs: createdAtMs,
+    expiresAtMs,
+    ...(typeof invitation.ownerDisplayName === 'string'
+      ? { ownerDisplayName: invitation.ownerDisplayName }
+      : {}),
+  });
+  return issued.ok ? issued.value : null;
 }

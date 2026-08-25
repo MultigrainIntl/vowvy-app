@@ -55,10 +55,10 @@ export default function CollaboratorDashboard({ user }: Props) {
           .filter(({ access }) =>
             access.status === 'active' &&
             (access.expiresAtMs === null || Date.now() < access.expiresAtMs))
-          .map(({ collaboratorUid, access }) => ({
+          .map(({ collaboratorUid, access, displayName, email }) => ({
             uid: collaboratorUid,
-            displayName: `Collaborator ${collaboratorUid.slice(0, 6)}`,
-            email: '',
+            displayName,
+            email,
             access,
             acceptedAt: new Date(access.createdAtMs),
             expiresAt: access.expiresAtMs === null
@@ -125,6 +125,7 @@ export default function CollaboratorDashboard({ user }: Props) {
         createdByUid: user.uid,
         nowMs,
         expiresAtMs,
+        ownerDisplayName: user.displayName ?? user.email?.split('@')[0] ?? '',
       });
       setInviteLink(`${window.location.origin}/invite/${token}`);
     } catch (e) {

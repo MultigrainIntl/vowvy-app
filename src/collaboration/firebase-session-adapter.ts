@@ -1,6 +1,8 @@
 import {
   collection,
   collectionGroup,
+  doc,
+  getDoc,
   onSnapshot,
   query,
   where,
@@ -13,17 +15,22 @@ import {
   type CollaboratorAccessRecord,
   type CollaboratorSession,
 } from './access-model';
+import { legacyAccessFromRecords, legacyCollaboratorIdentity } from './legacy-access';
 
 export interface SharedInventorySession {
   ownerUid: string;
   ownerLabel: string;
   access: CollaboratorAccessRecord;
   session: CollaboratorSession;
+  source: 'canonical' | 'legacy';
 }
 
 export interface OwnedCollaboratorAccess {
   collaboratorUid: string;
   access: CollaboratorAccessRecord;
+  displayName: string;
+  email: string;
+  source: 'canonical' | 'legacy';
 }
 
 export interface DefaultSharedInventorySelection {
@@ -39,6 +46,7 @@ export function selectSharedInventorySessions(
   values: unknown[],
   collaboratorUid: string,
   nowMs: number,
+  source: 'canonical' | 'legacy' = 'canonical',
 ): SharedInventorySession[] {
   return values.flatMap(value => {
     if (!isCollaboratorAccessRecord(value)) return [];
@@ -59,6 +67,7 @@ export function selectSharedInventorySessions(
         : ownerLabel(value.ownerUid),
       access: value,
       session: decision.session,
+      source,
     }];
   });
 }
@@ -114,17 +123,92 @@ export function observeSharedInventorySessions(
     where('collaboratorUid', '==', collaboratorUid),
   );
 
-  return onSnapshot(
+  let canonical: SharedInventorySession[] = [];
+  let legacy: SharedInventorySession[] = [];
+  let canonicalOwners = new Set<string>();
+  let canonicalReady = false;
+  let legacyReady = false;
+  let closed = false;
+  let legacyGeneration = 0;
+
+  const publish = () => {
+    if (!closed && (canonicalReady || legacyReady)) {
+      onChange([
+        ...canonical,
+        ...legacy.filter(session => !canonicalOwners.has(session.ownerUid)),
+      ]);
+    }
+  };
+
+  const unsubscribeCanonical = onSnapshot(
     accessQuery,
     snapshot => {
-      onChange(selectSharedInventorySessions(
-        snapshot.docs.map(item => item.data()),
+      const values = snapshot.docs.map(item => item.data());
+      canonicalOwners = new Set(values.flatMap(value =>
+        typeof value.ownerUid === 'string' ? [value.ownerUid] : [],
+      ));
+      canonical = selectSharedInventorySessions(
+        values,
         collaboratorUid,
         Date.now(),
-      ));
+      );
+      canonicalReady = true;
+      publish();
     },
-    error => onError(error),
+    error => {
+      canonicalReady = false;
+      if (!legacyReady) onError(error);
+    },
   );
+
+  const invitationsQuery = query(
+    collection(firestore, 'invites'),
+    where('acceptedByUid', '==', collaboratorUid),
+  );
+  const unsubscribeLegacy = onSnapshot(
+    invitationsQuery,
+    async snapshot => {
+      const generation = ++legacyGeneration;
+      try {
+        const records = await Promise.all(snapshot.docs.map(async item => {
+          const invitation = item.data();
+          if (invitation.status !== 'active' || typeof invitation.ownerUid !== 'string') {
+            return null;
+          }
+          const previous = await getDoc(doc(
+            firestore,
+            `users/${invitation.ownerUid}/collaborators/${collaboratorUid}`,
+          ));
+          return previous.exists()
+            ? legacyAccessFromRecords(invitation, previous.data(), collaboratorUid, item.id)
+            : null;
+        }));
+        if (closed || generation !== legacyGeneration) return;
+        legacy = selectSharedInventorySessions(
+          records.filter(record => record !== null),
+          collaboratorUid,
+          Date.now(),
+          'legacy',
+        );
+        legacyReady = true;
+        publish();
+      } catch (error) {
+        if (!canonicalReady) {
+          onError(error instanceof Error ? error : new Error('Legacy access unavailable.'));
+        }
+      }
+    },
+    error => {
+      legacyReady = false;
+      if (!canonicalReady) onError(error);
+    },
+  );
+
+  return () => {
+    closed = true;
+    unsubscribeCanonical();
+    unsubscribeLegacy();
+  };
 }
 
 export function observeOwnedCollaboratorAccess(
@@ -133,16 +217,80 @@ export function observeOwnedCollaboratorAccess(
   onChange: (access: OwnedCollaboratorAccess[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
-  return onSnapshot(
+  let canonical: OwnedCollaboratorAccess[] = [];
+  let legacy: OwnedCollaboratorAccess[] = [];
+  let closed = false;
+  const publish = () => {
+    if (closed) return;
+    const canonicalIds = new Set(canonical.map(record => record.collaboratorUid));
+    onChange([
+      ...canonical,
+      ...legacy.filter(record => !canonicalIds.has(record.collaboratorUid)),
+    ]);
+  };
+
+  const unsubscribeCanonical = onSnapshot(
     collection(firestore, `users/${ownerUid}/collaboratorAccess`),
     snapshot => {
-      onChange(snapshot.docs.flatMap(item => {
+      canonical = snapshot.docs.flatMap(item => {
         const access = item.data();
         return isCollaboratorAccessRecord(access)
-          ? [{ collaboratorUid: item.id, access }]
+          ? [{
+            collaboratorUid: item.id,
+            access,
+            displayName: access.collaboratorDisplayName ||
+              access.collaboratorEmail || `Collaborator ${item.id.slice(0, 6)}`,
+            email: access.collaboratorEmail || '',
+            source: 'canonical' as const,
+          }]
           : [];
-      }));
+      });
+      publish();
     },
     error => onError(error),
   );
+
+  const unsubscribeLegacy = onSnapshot(
+    collection(firestore, `users/${ownerUid}/collaborators`),
+    snapshot => {
+      legacy = snapshot.docs.flatMap(item => {
+        const identity = legacyCollaboratorIdentity(item.data(), item.id);
+        if (!identity) return [];
+        const access: CollaboratorAccessRecord = {
+          schemaVersion: 1,
+          accessId: `legacy:${ownerUid}:${item.id}`,
+          invitationId: identity.invitationId,
+          ownerUid,
+          collaboratorUid: item.id,
+          status: 'active',
+          capabilities: ['inventory.read', 'location.create', 'container.create',
+            'photo.create', 'note.create', 'note.edit', 'item.move'],
+          validFromMs: identity.acceptedAtMs,
+          expiresAtMs: null,
+          createdAtMs: identity.acceptedAtMs,
+          createdByUid: ownerUid,
+          revokedAtMs: null,
+          revokedByUid: null,
+          supersedesAccessId: null,
+          collaboratorDisplayName: identity.displayName,
+          ...(identity.email ? { collaboratorEmail: identity.email } : {}),
+        };
+        return [{
+          collaboratorUid: item.id,
+          access,
+          displayName: identity.displayName,
+          email: identity.email,
+          source: 'legacy' as const,
+        }];
+      });
+      publish();
+    },
+    error => onError(error),
+  );
+
+  return () => {
+    closed = true;
+    unsubscribeCanonical();
+    unsubscribeLegacy();
+  };
 }

@@ -1,4 +1,5 @@
 import type { Firestore } from 'firebase-admin/firestore';
+import { allowsSharedPhotoAccess } from './collaboratorAccess';
 
 export interface MoveCollaboratorPhotoInput {
   ownerUid: string;
@@ -13,6 +14,18 @@ type PhotoRecord = {
   storagePath?: unknown;
 };
 
+function photoFieldValues(
+  photos: PhotoRecord[],
+  field: 'url' | 'storagePath',
+): string[] {
+  const values: string[] = [];
+  for (const photo of photos) {
+    const value = photo[field];
+    if (typeof value === 'string') values.push(value);
+  }
+  return values;
+}
+
 function requiredId(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= 200;
 }
@@ -22,24 +35,6 @@ function isSharedContainer(data: FirebaseFirestore.DocumentData): boolean {
     data.effectiveIsPrivate === false &&
     (data.visibility === 'shared' || data.visibility === 'inherit') &&
     Array.isArray(data.photos);
-}
-
-function activeAccess(
-  data: FirebaseFirestore.DocumentData,
-  ownerUid: string,
-  collaboratorUid: string,
-  nowMs: number,
-): boolean {
-  return data.schemaVersion === 1 &&
-    data.ownerUid === ownerUid &&
-    data.collaboratorUid === collaboratorUid &&
-    data.status === 'active' &&
-    Array.isArray(data.capabilities) &&
-    data.capabilities.includes('item.move') &&
-    typeof data.validFromMs === 'number' &&
-    data.validFromMs <= nowMs &&
-    (data.expiresAtMs === null ||
-      (typeof data.expiresAtMs === 'number' && nowMs < data.expiresAtMs));
 }
 
 export type MoveCollaboratorPhotoError =
@@ -83,17 +78,21 @@ export async function moveCollaboratorPhotoTransaction(
   const destinationRef = db.doc(
     `users/${input.ownerUid}/containers/${input.destinationContainerId}`,
   );
+  const legacyRef = db.doc(
+    `users/${input.ownerUid}/collaborators/${collaboratorUid}`,
+  );
 
   await db.runTransaction(async transaction => {
-    const [accessSnapshot, sourceSnapshot, destinationSnapshot] =
-      await transaction.getAll(accessRef, sourceRef, destinationRef);
+    const [accessSnapshot, legacySnapshot, sourceSnapshot, destinationSnapshot] =
+      await transaction.getAll(accessRef, legacyRef, sourceRef, destinationRef);
 
     if (
-      !accessSnapshot.exists ||
-      !activeAccess(
-        accessSnapshot.data() ?? {},
+      !allowsSharedPhotoAccess(
+        accessSnapshot.exists ? accessSnapshot.data() : null,
+        legacySnapshot.exists ? legacySnapshot.data() : null,
         input.ownerUid,
         collaboratorUid,
+        'item.move',
         nowMs,
       )
     ) {
@@ -123,19 +122,15 @@ export async function moveCollaboratorPhotoTransaction(
     const nextDestinationPhotos = [...destinationPhotos, photo];
     transaction.update(sourceRef, {
       photos: nextSourcePhotos,
-      photoUrls: nextSourcePhotos.flatMap(item =>
-        typeof item.url === 'string' ? [item.url] : []),
-      photoStoragePaths: nextSourcePhotos.flatMap(item =>
-        typeof item.storagePath === 'string' ? [item.storagePath] : []),
+      photoUrls: photoFieldValues(nextSourcePhotos, 'url'),
+      photoStoragePaths: photoFieldValues(nextSourcePhotos, 'storagePath'),
       lastModifiedAt: nowMs,
       lastModifiedBy: collaboratorUid,
     });
     transaction.update(destinationRef, {
       photos: nextDestinationPhotos,
-      photoUrls: nextDestinationPhotos.flatMap(item =>
-        typeof item.url === 'string' ? [item.url] : []),
-      photoStoragePaths: nextDestinationPhotos.flatMap(item =>
-        typeof item.storagePath === 'string' ? [item.storagePath] : []),
+      photoUrls: photoFieldValues(nextDestinationPhotos, 'url'),
+      photoStoragePaths: photoFieldValues(nextDestinationPhotos, 'storagePath'),
       lastModifiedAt: nowMs,
       lastModifiedBy: collaboratorUid,
     });

@@ -49,6 +49,18 @@ describe('shared inventory session selection', () => {
       selectSharedInventorySessions([access()], 'collaborator-1', 1_000),
     ).toEqual([]);
   });
+
+  it('preserves owner identity and identifies existing-access sessions', () => {
+    const sessions = selectSharedInventorySessions(
+      [access({ ownerDisplayName: 'Joseph Librizzi', expiresAtMs: null })],
+      'collaborator-1',
+      5_000,
+      'legacy',
+    );
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].ownerLabel).toBe('Joseph Librizzi');
+    expect(sessions[0].source).toBe('legacy');
+  });
 });
 
 describe('default shared inventory selection', () => {
