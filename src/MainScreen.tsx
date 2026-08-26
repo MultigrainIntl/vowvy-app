@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactElement } from 'react';
 import { signOut, type User } from 'firebase/auth';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import {
-  collection, doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, onSnapshot,
-  query, orderBy, where, arrayUnion, serverTimestamp, Timestamp,
+  collection, doc, setDoc, getDoc, updateDoc, onSnapshot,
+  query, orderBy, arrayUnion, serverTimestamp, Timestamp, runTransaction,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { httpsCallable } from 'firebase/functions';
 import imageCompression from 'browser-image-compression';
 import QRCode from 'qrcode';
 import { auth, db, storage, functions } from './firebase';
+import { appBaseUrl } from './environment';
 import { ThumbImage, LightboxImage, ContainerNotes } from './shared';
 import type { ContainerNote, PhotoItem } from './shared';
 import { navigate } from './nav';
@@ -19,6 +19,20 @@ import './MainScreen.css';
 import { subscribeToLocations, createLocation, getLocationPath, type Location } from './locations';
 import SellThisFlow from './SellThisFlow';
 import type { ContainerForListing } from './SellThisFlow';
+import {
+  advanceDefaultSharedInventorySelection,
+  observeSharedInventorySessions,
+  observeOwnedCollaboratorAccess,
+  type SharedInventorySession,
+} from './collaboration/firebase-session-adapter';
+import { createFirebaseInventoryAdapter } from './collaboration/firebase-inventory-adapter';
+import { isVisibleInventoryContainer } from './collaboration/inventory-presentation';
+import { createCollaboratorInventoryService } from './collaboration/inventory-service';
+import { createFirebaseLifecycleAdapter } from './collaboration/firebase-lifecycle-adapter';
+import {
+  persistCapturedPhoto,
+  saveCapturedPhotoQueue,
+} from './collaboration/photo-workflows';
 
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
@@ -43,6 +57,8 @@ interface Container {
   aiStatus: 'processing' | 'done' | 'error' | null;
   aiTags: string[];
   aiDescription: string;
+  aiError?: string | null;
+  aiRetryRequestedAt?: number;
   aiSearchTerms: string[];
   notes: ContainerNote[];
   deletedAt: number | null;
@@ -60,29 +76,75 @@ interface TrayPhoto {
   containerName: string;
 }
 
+function clearQrPrintState() {
+  document.body.classList.remove('vowvy-printing-qr');
+  document.body.classList.remove('vowvy-printing-qr-main');
+  document.body.classList.remove('vowvy-printing-qr-manage');
+  document.body.classList.remove('vowvy-qr-print-active');
+
+  const existingPrintRoot = document.getElementById('vowvy-qr-print-root');
+  existingPrintRoot?.remove();
+
+  window.removeEventListener('afterprint', clearQrPrintState);
+}
+
+function requestQrPrint(scopeClass: 'vowvy-printing-qr-main' | 'vowvy-printing-qr-manage') {
+  const card = document.querySelector('.qr-print-overlay .qr-print-card');
+
+  if (!card) {
+    window.print();
+    return;
+  }
+
+  const existingPrintRoot = document.getElementById('vowvy-qr-print-root');
+  existingPrintRoot?.remove();
+
+  const printRoot = document.createElement('div');
+  printRoot.id = 'vowvy-qr-print-root';
+  printRoot.appendChild(card.cloneNode(true));
+  document.body.appendChild(printRoot);
+
+  document.body.classList.add('vowvy-printing-qr');
+  document.body.classList.add(scopeClass);
+  document.body.classList.add('vowvy-qr-print-active');
+
+  window.removeEventListener('afterprint', clearQrPrintState);
+  window.addEventListener('afterprint', clearQrPrintState);
+
+  window.print();
+}
+
 function QRPrintModal({ container, onClose }: { container: Container; onClose: () => void }) {
   const { t } = useTranslation();
   const [tagline, setTagline] = useState(() => t('main.qr.defaultTagline'));
-  const [svgString, setSvgString] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
 
   useEffect(() => {
-    const url = `https://app.vowvy.com/container/${container.id}`;
-    QRCode.toString(url, { type: 'svg', width: 200, margin: 1 })
-      .then(setSvgString)
-      .catch(() => {});
+    const url = `${appBaseUrl}/container/${container.id}`;
+    QRCode.toDataURL(url, { width: 240, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(''));
   }, [container.id]);
+
+  const closeQr = () => {
+    clearQrPrintState();
+    onClose();
+  };
 
   return (
     <div className="qr-print-overlay">
       <div className="qr-print-controls">
-        <button className="qr-btn-print" onClick={() => window.print()}>{t('main.qr.print')}</button>
-        <button className="qr-btn-close" onClick={onClose}>{t('main.qr.close')}</button>
+        <button className="qr-btn-print" disabled={!qrDataUrl} onClick={() => requestQrPrint('vowvy-printing-qr-main')}>
+          {t('main.qr.print')}
+        </button>
+        <button className="qr-btn-close" onClick={closeQr}>{t('main.qr.close')}</button>
       </div>
+
       <div className="qr-print-card">
         <img src={logoMark} alt="Vowvy" className="qr-logo" />
-        {svgString && (
-          <div className="qr-code" dangerouslySetInnerHTML={{ __html: svgString }} />
-        )}
+        <div className="qr-code">
+          {qrDataUrl && <img src={qrDataUrl} alt={`QR code for ${container.name}`} className="qr-code-img" />}
+        </div>
         <div className="qr-container-name">{container.name}</div>
         <div className="qr-location">{container.location}</div>
         <input
@@ -94,6 +156,7 @@ function QRPrintModal({ container, onClose }: { container: Container; onClose: (
     </div>
   );
 }
+
 
 function relativeTime(ts: Timestamp | null): string {
   const t = i18next.t.bind(i18next);
@@ -147,9 +210,10 @@ function mapContainer(d: any): Container {
 
 interface Props { user: User; initialOwnerUid?: string | null }
 
+
 export default function MainScreen({ user, initialOwnerUid }: Props) {
   const { t, i18n } = useTranslation();
-  const [selectedLocationId, setSelectedLocationId]   = useState('');
+  const [selectedLocationId, setSelectedLocationId]   = useState(() => new URLSearchParams(window.location.search).get('location') ?? '');
   const [selectedParentId, setSelectedParentId]       = useState<string | null>(null);
   const [newLocationName, setNewLocationName]         = useState('');
   const [selectedContainerId, setSelectedContainerId] = useState('');
@@ -158,6 +222,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [extraPhotos, setExtraPhotos]                 = useState<File[]>([]);
   const [preview, setPreview]                         = useState<string | null>(null);
   const [saving, setSaving]                           = useState(false);
+  const [saveProgressText, setSaveProgressText]       = useState('');
   const [saved, setSaved]                             = useState(false);
   const [saveError, setSaveError]                     = useState('');
   const [containers, setContainers]                   = useState<Container[]>([]);
@@ -167,23 +232,33 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [lightboxContainerId, setLightboxContainerId] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex]             = useState(0);
   const [lightboxDescDraft, setLightboxDescDraft]     = useState('');
+  const [editingAiDesc, setEditingAiDesc] = useState(false);
+  const [aiDescDraft, setAiDescDraft] = useState('');
+  const [editingAiTags, setEditingAiTags] = useState(false);
+  const [aiTagsDraft, setAiTagsDraft] = useState('');
+  const [retryingAiPhotoIds, setRetryingAiPhotoIds] = useState<Set<string>>(() => new Set());
   const [lightboxAllPhotos, setLightboxAllPhotos]     = useState<PhotoItem[] | null>(null);
   const [lightboxFilterQuery, setLightboxFilterQuery] = useState('');
   const [updatingContainerId, setUpdatingContainerId] = useState<string | null>(null);
-  const [continuousCapture, setContinuousCapture] = useState(false);
+  const [, setContinuousCapture] = useState(false);
   const [captureContainerId, setCaptureContainerId] = useState<string | null>(null);
   const [captureQueue, setCaptureQueue] = useState<File[]>([]);
   const [searchQuery, setSearchQuery]                 = useState('');
   const [printContainer, setPrintContainer]           = useState<Container | null>(null);
   const [moveSource, setMoveSource] = useState<{ containerId: string; mode: 'container' | 'photo'; photoId?: string } | null>(null);
+  const [expandedMoveLocs, setExpandedMoveLocs] = useState<Set<string>>(new Set());
   const [sellContainer, setSellContainer] = useState<ContainerForListing | null>(null);
   const [sellSourcePhotos, setSellSourcePhotos] = useState<PhotoItem[] | null>(null);
   const [sellSourceContainerIds, setSellSourceContainerIds] = useState<string[] | null>(null);
+  const [renamingContId, setRenamingContId] = useState<string | null>(null);
+  const [renamingDraft, setRenamingDraft]   = useState('');
   const [sellIsFromTray, setSellIsFromTray] = useState(false);
   const [trayPhotos, setTrayPhotos] = useState<TrayPhoto[]>([]);
   const [showTray, setShowTray] = useState(false);
   const [viewingOwnerUid, setViewingOwnerUid]         = useState(initialOwnerUid ?? user.uid);
-  const [sharedInventories, setSharedInventories]     = useState<{ ownerUid: string; ownerName: string }[]>([]);
+  const [sharedInventories, setSharedInventories]     = useState<SharedInventorySession[]>([]);
+  const [sharedSessionsLoaded, setSharedSessionsLoaded] = useState(false);
+  const [collaborationError, setCollaborationError]   = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationsLoaded, setLocationsLoaded]   = useState(false);
   const [containersLoaded, setContainersLoaded] = useState(false);
@@ -191,7 +266,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [firstLocationName, setFirstLocationName]           = useState('');
   const [creatingFirstLocation, setCreatingFirstLocation]   = useState(false);
   const [showHowItWorks, setShowHowItWorks]                 = useState(false);
-  const [collaborators, setCollaborators]     = useState<{ uid: string; displayName: string; email: string; inviteToken: string }[]>([]);
+  const [collaborators, setCollaborators]     = useState<{ uid: string; displayName: string }[]>([]);
   const [showMobileMenu, setShowMobileMenu]   = useState(false);
   const [showInvitePanel, setShowInvitePanel] = useState(false);
   const [inviteLink, setInviteLink]           = useState<string | null>(null);
@@ -201,6 +276,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   const [cardMoreOpenId, setCardMoreOpenId] = useState<string | null>(null);
   const updatePhotoInputRef = useRef<HTMLInputElement>(null);
   const scrollRef           = useRef<HTMLDivElement>(null);
+  const defaultInventorySelectedRef = useRef(false);
 
   // Sync description draft when lightbox photo changes
   useEffect(() => {
@@ -209,58 +285,134 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     }
   }, [lightboxIndex, lightboxItems]);
 
-  // Listen for shared inventories (invites accepted by this user)
+  // Only verified, active and unexpired access records may select shared inventory.
   useEffect(() => {
-    const q = query(collection(db, 'invites'), where('acceptedByUid', '==', user.uid));
-    return onSnapshot(q, snap => {
-      setSharedInventories(
-        snap.docs
-          .filter(d => d.data().status === 'active')
-          .map(d => ({ ownerUid: d.data().ownerUid, ownerName: d.data().ownerDisplayName }))
-      );
-    });
-  }, [user.uid]);
+    return observeSharedInventorySessions(
+      db,
+      user.uid,
+      sessions => {
+        setSharedInventories(sessions);
+        setSharedSessionsLoaded(true);
+        setCollaborationError('');
 
-  // Listen for locations — use viewingOwnerUid so collaborators see the owner's locations
+        // Returning collaborators start in their verified shared inventory,
+        // without overriding an invitation URL or a later manual choice.
+        const defaultSelection = advanceDefaultSharedInventorySelection(
+          sessions,
+          user.uid,
+          Date.now(),
+          defaultInventorySelectedRef.current,
+          initialOwnerUid,
+        );
+        defaultInventorySelectedRef.current = defaultSelection.selected;
+        const ownerUid = defaultSelection.ownerUid;
+        if (ownerUid) {
+          setViewingOwnerUid(currentOwnerUid =>
+            currentOwnerUid === user.uid ? ownerUid : currentOwnerUid,
+          );
+        }
+      },
+      error => {
+        setSharedInventories([]);
+        setSharedSessionsLoaded(true);
+        setCollaborationError(error.message);
+      },
+    );
+  }, [initialOwnerUid, user.uid]);
+
+  // Owners retain the established real-time path. Collaborators load through the
+  // verified owner-aware inventory service; no URL or selector value grants access.
   useEffect(() => {
     setLocationsLoaded(false);
+    if (viewingOwnerUid !== user.uid) {
+      const shared = sharedInventories.find(
+        item => item.ownerUid === viewingOwnerUid,
+      );
+      if (!shared) {
+        setLocations([]);
+        setLocationsLoaded(true);
+        return;
+      }
+      let cancelled = false;
+      const service = createCollaboratorInventoryService(
+        shared.session,
+        createFirebaseInventoryAdapter(db, functions, {
+          legacyCompatible: shared.source === 'legacy',
+        }),
+      );
+      service.readInventory()
+        .then(result => {
+          if (cancelled) return;
+          if (!result.ok) {
+            setCollaborationError(`Shared inventory unavailable: ${result.reason}`);
+            setViewingOwnerUid(user.uid);
+            return;
+          }
+          setLocations(result.value.locations.map(location => ({
+            ...location,
+            createdAt: null,
+          })));
+          setContainers(result.value.containers.map(mapContainer));
+          setLocationsLoaded(true);
+          setContainersLoaded(true);
+          setCollaborationError('');
+        })
+        .catch(error => {
+          if (cancelled) return;
+          setCollaborationError(
+            error instanceof Error ? error.message : 'Shared inventory unavailable.',
+          );
+          setViewingOwnerUid(user.uid);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     return subscribeToLocations(viewingOwnerUid, locs => {
       setLocations(locs);
       setLocationsLoaded(true);
     });
-  }, [viewingOwnerUid]);
+  }, [viewingOwnerUid, user.uid, sharedInventories]);
 
-  // Listen for people who have access to this user's inventory
+  // Owner view of current access uses the same authoritative records as rules.
   useEffect(() => {
-    return onSnapshot(collection(db, `users/${user.uid}/collaborators`), snap => {
-      setCollaborators(
-        snap.docs
-          .filter(d => d.data().status === 'active')
-          .map(d => ({
-            uid: d.id,
-            displayName: d.data().displayName ?? d.data().email ?? 'Collaborator',
-            email: d.data().email ?? '',
-            inviteToken: d.data().inviteToken ?? '',
-          }))
-      );
-    });
+    return observeOwnedCollaboratorAccess(
+      db,
+      user.uid,
+      records => setCollaborators(
+        records
+          .filter(({ access }) =>
+            access.status === 'active' &&
+            (access.expiresAtMs === null || Date.now() < access.expiresAtMs))
+          .map(({ collaboratorUid, displayName }) => ({
+            uid: collaboratorUid,
+            displayName,
+          })),
+      ),
+      error => setCollaborationError(error.message),
+    );
   }, [user.uid]);
 
-  // Fall back to own inventory if a shared one was revoked
+  // Revocation, expiration, invalid access, or an unauthorized owner URL always
+  // returns the user to their own inventory—even when the valid list is empty.
   useEffect(() => {
-    if (viewingOwnerUid !== user.uid && sharedInventories.length > 0) {
-      if (!sharedInventories.some(s => s.ownerUid === viewingOwnerUid)) {
-        setViewingOwnerUid(user.uid);
-      }
+    if (
+      viewingOwnerUid !== user.uid &&
+      sharedSessionsLoaded &&
+      !sharedInventories.some(s => s.ownerUid === viewingOwnerUid)
+    ) {
+      setViewingOwnerUid(user.uid);
+      window.history.replaceState({}, '', '/');
     }
-  }, [sharedInventories, viewingOwnerUid, user.uid]);
+  }, [sharedInventories, sharedSessionsLoaded, viewingOwnerUid, user.uid]);
 
-  // Container snapshot — owner sees all; collaborators only see non-private containers
+  // Owner container snapshot. Collaborator containers are loaded by the verified
+  // inventory service in the effect above.
   useEffect(() => {
+    if (viewingOwnerUid !== user.uid) return;
+    setContainersLoaded(false);
     const col = collection(db, `users/${viewingOwnerUid}/containers`);
-    const q = viewingOwnerUid !== user.uid
-      ? query(col, where('effectiveIsPrivate', '==', false), orderBy('createdAt', 'desc'))
-      : query(col, orderBy('createdAt', 'desc'));
+    const q = query(col, orderBy('createdAt', 'desc'));
     return onSnapshot(q, snap => {
       setContainers(snap.docs.map(mapContainer));
       setContainersLoaded(true);
@@ -289,7 +441,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     locationsLoaded && containersLoaded &&
     locations.length > 0 && containers.length === 0;
 
-  const trashedContainers = containers.filter(c => c.deletedAt && isRecent(c.deletedAt));
+  const trashedContainers = containers.filter(c => c.deletedAt);
   const trashedPhotos     = containers.filter(c => !c.deletedAt)
     .flatMap(c => c.photos.filter(p => p.deletedAt && isRecent(p.deletedAt)));
   const trashedNotes      = containers.filter(c => !c.deletedAt)
@@ -303,6 +455,66 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     selectedContainerId !== '' &&
     (selectedContainerId !== 'new' || newContainerName.trim() !== '');
   const canSave = Boolean(selectedLocationId && containerValid && photo) && !saving;
+
+  const activeSharedInventory = viewingOwnerUid === user.uid
+    ? null
+    : sharedInventories.find(item => item.ownerUid === viewingOwnerUid) ?? null;
+
+  function collaboratorInventoryService() {
+    return activeSharedInventory
+      ? createCollaboratorInventoryService(
+          activeSharedInventory.session,
+          createFirebaseInventoryAdapter(db, functions, {
+            legacyCompatible: activeSharedInventory.source === 'legacy',
+          }),
+        )
+      : null;
+  }
+
+  async function refreshCollaboratorInventory(
+    service: ReturnType<typeof createCollaboratorInventoryService>,
+  ): Promise<void> {
+    const refreshed = await service.readInventory();
+    if (!refreshed.ok) {
+      throw new Error(`collaboration-refresh:${refreshed.reason}`);
+    }
+
+    setLocations(refreshed.value.locations.map(location => ({
+      ...location,
+      createdAt: null,
+    })));
+    setContainers(refreshed.value.containers.map(mapContainer));
+    setLocationsLoaded(true);
+    setContainersLoaded(true);
+    setCollaborationError('');
+  }
+
+  async function createLocationForActiveInventory(
+    name: string,
+    parentId: string | null,
+  ): Promise<string> {
+    if (viewingOwnerUid === user.uid) {
+      return createLocation(user.uid, name, parentId);
+    }
+    const service = collaboratorInventoryService();
+    if (!service) throw new Error('collaboration-session-unavailable');
+    const result = await service.createLocation(name, parentId);
+    if (!result.ok) throw new Error(`collaboration-location:${result.reason}`);
+    await refreshCollaboratorInventory(service);
+    return result.value;
+  }
+
+  function clearCaptureSelection() {
+    if (saving) return;
+    if (preview) URL.revokeObjectURL(preview);
+    setPhoto(null);
+    setExtraPhotos([]);
+    setPreview(null);
+    setSaveError('');
+    setSaved(false);
+    setSaveProgressText('');
+  }
+
 
   async function handleCreateFirstLocation() {
     const name = firstLocationName.trim();
@@ -333,10 +545,25 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       let resolvedLocationName = '';
       if (selectedLocationId === 'new') {
         if (!newLocationName.trim()) { setSaveError(t('main.errors.locationRequired')); setSaving(false); return; }
-        resolvedLocationId = await createLocation(user.uid, newLocationName.trim(), selectedParentId);
+        resolvedLocationId = await createLocationForActiveInventory(newLocationName.trim(), selectedParentId);
         resolvedLocationName = newLocationName.trim();
       } else {
         resolvedLocationName = getLocationPath(selectedLocationId, locations);
+      }
+      const service = collaboratorInventoryService();
+      if (service) {
+        const result = await service.createContainer(
+          newContainerName.trim(),
+          resolvedLocationId,
+          resolvedLocationName,
+        );
+        if (!result.ok) throw new Error(`collaboration-container:${result.reason}`);
+        await refreshCollaboratorInventory(service);
+        setSelectedLocationId(''); setNewLocationName(''); setSelectedContainerId('');
+        setNewContainerName(''); setPhoto(null); setExtraPhotos([]); setPreview(null);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+        return;
       }
       const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
       const locEffective0 = resolvedLocationId
@@ -367,51 +594,130 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
   }
 
   async function handleSave() {
-    if (!photo) return;
+    if (!photo || saving || !selectedLocationId || !containerValid) return;
+
     setSaving(true);
     setSaveError('');
-    // Resolve location — create new one if needed
-    let resolvedLocationId = selectedLocationId;
-    let resolvedLocationName = '';
-    if (selectedLocationId === 'new') {
-      if (!newLocationName.trim()) { setSaveError(t('main.errors.locationRequired')); setSaving(false); return; }
-      resolvedLocationId = await createLocation(user.uid, newLocationName.trim(), selectedParentId);
-      resolvedLocationName = newLocationName.trim();
-    } else {
-      resolvedLocationName = getLocationPath(selectedLocationId, locations);
-    }
+    setSaved(false);
+    setSaveProgressText('');
+
+    const selectedFiles = [photo, ...extraPhotos];
+
     try {
-      if (!auth.currentUser) { setSaveError(t('main.errors.sessionExpired')); setSaving(false); return; }
+      // Resolve location — create new one if needed
+      let resolvedLocationId = selectedLocationId;
+      let resolvedLocationName = '';
+
+      if (selectedLocationId === 'new') {
+        if (!newLocationName.trim()) {
+          setSaveError(t('main.errors.locationRequired'));
+          return;
+        }
+        resolvedLocationId = await createLocationForActiveInventory(newLocationName.trim(), selectedParentId);
+        resolvedLocationName = newLocationName.trim();
+      } else {
+        resolvedLocationName = getLocationPath(selectedLocationId, locations);
+      }
+
+      if (!auth.currentUser) {
+        setSaveError(t('main.errors.sessionExpired'));
+        return;
+      }
+
       await auth.currentUser.getIdToken(true);
 
-      const compressOpts = { maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: true, maxSizeMB: 0.5 };
-      const allFiles = [await imageCompression(photo, compressOpts), ...await Promise.all(extraPhotos.map(f => imageCompression(f, compressOpts)))];
+      const compressOpts = {
+        maxWidthOrHeight: 1600,
+        initialQuality: 0.85,
+        useWebWorker: true,
+        maxSizeMB: 0.5,
+      };
 
-      const uploadPhoto = async (containerId: string, file: File): Promise<{ url: string; storagePath: string }> => {
-        if (viewingOwnerUid !== user.uid) {
-          const ab = await file.arrayBuffer();
-          const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
-          const fn = httpsCallable<{ ownerUid: string; containerId: string; imageBase64: string; contentType: string }, { downloadURL: string; storagePath: string }>(functions, 'uploadCollaboratorPhoto');
-          const r = await fn({ ownerUid: viewingOwnerUid, containerId, imageBase64: b64, contentType: 'image/jpeg' });
-          return { url: r.data.downloadURL, storagePath: r.data.storagePath };
-        }
-        const storagePath = `users/${viewingOwnerUid}/containers/${containerId}/photos/${Date.now()}.jpg`;
-        await uploadBytes(ref(storage, storagePath), file);
+      const makePhotoItem = (url: string, storagePath: string): PhotoItem => ({
+        id: crypto.randomUUID(),
+        url,
+        storagePath,
+        description: '',
+        createdAt: Date.now(),
+        addedBy: user.uid,
+        addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+        moderationStatus: 'pending',
+        moderationCheckedAt: null,
+        moderationProvider: null,
+        moderationReason: null,
+      });
+
+      const uploadPhoto = async (containerId: string, file: File, index: number): Promise<{ url: string; storagePath: string }> => {
+        setSaveProgressText(`Saving ${index + 1} of ${selectedFiles.length} photo${selectedFiles.length === 1 ? '' : 's'}…`);
+
+        const compressed = await imageCompression(file, compressOpts);
+
+        const storagePath = `users/${viewingOwnerUid}/containers/${containerId}/photos/${Date.now()}-${index}-${Math.random().toString(36).slice(2)}.jpg`;
+        await uploadBytes(ref(storage, storagePath), compressed);
         return { url: await getDownloadURL(ref(storage, storagePath)), storagePath };
       };
 
+      const appendPhotoToExistingContainer = async (
+        containerId: string,
+        currentPhotos: PhotoItem[],
+        file: File,
+        index: number
+      ): Promise<PhotoItem[]> => {
+        const { url: photoUrl, storagePath } = await uploadPhoto(containerId, file, index);
+        const photoItem = makePhotoItem(photoUrl, storagePath);
+        const nextPhotos = [...currentPhotos, photoItem];
+
+        const service = collaboratorInventoryService();
+        if (service) {
+          const result = await service.addPhoto(containerId, photoItem);
+          if (!result.ok) throw new Error(`collaboration-photo:${result.reason}`);
+        } else {
+          await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), {
+            photos: nextPhotos,
+            photoUrls: arrayUnion(photoUrl),
+            photoStoragePaths: arrayUnion(storagePath),
+            lastModifiedAt: serverTimestamp(),
+            lastModifiedBy: user.uid,
+            lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+          });
+        }
+
+        return nextPhotos;
+      };
+
       if (selectedContainerId === 'new') {
+        const service = collaboratorInventoryService();
+        if (service) {
+          const created = await service.createContainer(
+            newContainerName.trim(),
+            resolvedLocationId,
+            resolvedLocationName,
+          );
+          if (!created.ok) throw new Error(`collaboration-container:${created.reason}`);
+          let currentPhotos: PhotoItem[] = [];
+          for (let i = 0; i < selectedFiles.length; i += 1) {
+            currentPhotos = await appendPhotoToExistingContainer(
+              created.value,
+              currentPhotos,
+              selectedFiles[i],
+              i,
+            );
+          }
+        } else {
         const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
-        const { url: photoUrl, storagePath } = await uploadPhoto(containerRef.id, allFiles[0]);
-        const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
         const locEffective1 = resolvedLocationId
           ? (locations.find(l => l.id === resolvedLocationId)?.effectiveIsPrivate ?? false)
           : false;
+
+        const { url: photoUrl, storagePath } = await uploadPhoto(containerRef.id, selectedFiles[0], 0);
+        const firstPhotoItem = makePhotoItem(photoUrl, storagePath);
+        let currentPhotos = [firstPhotoItem];
+
         await setDoc(containerRef, {
           location: resolvedLocationName,
           locationId: resolvedLocationId,
           name: newContainerName.trim(),
-          photos: [photoItem],
+          photos: currentPhotos,
           photoUrls: [photoUrl],
           photoStoragePaths: [storagePath],
           createdAt: serverTimestamp(),
@@ -423,33 +729,54 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           lastModifiedBy: user.uid,
           lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
         });
+
+        for (let i = 1; i < selectedFiles.length; i += 1) {
+          currentPhotos = await appendPhotoToExistingContainer(containerRef.id, currentPhotos, selectedFiles[i], i);
+        }
+        }
       } else if (selectedContainerId === '__loose__') {
         const looseExisting = containers.find(c =>
-          c.locationId === resolvedLocationId && c.name === 'Unsorted' && !c.deletedAt
+          c.locationId === resolvedLocationId && c.name === 'Loose items' && !c.deletedAt
         );
+
         if (looseExisting) {
-          const { url: photoUrl, storagePath } = await uploadPhoto(looseExisting.id, allFiles[0]);
-          const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
-          await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${looseExisting.id}`), {
-            photos: [...looseExisting.photos, photoItem],
-            photoUrls: arrayUnion(photoUrl),
-            photoStoragePaths: arrayUnion(storagePath),
-            lastModifiedAt: serverTimestamp(),
-            lastModifiedBy: user.uid,
-            lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
-          });
+          let currentPhotos = [...looseExisting.photos];
+          for (let i = 0; i < selectedFiles.length; i += 1) {
+            currentPhotos = await appendPhotoToExistingContainer(looseExisting.id, currentPhotos, selectedFiles[i], i);
+          }
         } else {
+          const service = collaboratorInventoryService();
+          if (service) {
+            const created = await service.createContainer(
+              'Loose items',
+              resolvedLocationId,
+              resolvedLocationName,
+            );
+            if (!created.ok) throw new Error(`collaboration-container:${created.reason}`);
+            let currentPhotos: PhotoItem[] = [];
+            for (let i = 0; i < selectedFiles.length; i += 1) {
+              currentPhotos = await appendPhotoToExistingContainer(
+                created.value,
+                currentPhotos,
+                selectedFiles[i],
+                i,
+              );
+            }
+          } else {
           const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
-          const { url: photoUrl, storagePath } = await uploadPhoto(containerRef.id, allFiles[0]);
-          const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
           const locEffectiveLoose = resolvedLocationId
             ? (locations.find(l => l.id === resolvedLocationId)?.effectiveIsPrivate ?? false)
             : false;
+
+          const { url: photoUrl, storagePath } = await uploadPhoto(containerRef.id, selectedFiles[0], 0);
+          const firstPhotoItem = makePhotoItem(photoUrl, storagePath);
+          let currentPhotos = [firstPhotoItem];
+
           await setDoc(containerRef, {
             location: resolvedLocationName,
             locationId: resolvedLocationId,
-            name: 'Unsorted',
-            photos: [photoItem],
+            name: 'Loose items',
+            photos: currentPhotos,
             photoUrls: [photoUrl],
             photoStoragePaths: [storagePath],
             createdAt: serverTimestamp(),
@@ -461,13 +788,104 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             lastModifiedBy: user.uid,
             lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
           });
+
+          for (let i = 1; i < selectedFiles.length; i += 1) {
+            currentPhotos = await appendPhotoToExistingContainer(containerRef.id, currentPhotos, selectedFiles[i], i);
+          }
+          }
         }
       } else {
-        const { url: photoUrl, storagePath } = await uploadPhoto(selectedContainerId, allFiles[0]);
-        const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
         const existing = containers.find(c => c.id === selectedContainerId);
-        const updatedPhotos = [...(existing?.photos ?? []), photoItem];
-        await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${selectedContainerId}`), {
+        let currentPhotos = [...(existing?.photos ?? [])];
+
+        for (let i = 0; i < selectedFiles.length; i += 1) {
+          currentPhotos = await appendPhotoToExistingContainer(selectedContainerId, currentPhotos, selectedFiles[i], i);
+        }
+      }
+
+      const sharedService = collaboratorInventoryService();
+      if (sharedService) {
+        await refreshCollaboratorInventory(sharedService);
+      }
+
+      if (preview) URL.revokeObjectURL(preview);
+      setPhoto(null);
+      setExtraPhotos([]);
+      setPreview(null);
+      setSelectedLocationId('');
+      setNewLocationName('');
+      setSelectedParentId(null);
+      setSelectedContainerId('');
+      setNewContainerName('');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err: any) {
+      console.error('[handleSave] code:', err?.code, '| message:', err?.message, '| full:', err);
+      setSaveError(t('main.errors.saveFailed'));
+    } finally {
+      setSaving(false);
+      setSaveProgressText('');
+    }
+  }
+
+
+  async function handleUpdatePhoto(e: any) {
+    const file = e.target.files?.[0] ?? null;
+    e.target.value = '';
+
+    if (!file || !updatingContainerId || saving) return;
+
+    setSaving(true);
+    setSaveError('');
+
+    try {
+      if (!auth.currentUser) {
+        setSaveError(t('main.errors.sessionExpired'));
+        return;
+      }
+
+      await auth.currentUser.getIdToken(true);
+
+      const compressed = await imageCompression(file, {
+        maxWidthOrHeight: 1600,
+        initialQuality: 0.85,
+        useWebWorker: true,
+        maxSizeMB: 0.5,
+      });
+
+      const containerId = updatingContainerId;
+      const existing = containers.find(c => c.id === containerId);
+
+      let photoUrl: string;
+      let storagePath: string;
+
+      storagePath = `users/${viewingOwnerUid}/containers/${containerId}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+      await uploadBytes(ref(storage, storagePath), compressed);
+      photoUrl = await getDownloadURL(ref(storage, storagePath));
+
+      const photoItem: PhotoItem = {
+        id: crypto.randomUUID(),
+        url: photoUrl,
+        storagePath,
+        description: '',
+        createdAt: Date.now(),
+        addedBy: user.uid,
+        addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+        moderationStatus: 'pending',
+        moderationCheckedAt: null,
+        moderationProvider: null,
+        moderationReason: null,
+      };
+
+      const updatedPhotos = [...(existing?.photos ?? []), photoItem];
+
+      const service = collaboratorInventoryService();
+      if (service) {
+        const result = await service.addPhoto(containerId, photoItem);
+        if (!result.ok) throw new Error(`collaboration-photo:${result.reason}`);
+        await refreshCollaboratorInventory(service);
+      } else {
+        await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), {
           photos: updatedPhotos,
           photoUrls: arrayUnion(photoUrl),
           photoStoragePaths: arrayUnion(storagePath),
@@ -476,81 +894,15 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
         });
       }
-
-      if (preview) URL.revokeObjectURL(preview);
-      setPhoto(null); setExtraPhotos([]); setPreview(null);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     } catch (err: any) {
-      console.error('[handleSave] code:', err?.code, '| message:', err?.message, '| full:', err);
+      console.error('[handleUpdatePhoto] code:', err?.code, '| message:', err?.message, '| full:', err);
       setSaveError(t('main.errors.saveFailed'));
     } finally {
       setSaving(false);
+      setUpdatingContainerId(null);
     }
   }
 
-  async function handleUpdatePhoto(e: React.ChangeEvent<HTMLInputElement>, overrideContainerId?: string) {
-    const file = e.target.files?.[0] ?? null;
-    e.target.value = '';
-    const id = overrideContainerId ?? updatingContainerId;
-    if (!file || !id) return;
-    setUpdatingContainerId(null);
-    setSaving(true);
-    setSaveError('');
-    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 15000));
-    try {
-      await Promise.race([
-        (async () => {
-          if (!auth.currentUser) { setSaveError(t('main.errors.sessionExpired')); return; }
-          await auth.currentUser.getIdToken(true);
-          console.log('Starting compression');
-          const compressed = await imageCompression(file, {
-            maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: false, maxSizeMB: 0.5,
-          });
-          console.log('Compression done');
-          let photoUrl: string;
-          let storagePath: string;
-          if (viewingOwnerUid !== user.uid) {
-            console.log('Starting collaborator upload');
-            const ab = await compressed.arrayBuffer();
-            const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
-            const fn = httpsCallable<{ ownerUid: string; containerId: string; imageBase64: string; contentType: string }, { downloadURL: string; storagePath: string }>(functions, 'uploadCollaboratorPhoto');
-            const r = await fn({ ownerUid: viewingOwnerUid, containerId: id, imageBase64: b64, contentType: 'image/jpeg' });
-            photoUrl = r.data.downloadURL;
-            storagePath = r.data.storagePath;
-          } else {
-            storagePath = `users/${viewingOwnerUid}/containers/${id}/photos/${Date.now()}.jpg`;
-            console.log('Starting upload');
-            await uploadBytes(ref(storage, storagePath), compressed);
-            console.log('Upload done');
-            photoUrl = await getDownloadURL(ref(storage, storagePath));
-          }
-          const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
-          const existing = containers.find(c => c.id === id);
-          const updatedPhotos = [...(existing?.photos ?? []), photoItem];
-          await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${id}`), {
-            photos: updatedPhotos,
-            photoUrls: arrayUnion(photoUrl),
-            photoStoragePaths: arrayUnion(storagePath),
-            lastModifiedAt: serverTimestamp(),
-            lastModifiedBy: user.uid,
-            lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
-          });
-          // Re-trigger camera if in continuous capture mode
-          if (continuousCapture) {
-            setUpdatingContainerId(id);
-            setTimeout(() => updatePhotoInputRef.current?.click(), 300);
-          }
-        })(),
-        timeout,
-      ]);
-    } catch (e: any) {
-      const msg = e?.message ?? e?.code ?? 'unknown error';
-      setSaveError(msg === 'TIMEOUT' ? t('main.errors.saveTimeout') : t('main.errors.addPhotoFailed', { message: msg }));
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function handleDeletePhoto() {
     if (!lightboxContainerId || !lightboxItems) return;
@@ -580,6 +932,95 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       }, 0);
     }
   }
+
+
+    async function handleSaveAiDescription(photoId: string, newDesc: string) {
+      if (!auth.currentUser || !lightboxContainerId) return;
+      await auth.currentUser.getIdToken(true);
+      const _cnt = containers.find(cc => cc.id === lightboxContainerId);
+      if (!_cnt) return;
+      const _up = (_cnt.photos ?? []).map((p: any) => p.id === photoId ? { ...p, aiDescription: newDesc } : p);
+      await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), { photos: _up });
+      setLightboxItems(prev => prev ? prev.map(p => p.id === photoId ? { ...p, aiDescription: newDesc } : p) : prev);
+    }
+
+    async function handleSaveAiTags(photoId: string, tagsStr: string) {
+      if (!auth.currentUser || !lightboxContainerId) return;
+      await auth.currentUser.getIdToken(true);
+      const newTags = tagsStr.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+      const _cnt = containers.find(cc => cc.id === lightboxContainerId);
+      if (!_cnt) return;
+      const _up = (_cnt.photos ?? []).map((p: any) => p.id === photoId ? { ...p, aiTags: newTags } : p);
+      await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), { photos: _up });
+      setLightboxItems(prev => prev ? prev.map(p => p.id === photoId ? { ...p, aiTags: newTags } : p) : prev);
+    }
+
+    async function handleRetryPhotoAi(photoId: string) {
+      if (!auth.currentUser || !lightboxContainerId) return;
+
+      setRetryingAiPhotoIds(prev => {
+        const next = new Set(prev);
+        next.add(photoId);
+        return next;
+      });
+
+      setLightboxItems(prev =>
+        prev
+          ? prev.map((p: any) =>
+              p.id === photoId
+                ? {
+                    ...p,
+                    aiStatus: 'processing',
+                    aiDescription: '',
+                    aiTags: [],
+                    aiObjects: [],
+                  }
+                : p
+            )
+          : prev
+      );
+
+      try {
+        await auth.currentUser.getIdToken(true);
+
+        const ownerUid = viewingOwnerUid || auth.currentUser.uid;
+        const _cntRef = doc(db, `users/${ownerUid}/containers/${lightboxContainerId}`);
+        await runTransaction(db, async (tx) => {
+          const _snap = await tx.get(_cntRef);
+          const _freshPhotos: any[] = _snap.data()?.photos ?? [];
+          const _up = _freshPhotos.map((p: any) =>
+            p.id === photoId
+              ? {
+                  ...p,
+                  aiStatus: 'retry' as const,
+                  aiError: null,
+                  aiRetryRequestedAt: Date.now(),
+                }
+              : p
+          );
+          tx.update(_cntRef, { photos: _up });
+        });
+
+      } catch (err) {
+        console.error('Failed to retry AI analysis', err);
+
+        setRetryingAiPhotoIds(prev => {
+          const next = new Set(prev);
+          next.delete(photoId);
+          return next;
+        });
+
+        setLightboxItems(prev =>
+          prev
+            ? prev.map((p: any) =>
+                p.id === photoId
+                  ? { ...p, aiStatus: 'error' }
+                  : p
+              )
+            : prev
+        );
+      }
+    }
 
   async function handleSavePhotoDescription() {
     if (!lightboxContainerId || !lightboxItems) return;
@@ -619,7 +1060,35 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     if (!auth.currentUser) return;
     await auth.currentUser.getIdToken(true);
     const note: ContainerNote = { id: crypto.randomUUID(), text, createdAt: Date.now() };
+    const service = collaboratorInventoryService();
+    if (service) {
+      const result = await service.addNote(containerId, note);
+      if (!result.ok) throw new Error(`collaboration-note:${result.reason}`);
+      await refreshCollaboratorInventory(service);
+      return;
+    }
     await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${containerId}`), { notes: arrayUnion(note) });
+  }
+
+  async function handleEditNote(containerId: string, noteId: string, text: string) {
+    if (!auth.currentUser) return;
+    await auth.currentUser.getIdToken(true);
+    const service = collaboratorInventoryService();
+    if (service) {
+      const result = await service.editNote(containerId, noteId, text);
+      if (!result.ok) throw new Error(`collaboration-note-edit:${result.reason}`);
+      await refreshCollaboratorInventory(service);
+      return;
+    }
+    const container = containers.find(c => c.id === containerId);
+    if (!container) return;
+    const notes = container.notes.map(note =>
+      note.id === noteId ? { ...note, text: text.trim() } : note
+    );
+    await updateDoc(
+      doc(db, `users/${viewingOwnerUid}/containers/${containerId}`),
+      { notes },
+    );
   }
 
   async function handleDeleteNote(containerId: string, noteId: string) {
@@ -633,7 +1102,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
 
 
   async function handleCopyLink() {
-    await navigator.clipboard.writeText('https://vowvy-1ba5f.web.app');
+    await navigator.clipboard.writeText(appBaseUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -645,7 +1114,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         c.name.toLowerCase().includes(trimmedQuery) ||
         c.aiTags.some(t => t.toLowerCase().includes(trimmedQuery)) ||
         c.aiDescription.toLowerCase().includes(trimmedQuery) ||
-        c.aiSearchTerms.join(' ').toLowerCase().includes(trimmedQuery) ||
+        (c.aiSearchTerms ?? []).join(' ').toLowerCase().includes(trimmedQuery) ||
         c.notes.filter(n => !n.deletedAt).some(n => n.text.toLowerCase().includes(trimmedQuery)) ||
         c.photos.filter(p => !p.deletedAt).some(p =>
           p.description.toLowerCase().includes(trimmedQuery) ||
@@ -655,11 +1124,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         )
       )
     : activeContainers
-  ).filter(c => {
-    // Hide private containers from collaborators
-    if (viewingOwnerUid !== user.uid && c.effectiveIsPrivate) return false;
-    return true;
-  });
+  ).filter(container => isVisibleInventoryContainer(
+    container,
+    viewingOwnerUid,
+    user.uid,
+  ));
 
   const photoMatchMap = new Map<string, PhotoItem[]>();
   if (trimmedQuery) {
@@ -681,6 +1150,49 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     return acc;
   }, {});
   const locationKeys = Object.keys(grouped);
+
+  const isAutomobileLocationName = (name: string) =>
+    /\b(auto|autos|automobile|automobiles|vehicle|vehicles|car|cars|truck|trucks|van|vans|suv|jeep|bronco)\b/i.test(name);
+
+  const getSortedLocationChildren = (parentId: string | null = null): Location[] =>
+    locations
+      .filter(l => (l.parentId ?? null) === parentId)
+      .sort((a, b) => {
+        if (parentId === null) {
+          const autoA = isAutomobileLocationName(a.name) ? 1 : 0;
+          const autoB = isAutomobileLocationName(b.name) ? 1 : 0;
+          if (autoA !== autoB) return autoA - autoB;
+        }
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      });
+
+  const buildLocationOptions: (parentId?: string | null) => Location[] = (parentId = null) =>
+    getSortedLocationChildren(parentId)
+      .flatMap(loc => [loc, ...buildLocationOptions(loc.id)]);
+
+  const formatLocationOptionLabel = (loc: Location): string => {
+    const ancestors: Location[] = [];
+    let current = loc;
+
+    while (current.parentId) {
+      const parent = locations.find(l => l.id === current.parentId);
+      if (!parent) break;
+      ancestors.unshift(parent);
+      current = parent;
+    }
+
+    if (ancestors.length === 0) return loc.name;
+
+    const gap = '\u00A0\u00A0';
+    const prefix = ancestors.map(() => `${gap}${gap}`).join('');
+
+    const siblings = getSortedLocationChildren(loc.parentId ?? null);
+    const isLast = siblings[siblings.length - 1]?.id === loc.id;
+    return `${prefix}${isLast ? '└─' : '├─'} ${loc.name}`;
+  };
+
+  const locationOptions = buildLocationOptions();
+
 
   function openLightbox(c: Container) {
     const activePhotos = c.photos.filter(p => !p.deletedAt).reverse();
@@ -706,6 +1218,12 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     setLightboxFilterQuery('');
   }
 
+  async function handleRenameContainer() {
+    if (!renamingContId || !renamingDraft.trim()) return;
+    await updateDoc(doc(db, `users/${user.uid}/containers/${renamingContId}`), { name: renamingDraft.trim() });
+    setRenamingContId(null);
+  }
+
   function renderContainerRow(c: Container, showLocation = false) {
     const activePhotos = c.photos.filter(p => !p.deletedAt);
     const lastPhoto    = activePhotos[activePhotos.length - 1];
@@ -714,9 +1232,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     const thumbPhoto = matchedPhotos ? matchedPhotos[matchedPhotos.length - 1] : lastPhoto;
     return (
       <div key={c.id} className="container-row">
-        <button className="delete-container-btn" onClick={() => handleDeleteContainer(c)}>✕</button>
+        {viewingOwnerUid === user.uid && (
+          <button className="delete-container-btn" onClick={() => handleDeleteContainer(c)}>✕</button>
+        )}
         <div className="thumb-wrap" onClick={() => openLightbox(c)}>
-          {thumbPhoto && <ThumbImage storagePath={thumbPhoto.storagePath} alt={c.name} />}
+          {thumbPhoto && <ThumbImage storagePath={thumbPhoto.storagePath} url={thumbPhoto.url} alt={c.name} />}
           {matchedPhotos ? (
             <span className="photo-count photo-count--match">
               {matchedPhotos.length === 1 ? '1 match' : `${matchedPhotos.length} matches`}
@@ -726,8 +1246,8 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           ) : null}
         </div>
         <div className="container-meta">
-          <div className={`container-name${c.name === 'Unsorted' ? ' container-name--loose' : ''}`}>
-            {c.name === 'Unsorted' ? 'Loose items' : c.name}
+          <div className={`container-name${c.name === 'Loose items' ? ' container-name--loose' : ''}`}>
+            {c.name}
             {viewingOwnerUid === user.uid && (
               <button
                 onClick={async () => {
@@ -757,38 +1277,40 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             containerId={c.id}
             notes={c.notes.filter(n => !n.deletedAt)}
             onAdd={handleAddNote}
+            onEdit={handleEditNote}
             onDelete={handleDeleteNote}
+            canDelete={viewingOwnerUid === user.uid}
+            canEdit
           />
           <div className="container-actions">
-            <button
-              className="card-action-btn"
-              onClick={() => {
-                setContinuousCapture(false);
-                setCaptureContainerId(null);
-                if (/CriOS/.test(navigator.userAgent)) { setShowIOSModal(true); return; }
-                setUpdatingContainerId(c.id);
-                updatePhotoInputRef.current?.click();
-              }}
+                                                <button
+                          className="card-action-btn"
+                          onClick={() => {
+                            if (/CriOS/.test(navigator.userAgent)) { setShowIOSModal(true); return; }
+                            setUpdatingContainerId(null);
+                            setContinuousCapture(true);
+                            setCaptureQueue([]);
+                            setCaptureContainerId(c.id);
+                            setCardMoreOpenId(null);
+                          }}
+                          >
+                            {t('main.card.addItems')}
+                        </button>
+<button
+              className="card-action-btn card-action-btn--desktop-only"
+              onClick={() => { setPrintContainer(c); setCardMoreOpenId(null); }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-              {t('main.card.addPhoto')}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="6" width="2" height="2"/><path d="M13 3h8v8h-8V3zm1.5 1.5v5h5v-5h-5z"/><rect x="16" y="6" width="2" height="2"/><path d="M3 13h8v8H3v-8zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="16" width="2" height="2"/><rect x="13" y="13" width="2" height="2"/><rect x="16" y="13" width="2" height="2"/><rect x="19" y="13" width="2" height="2"/><rect x="13" y="16" width="2" height="2"/><rect x="19" y="16" width="2" height="2"/><rect x="13" y="19" width="2" height="2"/><rect x="16" y="19" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/></svg>
+              {t('main.card.printQR')}
             </button>
             <button
-              className={`card-action-btn${captureContainerId === c.id ? ' card-action-btn--active' : ''}`}
-              onClick={() => {
-                if (captureContainerId === c.id) {
-                  setCaptureContainerId(null);
-                  setContinuousCapture(false);
-                } else {
-                  setCaptureContainerId(c.id);
-                  setContinuousCapture(true);
-                }
-              }}
+              className="card-action-btn card-action-btn--desktop-only"
+              onClick={() => setMoveSource({ containerId: c.id, mode: 'container' })}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.776 48.776 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" /></svg>
-              {captureContainerId === c.id ? t('main.card.done') : t('main.card.takePhotos')}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
+              {t('main.card.moveBox')}
             </button>
-            {viewingOwnerUid === user.uid ? (
+            {viewingOwnerUid === user.uid && (
               <div className="card-more-wrap">
                 <button
                   className="card-action-btn"
@@ -798,30 +1320,17 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   ⋯
                 </button>
                 {cardMoreOpenId === c.id && (
-                  <div className="card-more-dropdown">
-                    <button className="card-more-item" onClick={() => { setPrintContainer(c); setCardMoreOpenId(null); }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="6" width="2" height="2"/><path d="M13 3h8v8h-8V3zm1.5 1.5v5h5v-5h-5z"/><rect x="16" y="6" width="2" height="2"/><path d="M3 13h8v8H3v-8zm1.5 1.5v5h5v-5h-5z"/><rect x="6" y="16" width="2" height="2"/><rect x="13" y="13" width="2" height="2"/><rect x="16" y="13" width="2" height="2"/><rect x="19" y="13" width="2" height="2"/><rect x="13" y="16" width="2" height="2"/><rect x="19" y="16" width="2" height="2"/><rect x="13" y="19" width="2" height="2"/><rect x="16" y="19" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/></svg>
-                      {t('main.card.printQR')}
-                    </button>
-                    <button className="card-more-item" onClick={() => { setMoveSource({ containerId: c.id, mode: 'container' }); setCardMoreOpenId(null); }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
-                      {t('main.card.move')}
-                    </button>
+                                    <div className="card-more-dropdown">
+                    <button className="card-more-item card-more-item--mobile-only" onClick={() => { setMoveSource({ containerId: c.id, mode: 'container' }); setCardMoreOpenId(null); }}>{t('main.card.moveBox')}</button>
                     <button className="card-more-item" onClick={() => { setSellContainer(c); setSellSourcePhotos(photoMatchMap.get(c.id) ?? null); setSellSourceContainerIds(null); setSellIsFromTray(false); setCardMoreOpenId(null); }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg>
-                      Sell this
+                      {t('sell.heading')}
                     </button>
+                    <button className="card-more-item" onClick={() => { setRenamingContId(c.id); setRenamingDraft(c.name); setCardMoreOpenId(null); }}>{ t('manage.rename') }</button>
+                    <button className="card-more-item card-more-item--mobile-only" onClick={() => { setPrintContainer(c); setCardMoreOpenId(null); }}>{t('main.card.printQR')}</button>
                   </div>
                 )}
               </div>
-            ) : (
-              <button
-                className="card-action-btn"
-                onClick={() => setMoveSource({ containerId: c.id, mode: 'container' })}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg>
-                {t('main.card.move')}
-              </button>
             )}
           </div>
         </div>
@@ -833,16 +1342,21 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     setGeneratingInvite(true);
     try {
       const token = crypto.randomUUID();
-      const expiresAt = inviteExpiry
-        ? new Date(Date.now() + inviteExpiry * 24 * 60 * 60 * 1000)
+      const nowMs = Date.now();
+      const expiresAtMs = inviteExpiry
+        ? nowMs + inviteExpiry * 24 * 60 * 60 * 1000
         : null;
-      await setDoc(doc(db, 'invites', token), {
+      const lifecycle = createFirebaseLifecycleAdapter(db, {
+        nowMs: () => Date.now(),
+        newAccessId: () => crypto.randomUUID(),
+      });
+      await lifecycle.issueInvitation({
+        invitationId: token,
         ownerUid: user.uid,
-        ownerDisplayName: user.displayName ?? user.email?.split('@')[0] ?? 'Your host',
-        status: 'pending',
-        token,
-        createdAt: serverTimestamp(),
-        ...(expiresAt && { expiresAt }),
+        createdByUid: user.uid,
+        nowMs,
+        expiresAtMs,
+        ownerDisplayName: user.displayName ?? user.email?.split('@')[0] ?? '',
       });
       setInviteLink(`${window.location.origin}/invite/${token}`);
     } catch (e) {
@@ -852,13 +1366,14 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
     }
   }
 
-  async function revokeCollaborator(collaboratorUid: string, inviteToken: string) {
+  async function revokeCollaborator(collaboratorUid: string) {
     if (!window.confirm('Remove this person\'s access?')) return;
     try {
-      await deleteDoc(doc(db, `users/${user.uid}/collaborators/${collaboratorUid}`));
-      if (inviteToken) {
-        await updateDoc(doc(db, 'invites', inviteToken), { status: 'revoked' });
-      }
+      const lifecycle = createFirebaseLifecycleAdapter(db, {
+        nowMs: () => Date.now(),
+        newAccessId: () => crypto.randomUUID(),
+      });
+      await lifecycle.revokeAccess(user.uid, collaboratorUid);
     } catch (e) {
       console.error('Failed to revoke collaborator', e);
     }
@@ -883,7 +1398,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         <div className="header-actions">
           {viewingOwnerUid === user.uid && trayPhotos.length > 0 && (
             <button className="tray-indicator-btn" onClick={() => setShowTray(true)}>
-              Items to sell ({trayPhotos.length})
+              {t('main.tray.sellHeading')} ({trayPhotos.length})
             </button>
           )}
           {sharedInventories.length > 0 && (
@@ -897,7 +1412,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
             >
               <option value={user.uid}>{t('main.header.myInventory')}</option>
               {sharedInventories.map(s => (
-                <option key={s.ownerUid} value={s.ownerUid}>{t('main.header.othersInventory', { name: s.ownerName })}</option>
+                <option key={s.ownerUid} value={s.ownerUid}>{t('main.header.othersInventory', { name: s.ownerLabel })}</option>
               ))}
             </select>
           )}
@@ -983,7 +1498,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 >
                   <option value={user.uid}>{t('main.header.myInventory')}</option>
                   {sharedInventories.map(s => (
-                    <option key={s.ownerUid} value={s.ownerUid}>{t('main.header.othersInventory', { name: s.ownerName })}</option>
+                    <option key={s.ownerUid} value={s.ownerUid}>{t('main.header.othersInventory', { name: s.ownerLabel })}</option>
                   ))}
                 </select>
               </div>
@@ -1031,8 +1546,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       {/* Collaborator mode banner */}
       {viewingOwnerUid !== user.uid && (
         <div className="collab-banner">
-          {t('main.collab.banner', { name: sharedInventories.find(s => s.ownerUid === viewingOwnerUid)?.ownerName ?? 'another user' })}
+          {t('main.collab.banner', { name: sharedInventories.find(s => s.ownerUid === viewingOwnerUid)?.ownerLabel ?? 'authorized shared inventory' })}
         </div>
+      )}
+      {collaborationError && (
+        <div className="collab-banner" role="alert">{collaborationError}</div>
       )}
 
       <main className="main-content">
@@ -1123,9 +1641,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               }}
             >
               <option value="">{t('main.capture.selectLocation')}</option>
-              {locations.map(loc => (
+              {locationOptions.map(loc => (
                 <option key={loc.id} value={loc.id}>
-                  {getLocationPath(loc.id, locations)}
+                  {formatLocationOptionLabel(loc)}
                 </option>
               ))}
               <option value="new">{t('main.capture.addNewLocation')}</option>
@@ -1146,7 +1664,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   <button
                     disabled={!newLocationName.trim() || saving}
                     onClick={async () => {
-                      const id = await createLocation(user.uid, newLocationName.trim(), selectedParentId);
+                      const id = await createLocationForActiveInventory(newLocationName.trim(), selectedParentId);
                       setSelectedLocationId(id);
                       setNewLocationName('');
                       setSelectedParentId(null);
@@ -1169,9 +1687,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     onChange={e => setSelectedParentId(e.target.value || null)}
                   >
                     <option value="">{t('main.capture.topLevel')}</option>
-                    {locations.map(loc => (
+                    {locationOptions.map(loc => (
                       <option key={loc.id} value={loc.id}>
-                        {t('main.capture.insideLocation', { name: getLocationPath(loc.id, locations) })}
+                        {t('main.capture.insideLocation', { name: formatLocationOptionLabel(loc) })}
                       </option>
                     ))}
                   </select>
@@ -1189,9 +1707,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               {selectedLocationId && selectedLocationId !== 'new' && (
                 <option value="__loose__">Add directly to this space</option>
               )}
-              {containersAtLocation.filter(c => c.name !== 'Unsorted').map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+            {[...containersAtLocation.filter(c => c.name !== 'Loose items')]
+              .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+              .map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
               <option value="new">Add a container (box, bin, drawer…)</option>
             </select>
 
@@ -1222,6 +1742,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 const files = Array.from(e.target.files ?? []);
                 if (files.length === 0) return;
                 if (preview) URL.revokeObjectURL(preview);
+                setSaveError('');
+                setSaved(false);
+                setSaveProgressText('');
                 setPhoto(files[0]);
                 setExtraPhotos(files.slice(1));
                 setPreview(URL.createObjectURL(files[0]));
@@ -1250,11 +1773,48 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 </div>
               )}
             </label>
+
+            {photo && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                fontSize: 13,
+                color: '#7a3b2e',
+              }}>
+                <span>
+                  {extraPhotos.length + 1} photo{extraPhotos.length === 0 ? '' : 's'} selected
+                </span>
+                <button
+                  type="button"
+                  onClick={clearCaptureSelection}
+                  disabled={saving}
+                  style={{
+                    border: '1px solid #c8a090',
+                    background: '#fff',
+                    color: '#7a3b2e',
+                    borderRadius: 8,
+                    padding: '6px 10px',
+                    fontSize: 13,
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Clear selection
+                </button>
+              </div>
+            )}
+
+            {saving && saveProgressText && (
+              <p className="container-confirm" style={{ marginTop: 0 }}>
+                ⏳ {saveProgressText}
+              </p>
+            )}
           </div>
 
           {saveError && <p className="save-error">{saveError}</p>}
           <button className={`save-btn${saved ? ' saved' : ''}`} onClick={handleSave} disabled={!canSave}>
-            {saving ? t('main.capture.saving') : saved ? t('main.capture.saved') : t('main.capture.save')}
+            {saving ? (saveProgressText || t('main.capture.saving')) : saved ? t('main.capture.saved') : t('main.capture.save')}
           </button>
           {selectedContainerId === 'new' && newContainerName.trim() !== '' && selectedLocationId && !photo && (
             <button
@@ -1283,7 +1843,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           </div>
           {viewingOwnerUid === user.uid && (
             <button className="sell-from-search-btn" onClick={() => setShowTray(true)}>
-              {trayPhotos.length > 0 ? `Sell (${trayPhotos.length})` : 'Sell'}
+              {trayPhotos.length > 0 ? `${t('main.tray.sell')} (${trayPhotos.length})` : t('main.tray.sell')}
             </button>
           )}
         </div>
@@ -1300,9 +1860,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               <div key={loc} className="location-group">
                 <div className="location-heading-row">
                   <h2 className="location-heading">{loc}</h2>
-                  <button className="delete-location-btn" onClick={() => handleDeleteLocation(loc)}>✕</button>
+                  {viewingOwnerUid === user.uid && (
+                    <button className="delete-location-btn" onClick={() => handleDeleteLocation(loc)}>✕</button>
+                  )}
                 </div>
-                {grouped[loc].map(c => renderContainerRow(c))}
+                {[...grouped[loc]].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})).map(c=>renderContainerRow(c))}
               </div>
             ))
           )}
@@ -1316,7 +1878,9 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
       {lightboxItems && (
         <div className="lightbox-backdrop" onClick={closeLightbox}>
           <div className="lightbox-toolbar" onClick={e => e.stopPropagation()}>
-            <button className="lightbox-delete" onClick={handleDeletePhoto}>{t('main.lightbox.delete')}</button>
+            {viewingOwnerUid === user.uid && (
+              <button className="lightbox-delete" onClick={handleDeletePhoto}>{t('main.lightbox.delete')}</button>
+            )}
             <button className="lightbox-action" onClick={() => {
               if (!lightboxContainerId || !lightboxItems) return;
               setMoveSource({
@@ -1342,35 +1906,35 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     const compressed = await imageCompression(file, {
                       maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: false, maxSizeMB: 0.5,
                     });
-                    let photoUrl: string;
-                    let storagePath: string;
-                    if (viewingOwnerUid !== user.uid) {
-                      const ab = await compressed.arrayBuffer();
-                      const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
-                      const fn = httpsCallable<{ ownerUid: string; containerId: string; imageBase64: string; contentType: string }, { downloadURL: string; storagePath: string }>(functions, 'uploadCollaboratorPhoto');
-                      const r = await fn({ ownerUid: viewingOwnerUid, containerId: lightboxContainerId, imageBase64: b64, contentType: 'image/jpeg' });
-                      photoUrl = r.data.downloadURL;
-                      storagePath = r.data.storagePath;
-                    } else {
-                      storagePath = `users/${viewingOwnerUid}/containers/${lightboxContainerId}/photos/${Date.now()}.jpg`;
-                      await uploadBytes(ref(storage, storagePath), compressed);
-                      photoUrl = await getDownloadURL(ref(storage, storagePath));
-                    }
+                    const storagePath = `users/${viewingOwnerUid}/containers/${lightboxContainerId}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+                    await uploadBytes(ref(storage, storagePath), compressed);
+                    const photoUrl = await getDownloadURL(ref(storage, storagePath));
                     const photoItem: PhotoItem = { id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone', moderationStatus: 'pending', moderationCheckedAt: null, moderationProvider: null, moderationReason: null };
-                    const existing = containers.find(c => c.id === lightboxContainerId);
-                    await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), {
-                      photos: [...(existing?.photos ?? []), photoItem],
-                      photoUrls: arrayUnion(photoUrl),
-                      photoStoragePaths: arrayUnion(storagePath),
-                      lastModifiedAt: serverTimestamp(),
-                      lastModifiedBy: user.uid,
-                      lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+                    const collaborator = collaboratorInventoryService();
+                    await persistCapturedPhoto({
+                      containerId: lightboxContainerId,
+                      photo: photoItem,
+                      existingPhotos: containers.find(item => item.id === lightboxContainerId)?.photos ?? [],
+                      collaborator,
+                      writeOwnedPhotos: async () => {
+                        await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${lightboxContainerId}`), {
+                          photos: arrayUnion(photoItem),
+                          photoUrls: arrayUnion(photoUrl),
+                          photoStoragePaths: arrayUnion(storagePath),
+                          lastModifiedAt: serverTimestamp(),
+                          lastModifiedBy: user.uid,
+                          lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+                        });
+                      },
                     });
                     // Update lightboxItems immediately so the new photo appears without
                     // closing and reopening the lightbox. Prepend because the array is
                     // newest-first (matches the .reverse() in openLightbox).
                     setLightboxItems(prev => prev ? [photoItem, ...prev] : [photoItem]);
                     setLightboxIndex(0);
+                    if (collaborator) {
+                      await refreshCollaboratorInventory(collaborator);
+                    }
                     setTimeout(() => {
                       if (scrollRef.current) scrollRef.current.scrollLeft = 0;
                     }, 0);
@@ -1407,7 +1971,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           >
             {lightboxItems.map((item, i) => (
               <div key={item.id} className="lightbox-slide">
-                <LightboxImage storagePath={item.storagePath} alt={`Photo ${i + 1}`} />
+                <LightboxImage storagePath={item.storagePath} url={item.url} alt={`Photo ${i + 1}`} />
               </div>
             ))}
           </div>
@@ -1442,22 +2006,81 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           {(() => {
             const photo = lightboxItems[lightboxIndex];
             if (!photo) return null;
+            const isRetryingAi = retryingAiPhotoIds.has(photo.id) && photo.aiStatus === 'processing';
+            const hasAiContent = !!(photo.aiDescription || (photo.aiTags && photo.aiTags.length > 0));
+            const aiActionLabel = isRetryingAi
+              ? t('main.lightbox.retryingAi')
+              : hasAiContent
+                ? t('main.lightbox.redoAi')
+                : t('main.lightbox.runAi');
+
+            // --- Processing state ---
             if (photo.aiStatus === 'processing') {
               return (
                 <div className="lightbox-ai" onClick={e => e.stopPropagation()}>
-                  <span className="lightbox-ai-analyzing">Analyzing…</span>
+                  <p className="lightbox-ai-processing">
+                    {isRetryingAi ? t('main.lightbox.retryingAi') : t('main.lightbox.aiProcessing')}
+                  </p>
+                  <p className="lightbox-ai-processing-detail">
+                    {isRetryingAi
+                      ? 'This can take up to 1â2 minutes. You can keep using VOWVY while it finishes.'
+                      : t('main.lightbox.aiProcessingDetail')}
+                  </p>
                 </div>
               );
             }
-            if (!photo.aiDescription && (!photo.aiTags || photo.aiTags.length === 0)) return null;
+
+            // --- Unified return: description + tags + always-visible AI action button ---
             return (
               <div className="lightbox-ai" onClick={e => e.stopPropagation()}>
-                {photo.aiDescription && <p className="lightbox-ai-desc">{photo.aiDescription}</p>}
-                {photo.aiTags && photo.aiTags.length > 0 && (
-                  <div className="lightbox-ai-tags">
-                    {filterDisplayTags(photo.aiTags, 6).map((tag, i) => <span key={i} className="lightbox-ai-tag">{tag}</span>)}
+                {photo.aiDescription !== undefined && (
+                  <div className="lightbox-ai-desc-wrap" onClick={e => e.stopPropagation()}>
+                    {editingAiDesc ? (
+                      <>
+                        <textarea className="lightbox-ai-desc-input" value={aiDescDraft} onChange={e =>
+                          setAiDescDraft(e.target.value)} rows={3} autoFocus />
+                        <div className="lightbox-ai-edit-btns">
+                          <button className="lightbox-ai-save-btn" onClick={() => { handleSaveAiDescription(photo.id, aiDescDraft); setEditingAiDesc(false); }}>Save</button>
+                          <button className="lightbox-ai-cancel-btn" onClick={() => setEditingAiDesc(false)}>Cancel</button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="lightbox-ai-desc" onClick={() => { setEditingAiDesc(true); setAiDescDraft(photo.aiDescription ?? ''); }}>{photo.aiDescription}</p>
+                    )}
                   </div>
                 )}
+                {photo.aiTags && photo.aiTags.length > 0 && (
+                  <div className="lightbox-ai-tags-wrap" onClick={e => e.stopPropagation()}>
+                    {editingAiTags ? (
+                      <>
+                        <input className="lightbox-ai-tags-input" value={aiTagsDraft} onChange={e => setAiTagsDraft(e.target.value)} placeholder="tag1, tag2, tag3" autoFocus />
+                        <div className="lightbox-ai-edit-btns">
+                          <button className="lightbox-ai-save-btn" onClick={() => { handleSaveAiTags(photo.id, aiTagsDraft); setEditingAiTags(false); }}>Save</button>
+                          <button className="lightbox-ai-cancel-btn" onClick={() => setEditingAiTags(false)}>Cancel</button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="lightbox-ai-tags" onClick={() => { setEditingAiTags(true); setAiTagsDraft((photo.aiTags ?? []).join(', ')); }}>
+                        {filterDisplayTags(photo.aiTags, 6).map((tag, i) => <span key={i} className="lightbox-ai-tag">{tag}</span>)}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {photo.aiStatus === 'error' && (
+                  <p className="lightbox-ai-processing" style={{ color: '#c00' }}>
+                    {photo.aiError ?? 'AI analysis failed for this photo.'}
+                  </p>
+                )}
+                <div className="lightbox-ai-action" onClick={e => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="lightbox-ai-save-btn"
+                    disabled={retryingAiPhotoIds.has(photo.id)}
+                    onClick={() => handleRetryPhotoAi(photo.id)}
+                  >
+                    {aiActionLabel}
+                  </button>
+                </div>
               </div>
             );
           })()}
@@ -1475,7 +2098,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     setTrayPhotos(prev => [...prev, { photo, containerId: lbContainer.id, containerName: lbContainer.name }]);
                   }}
                 >
-                  {alreadyAdded ? 'Added ✓' : 'Add to Items to sell'}
+                  {alreadyAdded ? t('main.lightbox.addedToSell') : t('main.lightbox.addToSell')}
                 </button>
               </div>
             );
@@ -1510,7 +2133,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                 <span className="lightbox-privacy-icon" aria-hidden="true">
                   {lbContainer.effectiveIsPrivate ? '🔒' : '🔓'}
                 </span>
-                <span className="lightbox-privacy-label">Container privacy</span>
+                <span className="lightbox-privacy-label">{t('main.lightbox.containerPrivacy')}</span>
                 <select
                   className="lightbox-privacy-select"
                   value={lbContainer.visibility}
@@ -1524,18 +2147,18 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     });
                   }}
                 >
-                  <option value="inherit">Follow parent</option>
-                  <option value="private">Hide from helpers</option>
-                  <option value="shared">Show to helpers</option>
+                  <option value="inherit">{t('manage.followParent')}</option>
+                  <option value="private">{t('manage.hideFromHelpers')}</option>
+                  <option value="shared">{t('manage.showToHelpers')}</option>
                 </select>
                 <span className="lightbox-privacy-status">
                   {lbContainer.visibility === 'inherit'
                     ? lbContainer.effectiveIsPrivate
-                      ? 'Following parent — helpers cannot see this'
-                      : 'Following parent — helpers can see this'
+                      ? t('main.lightbox.followParentHidden')
+                      : t('main.lightbox.followParentVisible')
                     : lbContainer.visibility === 'private'
-                      ? 'Helpers cannot see this'
-                      : 'Helpers can see this'}
+                      ? t('main.lightbox.helpersCannotSee')
+                      : t('main.lightbox.helpersCanSee')}
                 </span>
               </div>
             );
@@ -1547,6 +2170,17 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
         <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setCardMoreOpenId(null)} />
       )}
 
+      {renamingContId && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={() => setRenamingContId(null)}>
+          <div style={{background:'var(--color-bg,#fff)',padding:'1.5rem',borderRadius:'8px',minWidth:'16rem'}} onClick={e=>e.stopPropagation()}>
+            <input style={{width:'100%',padding:'.5rem',marginBottom:'.75rem',border:'1px solid #ccc',borderRadius:'4px',boxSizing:'border-box'}} value={renamingDraft} autoFocus onChange={e=>setRenamingDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleRenameContainer();if(e.key==='Escape')setRenamingContId(null);}} />
+            <div style={{display:'flex',gap:'.5rem',justifyContent:'flex-end'}}>
+              <button onClick={()=>setRenamingContId(null)}>Cancel</button>
+              <button onClick={handleRenameContainer}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
       {printContainer && (
         <QRPrintModal container={printContainer} onClose={() => setPrintContainer(null)} />
       )}
@@ -1579,10 +2213,11 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               accept="image/*"
               capture="environment"
               className="photo-input-hidden"
+              disabled={saving}
               onChange={async e => {
                 const file = e.target.files?.[0] ?? null;
                 e.target.value = '';
-                if (!file) return;
+                if (!file || saving) return;
                 setCaptureQueue(prev => [...prev, file]);
               }}
             />
@@ -1601,57 +2236,118 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
               </div>
             )}
           </label>
+          {saving && saveProgressText && (
+            <div style={{
+              background: 'rgba(122, 59, 46, 0.95)',
+              color: '#fff',
+              borderRadius: 999,
+              padding: '8px 14px',
+              fontSize: 13,
+              fontWeight: 700,
+              boxShadow: '0 4px 18px rgba(0,0,0,0.24)',
+            }}>
+              ⏳ {saveProgressText}
+            </div>
+          )}
           <button
             onClick={async () => {
-              if (captureQueue.length > 0 && captureContainerId) {
-                setSaving(true);
-                try {
-                  if (!auth.currentUser) return;
-                  await auth.currentUser.getIdToken(true);
-                  const existing = containers.find(c => c.id === captureContainerId);
-                  const newPhotos: PhotoItem[] = [];
-                  for (const file of captureQueue) {
-                    const compressed = await imageCompression(file, {
-                      maxWidthOrHeight: 1600, initialQuality: 0.85, useWebWorker: false, maxSizeMB: 0.5,
-                    });
-                    let photoUrl: string;
-                    let storagePath: string;
-                    if (viewingOwnerUid !== user.uid) {
-                      const ab = await compressed.arrayBuffer();
-                      const b64 = btoa(new Uint8Array(ab).reduce((s, b) => s + String.fromCharCode(b), ''));
-                      const fn = httpsCallable<{ ownerUid: string; containerId: string; imageBase64: string; contentType: string }, { downloadURL: string; storagePath: string }>(functions, 'uploadCollaboratorPhoto');
-                      const r = await fn({ ownerUid: viewingOwnerUid, containerId: captureContainerId, imageBase64: b64, contentType: 'image/jpeg' });
-                      photoUrl = r.data.downloadURL;
-                      storagePath = r.data.storagePath;
-                    } else {
-                      storagePath = `users/${viewingOwnerUid}/containers/${captureContainerId}/photos/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
-                      await uploadBytes(ref(storage, storagePath), compressed);
-                      photoUrl = await getDownloadURL(ref(storage, storagePath));
-                    }
-                    newPhotos.push({ id: crypto.randomUUID(), url: photoUrl, storagePath, description: '', createdAt: Date.now(), addedBy: user.uid, addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone' });
-                  }
-                  await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${captureContainerId}`), {
-                    photos: [...(existing?.photos ?? []), ...newPhotos],
-                    photoUrls: arrayUnion(...newPhotos.map(p => p.url)),
-                    photoStoragePaths: arrayUnion(...newPhotos.map(p => p.storagePath)),
-                    lastModifiedAt: serverTimestamp(),
-                    lastModifiedBy: user.uid,
-                    lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
-                  });
-                } catch {
-                  setSaveError(t('main.errors.somePhotosFailed'));
-                } finally {
-                  setSaving(false);
-                }
+              if (saving) return;
+
+              if (captureQueue.length === 0) {
+                setCaptureQueue([]);
+                setCaptureContainerId(null);
+                setContinuousCapture(false);
+                setSaveProgressText('');
+                return;
               }
-              setCaptureContainerId(null);
-              setContinuousCapture(false);
-              setCaptureQueue([]);
+
+              if (!captureContainerId) return;
+
+              setSaving(true);
+              setSaveError('');
+              setSaveProgressText(`Saving 1 of ${captureQueue.length} photo${captureQueue.length === 1 ? '' : 's'}…`);
+
+              try {
+                if (!auth.currentUser) {
+                  setSaveError(t('main.errors.sessionExpired'));
+                  return;
+                }
+
+                await auth.currentUser.getIdToken(true);
+
+                const targetContainerId = captureContainerId;
+                const existing = containers.find(c => c.id === targetContainerId);
+                const collaborator = collaboratorInventoryService();
+
+                await saveCapturedPhotoQueue<File, PhotoItem>({
+                  files: captureQueue,
+                  existingPhotos: existing?.photos ?? [],
+                  onProgress: (current, total) => {
+                    setSaveProgressText(`Saving ${current} of ${total} photo${total === 1 ? '' : 's'}…`);
+                  },
+                  createPhoto: async (file, index) => {
+                    const compressed = await imageCompression(file, {
+                      maxWidthOrHeight: 1600,
+                      initialQuality: 0.85,
+                      useWebWorker: false,
+                      maxSizeMB: 0.5,
+                    });
+                    const storagePath = `users/${viewingOwnerUid}/containers/${targetContainerId}/photos/${Date.now()}-${index}-${Math.random().toString(36).slice(2)}.jpg`;
+                    await uploadBytes(ref(storage, storagePath), compressed);
+                    const photoUrl = await getDownloadURL(ref(storage, storagePath));
+
+                    return {
+                      id: crypto.randomUUID(),
+                      url: photoUrl,
+                      storagePath,
+                      description: '',
+                      createdAt: Date.now(),
+                      addedBy: user.uid,
+                      addedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+                      moderationStatus: 'pending',
+                      moderationCheckedAt: null,
+                      moderationProvider: null,
+                      moderationReason: null,
+                    };
+                  },
+                  persistPhoto: (photoItem, currentPhotos) => persistCapturedPhoto({
+                    containerId: targetContainerId,
+                    photo: photoItem,
+                    existingPhotos: currentPhotos,
+                    collaborator,
+                    writeOwnedPhotos: async nextPhotos => {
+                      await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${targetContainerId}`), {
+                        photos: nextPhotos,
+                        photoUrls: arrayUnion(photoItem.url),
+                        photoStoragePaths: arrayUnion(photoItem.storagePath),
+                        lastModifiedAt: serverTimestamp(),
+                        lastModifiedBy: user.uid,
+                        lastModifiedByName: user.displayName ?? user.email?.split('@')[0] ?? 'Someone',
+                      });
+                    },
+                  }),
+                });
+
+                if (collaborator) {
+                  await refreshCollaboratorInventory(collaborator);
+                }
+
+                setCaptureQueue([]);
+                setCaptureContainerId(null);
+                setContinuousCapture(false);
+                setSaveProgressText('');
+              } catch (err: any) {
+                console.error('[continuousCapture] code:', err?.code, '| message:', err?.message, '| full:', err);
+                setSaveError(t('main.errors.somePhotosFailed'));
+              } finally {
+                setSaving(false);
+              }
             }}
             style={{
               padding: '8px 24px', borderRadius: 20, border: 'none',
               background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 14, cursor: 'pointer',
             }}
+            disabled={saving}
           >
             {captureQueue.length > 0 ? t('main.captureMode.save', { count: captureQueue.length }) : t('main.captureMode.done')}
           </button>
@@ -1688,27 +2384,65 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                     {t('main.move.noLocations')}
                   </p>
                 ) : (
-                  locations.map(loc => (
-                    <button
-                      key={loc.id}
-                      onClick={async () => {
-                        const src = containers.find(c => c.id === moveSource.containerId);
-                        if (!src) return;
-                        await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${src.id}`), {
-                          locationId: loc.id,
-                          location: getLocationPath(loc.id, locations),
-                        });
-                        setMoveSource(null);
-                      }}
-                      style={{
-                        textAlign: 'left', padding: '12px 16px', borderRadius: 10,
-                        border: '1px solid #eee', background: '#faf8f6',
-                        cursor: 'pointer', fontSize: 14, color: '#333',
-                      }}
-                    >
-                      {getLocationPath(loc.id, locations)}
-                    </button>
-                  ))
+                  (() => {
+                    const rootIds = locations.filter(l => !l.parentId).map(l => l.id);
+                    return rootIds.map(rootId => {
+                      const root = locations.find(l => l.id === rootId)!;
+                      const children = locations.filter(l => {
+                        let curr: any = l;
+                        while (curr && curr.parentId) {
+                          if (curr.parentId === rootId) return true;
+                          curr = locations.find(loc => loc.id === curr.parentId);
+                        }
+                        return false;
+                      });
+                      return (
+                        <div key={root.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                          <p style={{ margin: '4px 0', fontSize: 11, color: '#888', fontWeight: 700, textTransform: 'uppercase' }}>{root.name}</p>
+                          <button
+                            onClick={async () => {
+                              const src = containers.find(c => c.id === moveSource.containerId);
+                              if (!src) return;
+                              await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${src.id}`), {
+                                locationId: root.id,
+                                location: root.name,
+                              });
+                              setMoveSource(null);
+                            }}
+                            style={{
+                              textAlign: 'left', padding: '10px 14px', borderRadius: 8,
+                              border: '1px solid #eee', background: '#faf8f6',
+                              cursor: 'pointer', fontSize: 13, color: '#333',
+                            }}
+                          >
+                            {root.name}
+                          </button>
+                          {children.map(child => (
+                            <button
+                              key={child.id}
+                              onClick={async () => {
+                                const src = containers.find(c => c.id === moveSource.containerId);
+                                if (!src) return;
+                                await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${src.id}`), {
+                                  locationId: child.id,
+                                  location: getLocationPath(child.id, locations),
+                                });
+                                setMoveSource(null);
+                              }}
+                              style={{
+                                textAlign: 'left', padding: '10px 14px', borderRadius: 8,
+                                border: '1px solid #eee', background: '#fff',
+                                cursor: 'pointer', fontSize: 13, color: '#555',
+                                marginLeft: 12,
+                              }}
+                            >
+                              {getLocationPath(child.id, locations).split(' › ').slice(1).join(' › ')}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    });
+                  })()
                 )
               ) : (
                 containers.filter(c => !c.deletedAt && c.id !== moveSource.containerId).length === 0 && locations.length === 0 ? (
@@ -1717,133 +2451,204 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   </p>
                 ) : (
                   <>
-                    {locations.length > 0 && (
-                      <>
-                        <p style={{ margin: '4px 0', fontSize: 12, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('main.move.locationsHeading')}</p>
-                        {locations.map(loc => (
-                          <button
-                            key={loc.id}
-                            onClick={async () => {
-                              const src = containers.find(c => c.id === moveSource.containerId);
-                              if (!src || !moveSource.photoId) return;
-                              const photo = src.photos.find(p => p.id === moveSource.photoId);
-                              if (!photo) return;
-
-                              // Check if an Unsorted container already exists at this location
-                              let targetContainerId: string;
-                              const existing = containers.find(c =>
-                                c.locationId === loc.id && c.name === 'Unsorted' && !c.deletedAt
-                              );
-
-                              if (existing) {
-                                await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${existing.id}`), {
-                                  photos: [...existing.photos, photo],
-                                  photoUrls: arrayUnion(photo.url),
-                                  photoStoragePaths: arrayUnion(photo.storagePath),
-                                });
-                                targetContainerId = existing.id;
-                              } else {
-                                const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
-                                await setDoc(containerRef, {
-                                  name: 'Unsorted',
-                                  locationId: loc.id,
-                                  location: getLocationPath(loc.id, locations),
-                                  photos: [photo],
-                                  photoUrls: [photo.url],
-                                  photoStoragePaths: [photo.storagePath],
-                                  createdAt: serverTimestamp(),
-                                  deletedAt: null,
-                                  isPrivate: loc.effectiveIsPrivate,
-                                  visibility: 'inherit',
-                                  effectiveIsPrivate: loc.effectiveIsPrivate,
-                                });
-                                targetContainerId = containerRef.id;
+                    {(() => {
+                      if (!moveSource) return null;
+                      const ns = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+                      const rootLocs = [...locations].filter(l => !l.parentId).sort((a, b) => ns(a.name, b.name));
+                      const containersAtLoc = (locId: string) =>
+                        containers
+                          .filter(c => !c.deletedAt && c.id !== moveSource.containerId && c.locationId === locId)
+                          .sort((a, b) => ns(a.name, b.name));
+                      const unassigned = containers
+                        .filter(c => !c.deletedAt && c.id !== moveSource.containerId && !c.locationId)
+                        .sort((a, b) => ns(a.name, b.name));
+                      const renderDestBtn = (dest: Container) => (
+                        <button
+                          key={dest.id}
+                          onClick={async () => {
+                            const src = containers.find(c => c.id === moveSource.containerId);
+                            if (!src) return;
+                            if (viewingOwnerUid !== user.uid) {
+                              if (moveSource.mode !== 'photo' || !moveSource.photoId) {
+                                setCollaborationError('Only individual photo moves are available in shared inventory.');
+                                return;
                               }
-
-                              // Remove photo from source and clear AI fields
-                              await updateDoc(doc(db, `users/${viewingOwnerUid}/containers/${src.id}`), {
-                                photos: src.photos.filter(p => p.id !== moveSource.photoId),
-                                photoUrls: src.photos.filter(p => p.id !== moveSource.photoId).map(p => p.url),
-                                photoStoragePaths: src.photos.filter(p => p.id !== moveSource.photoId).map(p => p.storagePath),
-                                aiDescription: '',
-                                aiTags: [],
-                                aiObjects: [],
-                                aiStatus: null,
-                              });
-                              void targetContainerId;
+                              const service = collaboratorInventoryService();
+                              if (!service) {
+                                setCollaborationError('Collaboration session unavailable.');
+                                return;
+                              }
+                              const result = await service.movePhoto(
+                                src.id,
+                                dest.id,
+                                moveSource.photoId,
+                              );
+                              if (!result.ok) {
+                                setCollaborationError(`Photo move failed: ${result.reason}`);
+                                return;
+                              }
                               closeLightbox();
                               setMoveSource(null);
-                            }}
-                            style={{
-                              textAlign: 'left', padding: '12px 16px', borderRadius: 10,
-                              border: '1px solid #eee', background: '#faf8f6',
-                              cursor: 'pointer', fontSize: 14, color: '#333',
-                            }}
-                          >
-                            📍 {getLocationPath(loc.id, locations)}
-                          </button>
-                        ))}
-                      </>
-                    )}
-                    {containers.filter(c => !c.deletedAt && c.id !== moveSource.containerId).length > 0 && (
-                      <>
-                        <p style={{ margin: '8px 0 4px', fontSize: 12, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('main.move.containersHeading')}</p>
-                        {containers
-                          .filter(c => !c.deletedAt && c.id !== moveSource.containerId)
-                          .map(dest => (
-                            <button
-                              key={dest.id}
-                              onClick={async () => {
-                                const src = containers.find(c => c.id === moveSource.containerId);
-                                if (!src) return;
-                                const srcRef  = doc(db, `users/${viewingOwnerUid}/containers/${src.id}`);
-                                const destRef = doc(db, `users/${viewingOwnerUid}/containers/${dest.id}`);
-                                const destSnap = await getDoc(destRef);
-                                const destPhotos: PhotoItem[] = destSnap.data()?.photos ?? [];
-                                const batch = writeBatch(db);
-                                if (moveSource.mode === 'photo' && moveSource.photoId) {
-                                  const photo = src.photos.find(p => p.id === moveSource.photoId);
-                                  if (!photo) return;
-                                  const newDestPhotos = [...destPhotos, photo];
-                                  batch.update(destRef, {
-                                    photos: newDestPhotos,
-                                    photoUrls: newDestPhotos.map(p => p.url),
-                                    photoStoragePaths: newDestPhotos.map(p => p.storagePath),
-                                  });
-                                  const newSrcPhotos = src.photos.filter(p => p.id !== moveSource.photoId);
-                                  batch.update(srcRef, {
-                                    photos: newSrcPhotos,
-                                    photoUrls: newSrcPhotos.map(p => p.url),
-                                    photoStoragePaths: newSrcPhotos.map(p => p.storagePath),
-                                  });
-                                } else {
-                                  const newDestPhotos = [...destPhotos, ...src.photos];
-                                  batch.update(destRef, {
-                                    photos: newDestPhotos,
-                                    photoUrls: newDestPhotos.map(p => p.url),
-                                    photoStoragePaths: newDestPhotos.map(p => p.storagePath),
-                                  });
-                                  batch.update(srcRef, {
-                                    photos: [], photoUrls: [], photoStoragePaths: [], photoUrl: null, photoStoragePath: null,
-                                  });
+                              return;
+                            }
+                            const srcRef  = doc(db, `users/${viewingOwnerUid}/containers/${src.id}`);
+                            const destRef = doc(db, `users/${viewingOwnerUid}/containers/${dest.id}`);
+                            await runTransaction(db, async (tx) => {
+                              const [txDestSnap, txSrcSnap] = await Promise.all([tx.get(destRef), tx.get(srcRef)]);
+                              const txDestPhotos: PhotoItem[] = (txDestSnap.data() as any)?.photos ?? [];
+                              const txSrcPhotos: PhotoItem[] = (txSrcSnap.data() as any)?.photos ?? [];
+                              if (moveSource.mode === 'photo' && moveSource.photoId) {
+                                const txPhoto = txSrcPhotos.find((p: PhotoItem) => p.id === moveSource.photoId);
+                                if (!txPhoto) return;
+                                const alreadyInDest = txDestPhotos.some((p: PhotoItem) => p.id === txPhoto.id);
+                                const newDestPhotos = alreadyInDest ? txDestPhotos : [...txDestPhotos, txPhoto];
+                                const newSrcPhotos = txSrcPhotos.filter((p: PhotoItem) => p.id !== moveSource.photoId);
+                                tx.update(destRef, { photos: newDestPhotos, photoUrls: newDestPhotos.map((p: PhotoItem) => p.url), photoStoragePaths: newDestPhotos.map((p: PhotoItem) => p.storagePath) });
+                                const srcUpdate: any = { photos: newSrcPhotos, photoUrls: newSrcPhotos.map((p: PhotoItem) => p.url), photoStoragePaths: newSrcPhotos.map((p: PhotoItem) => p.storagePath) };
+                                if (newSrcPhotos.length === 0) { srcUpdate.aiDescription = ''; srcUpdate.aiTags = []; srcUpdate.aiObjects = []; srcUpdate.aiStatus = null; }
+                                tx.update(srcRef, srcUpdate);
+                              } else {
+                                const newDestPhotos = [...txDestPhotos, ...txSrcPhotos];
+                                tx.update(destRef, { photos: newDestPhotos, photoUrls: newDestPhotos.map((p: PhotoItem) => p.url), photoStoragePaths: newDestPhotos.map((p: PhotoItem) => p.storagePath) });
+                                tx.update(srcRef, { photos: [], photoUrls: [], photoStoragePaths: [], photoUrl: null, photoStoragePath: null });
+                              }
+                            });
+                            closeLightbox();
+                            setMoveSource(null);
+                          }}
+                          style={{ textAlign: 'left', padding: '9px 14px', borderRadius: 8, border: '1px solid #eee', background: '#faf8f6', cursor: 'pointer', fontSize: 14, color: '#333', width: '100%' }}
+                        >
+                          <strong>{dest.name}</strong>
+                          {dest.location && <span style={{ color: '#888', marginLeft: 8, fontSize: 13 }}>{dest.location}</span>}
+                        </button>
+                      );
+                      const renderLooseBtn = (loc: typeof locations[0]) => (
+                        <button
+                          key={`loose-${loc.id}`}
+                          onClick={async () => {
+                            const src = containers.find(c => c.id === moveSource.containerId);
+                            if (!src || !moveSource.photoId) return;
+                            if (viewingOwnerUid !== user.uid) {
+                              const service = collaboratorInventoryService();
+                              if (!service) {
+                                setCollaborationError('Collaboration session unavailable.');
+                                return;
+                              }
+                              const existingLoose = containers.find(
+                                c => c.locationId === loc.id &&
+                                  c.name === 'Loose items' &&
+                                  !c.deletedAt,
+                              );
+                              let destinationId = existingLoose?.id;
+                              if (!destinationId) {
+                                const created = await service.createContainer(
+                                  'Loose items',
+                                  loc.id,
+                                  getLocationPath(loc.id, locations),
+                                );
+                                if (!created.ok) {
+                                  setCollaborationError(
+                                    `Loose-items container failed: ${created.reason}`,
+                                  );
+                                  return;
                                 }
-                                await batch.commit();
-                                await updateDoc(srcRef, { aiDescription: '', aiTags: [], aiObjects: [], aiStatus: null });
-                                closeLightbox();
-                                setMoveSource(null);
-                              }}
-                              style={{
-                                textAlign: 'left', padding: '12px 16px', borderRadius: 10,
-                                border: '1px solid #eee', background: '#faf8f6',
-                                cursor: 'pointer', fontSize: 14, color: '#333',
-                              }}
+                                destinationId = created.value;
+                              }
+                              const moved = await service.movePhoto(
+                                src.id,
+                                destinationId,
+                                moveSource.photoId,
+                              );
+                              if (!moved.ok) {
+                                setCollaborationError(`Photo move failed: ${moved.reason}`);
+                                return;
+                              }
+                              closeLightbox();
+                              setMoveSource(null);
+                              return;
+                            }
+                            const srcRef1 = doc(db, `users/${viewingOwnerUid}/containers/${src.id}`);
+                            const srcSnap1 = await getDoc(srcRef1);
+                            const srcPhotos1: PhotoItem[] = srcSnap1.data()?.photos ?? [];
+                            const photo = srcPhotos1.find((p: PhotoItem) => p.id === moveSource.photoId);
+                            if (!photo) return;
+                            let targetContainerId: string;
+                            const existingLoose = containers.find(c => c.locationId === loc.id && c.name === 'Loose items' && !c.deletedAt);
+                            if (existingLoose) {
+                              const existingRef = doc(db, `users/${viewingOwnerUid}/containers/${existingLoose.id}`);
+                              await runTransaction(db, async (tx) => {
+                                const txSrcSnap = await tx.get(srcRef1);
+                                const txDestSnap = await tx.get(existingRef);
+                                const txSrcPhotos: PhotoItem[] = (txSrcSnap.data() as any)?.photos ?? [];
+                                const txDestPhotos: PhotoItem[] = (txDestSnap.data() as any)?.photos ?? [];
+                                const txPhoto = txSrcPhotos.find((p: PhotoItem) => p.id === moveSource.photoId);
+                                if (!txPhoto) return;
+                                const alreadyInDest = txDestPhotos.some((p: PhotoItem) => p.id === txPhoto.id);
+                                const newDest = alreadyInDest ? txDestPhotos : [...txDestPhotos, txPhoto];
+                                const newSrc = txSrcPhotos.filter((p: PhotoItem) => p.id !== moveSource.photoId);
+                                tx.update(existingRef, { photos: newDest, photoUrls: newDest.map((p: PhotoItem) => p.url), photoStoragePaths: newDest.map((p: PhotoItem) => p.storagePath) });
+                                tx.update(srcRef1, { photos: newSrc, photoUrls: newSrc.map((p: PhotoItem) => p.url), photoStoragePaths: newSrc.map((p: PhotoItem) => p.storagePath) });
+                              });
+                              targetContainerId = existingLoose.id;
+                            } else {
+                              const containerRef = doc(collection(db, `users/${viewingOwnerUid}/containers`));
+                              await setDoc(containerRef, { name: 'Loose items', locationId: loc.id, location: getLocationPath(loc.id, locations), photos: [photo], photoUrls: [photo.url], photoStoragePaths: [photo.storagePath], createdAt: serverTimestamp(), deletedAt: null, isPrivate: loc.effectiveIsPrivate, visibility: 'inherit', effectiveIsPrivate: loc.effectiveIsPrivate });
+                              targetContainerId = containerRef.id;
+                            }
+                            await runTransaction(db, async (tx) => {
+                              const freshSrcSnap = await tx.get(srcRef1);
+                              const freshSrcPhotos: PhotoItem[] = (freshSrcSnap.data() as any)?.photos ?? [];
+                              const newSrcPhotos = freshSrcPhotos.filter((p: PhotoItem) => p.id !== moveSource.photoId);
+                              const srcUpdate: any = { photos: newSrcPhotos, photoUrls: newSrcPhotos.map((p: PhotoItem) => p.url), photoStoragePaths: newSrcPhotos.map((p: PhotoItem) => p.storagePath) };
+                              if (newSrcPhotos.length === 0) { srcUpdate.aiDescription = ''; srcUpdate.aiTags = []; srcUpdate.aiObjects = []; srcUpdate.aiStatus = null; }
+                              tx.update(srcRef1, srcUpdate);
+                            });
+                            void targetContainerId;
+                            closeLightbox();
+                            setMoveSource(null);
+                          }}
+                          style={{ textAlign: 'left', padding: '9px 14px', borderRadius: 8, border: '1px dashed #bbb', background: '#f9f9f9', cursor: 'pointer', fontSize: 13, color: '#666', width: '100%' }}
+                        >
+                          + Move to Loose items here
+                        </button>
+                      );
+                      const childLocs = (parentId: string) =>
+                        [...locations].filter(l => l.parentId === parentId).sort((a, b) => ns(a.name, b.name));
+                      function renderLocNode(loc: typeof locations[0], depth: number): ReactElement {
+                        const isExp = expandedMoveLocs.has(loc.id);
+                        const lc = containersAtLoc(loc.id);
+                        const kids = childLocs(loc.id);
+                        return (
+                          <div key={loc.id} style={{ marginBottom: 4 }}>
+                            <button
+                              onClick={() => setExpandedMoveLocs(prev => { const n = new Set(prev); n.has(loc.id) ? n.delete(loc.id) : n.add(loc.id); return n; })}
+                              style={{ width: '100%', textAlign: 'left', paddingTop: '10px', paddingBottom: '10px', paddingRight: '14px', paddingLeft: `${14 + depth * 16}px`, borderRadius: 8, border: '1px solid #dde', background: isExp ? '#eeeef8' : '#f5f5fb', cursor: 'pointer', fontSize: 14, color: '#333', display: 'flex', alignItems: 'center', gap: 8 }}
                             >
-                              <strong>{dest.name}</strong>
-                              {dest.location && <span style={{ color: '#888', marginLeft: 8, fontSize: 13 }}>{dest.location}</span>}
+                              <span style={{ fontSize: 11, color: '#888' }}>{isExp ? '▼' : '▶'}</span>
+                              <span>📍 {loc.name}</span>
+                              <span style={{ fontSize: 12, color: '#aaa', marginLeft: 'auto' }}>{lc.length > 0 ? `${lc.length} box${lc.length !== 1 ? 'es' : ''}` : 'no boxes'}{kids.length > 0 ? ` · ${kids.length}↓` : ''}</span>
                             </button>
-                          ))}
-                      </>
-                    )}
+                            {isExp && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 3, marginLeft: 16 }}>
+                                {lc.length > 0 ? lc.map(dest => renderDestBtn(dest)) : renderLooseBtn(loc)}
+                                {kids.map(kid => renderLocNode(kid, depth + 1))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return (
+                        <>
+                          {rootLocs.map(loc => renderLocNode(loc, 0))}
+                          {unassigned.length > 0 && (
+                            <>
+                              <p style={{ margin: '8px 0 4px', fontSize: 12, color: '#888', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>No location</p>
+                              {unassigned.map(dest => renderDestBtn(dest))}
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
                   </>
                 )
               )}
@@ -1884,7 +2689,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
           <div className="tray-sheet" onClick={e => e.stopPropagation()}>
             <div className="tray-header">
               <span className="tray-title">
-                {trayPhotos.length > 0 ? `Items to sell (${trayPhotos.length})` : 'Items to sell'}
+                {trayPhotos.length > 0 ? `${t('main.tray.sellHeading')} (${trayPhotos.length})` : t('main.tray.sellHeading')}
               </span>
               <button className="tray-close-btn" onClick={() => setShowTray(false)} aria-label="Close">✕</button>
             </div>
@@ -1899,7 +2704,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   {trayPhotos.map((tp, i) => (
                     <div key={`${tp.photo.id}-${i}`} className="tray-item">
                       <div className="tray-item-thumb">
-                        <ThumbImage storagePath={tp.photo.storagePath} alt={tp.containerName} />
+                        <ThumbImage storagePath={tp.photo.storagePath} url={tp.photo.url} alt={tp.containerName} />
                       </div>
                       <div className="tray-item-meta">
                         <span className="tray-item-container">{tp.containerName}</span>
@@ -2060,7 +2865,7 @@ export default function MainScreen({ user, initialOwnerUid }: Props) {
                   }}>
                     <span style={{ fontSize: 14, color: '#333' }}>{c.displayName}</span>
                     <button
-                      onClick={() => revokeCollaborator(c.uid, c.inviteToken)}
+                      onClick={() => revokeCollaborator(c.uid)}
                       style={{
                         padding: '4px 12px', borderRadius: 6, border: '1px solid #e0b0a0',
                         background: '#fff', color: '#a04030', fontSize: 12, cursor: 'pointer',

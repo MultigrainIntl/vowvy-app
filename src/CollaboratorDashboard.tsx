@@ -1,21 +1,31 @@
 import { useState, useEffect } from 'react';
 import { type User } from 'firebase/auth';
 import {
-  collection, doc, onSnapshot, deleteDoc, updateDoc, setDoc,
-  query, where, orderBy, getDocs, Timestamp, serverTimestamp,
+  collection, onSnapshot, query, where, orderBy,
 } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { db } from './firebase';
 import { navigate } from './nav';
 import logoMark from './assets/logo-mark.svg';
 import './CollaboratorDashboard.css';
+import { createFirebaseLifecycleAdapter } from './collaboration/firebase-lifecycle-adapter';
+import {
+  observeOwnedCollaboratorAccess,
+  type OwnedCollaboratorAccess,
+} from './collaboration/firebase-session-adapter';
+import type { CollaboratorAccessRecord } from './collaboration/access-model';
+import {
+  inspectSharedInventoryCompatibility,
+  repairSharedInventoryCompatibility,
+  type SharedInventoryCompatibilityReport,
+} from './collaboration/legacy-inventory-compatibility';
 
 interface Collaborator {
   uid: string;
   displayName: string;
   email: string;
-  inviteToken: string;
-  acceptedAt: Timestamp | null;
+  access: CollaboratorAccessRecord;
+  acceptedAt: Date;
   expiresAt: Date | null;
 }
 
@@ -30,36 +40,52 @@ export default function CollaboratorDashboard({ user }: Props) {
   const [inviteCopied, setInviteCopied]       = useState(false);
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [inviteExpiry, setInviteExpiry]       = useState<number | null>(7);
+  const [actionError, setActionError] = useState('');
   const [recentActivity, setRecentActivity] = useState<{ collaboratorUid: string; containerName: string; modifiedAt: Date }[]>([]);
+  const [compatibilityReport, setCompatibilityReport] =
+    useState<SharedInventoryCompatibilityReport | null>(null);
+  const [repairingInventory, setRepairingInventory] = useState(false);
 
   useEffect(() => {
-    return onSnapshot(collection(db, `users/${user.uid}/collaborators`), async snap => {
-      const active = snap.docs.filter(d => d.data().status === 'active');
-      const result: Collaborator[] = await Promise.all(active.map(async d => {
-        const data = d.data();
-        let expiresAt: Date | null = null;
-        if (data.inviteToken) {
-          try {
-            const inviteSnap = await getDocs(
-              query(collection(db, 'invites'), where('__name__', '==', data.inviteToken))
-            );
-            if (!inviteSnap.empty) {
-              const inviteData = inviteSnap.docs[0].data();
-              expiresAt = inviteData.expiresAt ? inviteData.expiresAt.toDate?.() ?? null : null;
-            }
-          } catch {}
+    return observeOwnedCollaboratorAccess(
+      db,
+      user.uid,
+      (records: OwnedCollaboratorAccess[]) => setCollaborators(
+        records
+          .filter(({ access }) =>
+            access.status === 'active' &&
+            (access.expiresAtMs === null || Date.now() < access.expiresAtMs))
+          .map(({ collaboratorUid, access, displayName, email }) => ({
+            uid: collaboratorUid,
+            displayName,
+            email,
+            access,
+            acceptedAt: new Date(access.createdAtMs),
+            expiresAt: access.expiresAtMs === null
+              ? null
+              : new Date(access.expiresAtMs),
+          })),
+      ),
+      error => setActionError(error.message),
+    );
+  }, [user.uid]);
+
+  // Read-only preview: older records are never changed without owner confirmation.
+  useEffect(() => {
+    let cancelled = false;
+    inspectSharedInventoryCompatibility(db, user.uid)
+      .then(report => {
+        if (!cancelled) setCompatibilityReport(report);
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setActionError(error instanceof Error ? error.message : 'Inventory check failed.');
         }
-        return {
-          uid: d.id,
-          displayName: data.displayName ?? data.email ?? 'Collaborator',
-          email: data.email ?? '',
-          inviteToken: data.inviteToken ?? '',
-          acceptedAt: data.acceptedAt ?? null,
-          expiresAt,
-        };
-      }));
-      setCollaborators(result);
-    });
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [user.uid]);
 
   useEffect(() => {
@@ -85,20 +111,26 @@ export default function CollaboratorDashboard({ user }: Props) {
     setGeneratingInvite(true);
     try {
       const token = crypto.randomUUID();
-      const expiresAt = inviteExpiry
-        ? new Date(Date.now() + inviteExpiry * 24 * 60 * 60 * 1000)
+      const nowMs = Date.now();
+      const expiresAtMs = inviteExpiry
+        ? nowMs + inviteExpiry * 24 * 60 * 60 * 1000
         : null;
-      await setDoc(doc(db, 'invites', token), {
+      const lifecycle = createFirebaseLifecycleAdapter(db, {
+        nowMs: () => Date.now(),
+        newAccessId: () => crypto.randomUUID(),
+      });
+      await lifecycle.issueInvitation({
+        invitationId: token,
         ownerUid: user.uid,
-        ownerDisplayName: user.displayName ?? user.email?.split('@')[0] ?? 'Your host',
-        status: 'pending',
-        token,
-        createdAt: serverTimestamp(),
-        ...(expiresAt && { expiresAt }),
+        createdByUid: user.uid,
+        nowMs,
+        expiresAtMs,
+        ownerDisplayName: user.displayName ?? user.email?.split('@')[0] ?? '',
       });
       setInviteLink(`${window.location.origin}/invite/${token}`);
     } catch (e) {
       console.error('Failed to generate invite link', e);
+      setActionError(e instanceof Error ? e.message : 'Unable to create invitation.');
     } finally {
       setGeneratingInvite(false);
     }
@@ -108,20 +140,40 @@ export default function CollaboratorDashboard({ user }: Props) {
     if (!window.confirm(t('collabDash.revokeConfirm', { name: c.displayName }))) return;
     setRevoking(c.uid);
     try {
-      await deleteDoc(doc(db, `users/${user.uid}/collaborators/${c.uid}`));
-      if (c.inviteToken) {
-        await updateDoc(doc(db, 'invites', c.inviteToken), { status: 'revoked' });
-      }
+      const lifecycle = createFirebaseLifecycleAdapter(db, {
+        nowMs: () => Date.now(),
+        newAccessId: () => crypto.randomUUID(),
+      });
+      await lifecycle.revokeAccess(user.uid, c.uid);
     } catch (e) {
       console.error('Failed to revoke', e);
+      setActionError(e instanceof Error ? e.message : 'Unable to revoke access.');
     } finally {
       setRevoking(null);
     }
   }
 
-  function formatDate(ts: Timestamp | null): string {
-    if (!ts) return '—';
-    return ts.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  async function repairExistingSharedInventory() {
+    if (!compatibilityReport || repairingInventory) return;
+
+    const count = compatibilityReport.repairableLocations +
+      compatibilityReport.repairableContainers;
+    if (!window.confirm(t('collabDash.compatibility.confirm', { count }))) return;
+
+    setRepairingInventory(true);
+    setActionError('');
+    try {
+      await repairSharedInventoryCompatibility(db, user.uid, compatibilityReport);
+      setCompatibilityReport(await inspectSharedInventoryCompatibility(db, user.uid));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Inventory repair failed.');
+    } finally {
+      setRepairingInventory(false);
+    }
+  }
+
+  function formatDate(date: Date): string {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   function formatExpiry(d: Date | null): string {
@@ -152,6 +204,9 @@ export default function CollaboratorDashboard({ user }: Props) {
       <div className="collab-content">
         <h2 className="collab-title">{t('collabDash.title')}</h2>
         <p className="collab-subtitle">{t('collabDash.subtitle')}</p>
+        {actionError && (
+          <p role="alert" className="collab-empty">{actionError}</p>
+        )}
 
         <div className="collab-privacy-note">
           <span className="collab-privacy-note-icon">🔒</span>
@@ -161,6 +216,46 @@ export default function CollaboratorDashboard({ user }: Props) {
             <p className="collab-privacy-tip">{t('collabDash.privacyTip')}</p>
           </div>
         </div>
+
+        {compatibilityReport &&
+          compatibilityReport.repairableLocations +
+            compatibilityReport.repairableContainers > 0 && (
+          <div className="collab-privacy-note" role="status">
+            <span className="collab-privacy-note-icon">🔒</span>
+            <div>
+              <p className="collab-privacy-note-heading">
+                {t('collabDash.compatibility.heading')}
+              </p>
+              <p className="collab-privacy-note-body">
+                {t('collabDash.compatibility.description', {
+                  spaces: compatibilityReport.repairableLocations,
+                  containers: compatibilityReport.repairableContainers,
+                })}
+              </p>
+              <p className="collab-privacy-tip">
+                {t('collabDash.compatibility.privacy')}
+              </p>
+              <button
+                onClick={repairExistingSharedInventory}
+                disabled={repairingInventory}
+                style={{
+                  marginTop: 10,
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: repairingInventory ? '#ccc' : '#7a3b2e',
+                  color: '#fff',
+                  fontSize: 13,
+                  cursor: repairingInventory ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {repairingInventory
+                  ? t('collabDash.compatibility.repairing')
+                  : t('collabDash.compatibility.repair')}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="collab-invite-box">
           <p style={{ margin: '0 0 12px', fontSize: 14, color: '#555' }}>

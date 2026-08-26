@@ -1,13 +1,16 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { type User } from 'firebase/auth';
 import {
   collection, doc, onSnapshot, updateDoc, setDoc,
   query, orderBy, writeBatch, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { appBaseUrl } from './environment';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { navigate } from './nav';
+import QRCode from 'qrcode';
 import {
   subscribeToLocations, createLocation,
   getLocationChildren, getLocationPath, getDescendantIds,
@@ -46,6 +49,298 @@ function UnlockedIcon() {
   );
 }
 
+function clearQrPrintState() {
+  document.body.classList.remove('vowvy-printing-qr');
+  document.body.classList.remove('vowvy-printing-qr-main');
+  document.body.classList.remove('vowvy-printing-qr-manage');
+  document.body.classList.remove('vowvy-qr-print-active');
+
+  const existingPrintRoot = document.getElementById('vowvy-qr-print-root');
+  existingPrintRoot?.remove();
+
+  window.removeEventListener('afterprint', clearQrPrintState);
+}
+
+function requestQrPrint(scopeClass: 'vowvy-printing-qr-main' | 'vowvy-printing-qr-manage') {
+  const printable =
+    document.querySelector('.qr-print-overlay .qr-print-printable') ??
+    document.querySelector('.qr-print-overlay .qr-print-card');
+
+  if (!printable) {
+    window.print();
+    return;
+  }
+
+  const existingPrintRoot = document.getElementById('vowvy-qr-print-root');
+  existingPrintRoot?.remove();
+
+  const printRoot = document.createElement('div');
+  printRoot.id = 'vowvy-qr-print-root';
+  printRoot.appendChild(printable.cloneNode(true));
+  document.body.appendChild(printRoot);
+
+  document.body.classList.add('vowvy-printing-qr');
+  document.body.classList.add(scopeClass);
+  document.body.classList.add('vowvy-qr-print-active');
+
+  window.removeEventListener('afterprint', clearQrPrintState);
+  window.addEventListener('afterprint', clearQrPrintState);
+
+  window.print();
+}
+
+function ManageQRModal({ container, onClose }: { container: Container; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [tagline, setTagline] = useState(() => t('main.qr.defaultTagline'));
+  const [qrDataUrl, setQrDataUrl] = useState('');
+
+  useEffect(() => {
+    const url = `${appBaseUrl}/container/${container.id}`;
+    QRCode.toDataURL(url, { width: 240, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(''));
+  }, [container.id]);
+
+  const closeQr = () => {
+    clearQrPrintState();
+    onClose();
+  };
+
+  return createPortal((
+    <div className="qr-print-overlay">
+      <div className="qr-print-controls">
+        <button className="qr-btn-print" disabled={!qrDataUrl} onClick={() => requestQrPrint('vowvy-printing-qr-manage')}>
+          {t('main.qr.print')}
+        </button>
+        <button className="qr-btn-close" onClick={closeQr}>{t('main.qr.close')}</button>
+      </div>
+
+      <div className="qr-print-card">
+        <img src={logoMark} alt="Vowvy" className="qr-logo" />
+        <div className="qr-code">
+          {qrDataUrl && <img src={qrDataUrl} alt={`QR code for ${container.name}`} className="qr-code-img" />}
+        </div>
+        <div className="qr-container-name">{container.name}</div>
+        <div className="qr-location">{container.location}</div>
+        <input
+          className="qr-tagline-input"
+          value={tagline}
+          onChange={e => setTagline(e.target.value)}
+        />
+      </div>
+    </div>
+  ), document.body);
+}
+
+
+
+function isAutomobileLocationName(name: string) {
+  return /\b(auto|autos|automobile|automobiles|vehicle|vehicles|car|cars|truck|trucks|van|vans|suv|jeep|bronco)\b/i.test(name);
+}
+
+function sortLocationForOutline(a: Location, b: Location, parentId: string | null) {
+  if (parentId === null) {
+    const autoA = isAutomobileLocationName(a.name) ? 1 : 0;
+    const autoB = isAutomobileLocationName(b.name) ? 1 : 0;
+    if (autoA !== autoB) return autoA - autoB;
+  }
+  return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function getSortedLocationChildren(parentId: string | null, locations: Location[]) {
+  return [...getLocationChildren(parentId, locations)]
+    .sort((a, b) => sortLocationForOutline(a, b, parentId));
+}
+
+function locationQrUrl(locationId: string) {
+  return `${appBaseUrl}/?location=${encodeURIComponent(locationId)}`;
+}
+
+function getLocationDescendantsSorted(parentId: string, locations: Location[]): Location[] {
+  return [...getLocationChildren(parentId, locations)]
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+    .flatMap(child => [child, ...getLocationDescendantsSorted(child.id, locations)]);
+}
+
+function LocationQRModal({ location, locations, onClose }: { location: Location; locations: Location[]; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [tagline, setTagline] = useState(() => t('main.qr.locationTagline'));
+  const [qrDataUrl, setQrDataUrl] = useState('');
+
+  useEffect(() => {
+    QRCode.toDataURL(locationQrUrl(location.id), { width: 240, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(''));
+  }, [location.id]);
+
+  const closeQr = () => {
+    clearQrPrintState();
+    onClose();
+  };
+
+  const locationPath = getLocationPath(location.id, locations) || location.name;
+
+  return createPortal((
+    <div className="qr-print-overlay">
+      <div className="qr-print-controls">
+        <button className="qr-btn-print" disabled={!qrDataUrl} onClick={() => requestQrPrint('vowvy-printing-qr-manage')}>
+          {t('main.qr.print')}
+        </button>
+        <button className="qr-btn-close" onClick={closeQr}>{t('main.qr.close')}</button>
+      </div>
+
+      <div className="qr-print-printable">
+        <div className="qr-print-card">
+          <img src={logoMark} alt="Vowvy" className="qr-logo" />
+          <div className="qr-code">
+            {qrDataUrl && <img src={qrDataUrl} alt={`QR code for ${locationPath}`} className="qr-code-img" />}
+          </div>
+          <div className="qr-container-name">{location.name}</div>
+          <div className="qr-location">{locationPath}</div>
+          <input
+            className="qr-tagline-input"
+            value={tagline}
+            onChange={e => setTagline(e.target.value)}
+          />
+        </div>
+      </div>
+    </div>
+  ), document.body);
+}
+
+function LocationQRSetModal({ parent, locations, onClose }: { parent: Location; locations: Location[]; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [cards, setCards] = useState<{ location: Location; path: string; qrDataUrl: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const descendants = getLocationDescendantsSorted(parent.id, locations);
+
+    Promise.all(descendants.map(async location => {
+      const qrDataUrl = await QRCode.toDataURL(locationQrUrl(location.id), { width: 240, margin: 1 }).catch(() => '');
+      return {
+        location,
+        path: getLocationPath(location.id, locations) || location.name,
+        qrDataUrl,
+      };
+    })).then(next => {
+      if (!cancelled) setCards(next);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [parent.id, locations]);
+
+  const closeQr = () => {
+    clearQrPrintState();
+    onClose();
+  };
+
+  const parentPath = getLocationPath(parent.id, locations) || parent.name;
+
+  return createPortal((
+    <div className="qr-print-overlay qr-print-overlay--set">
+      <div className="qr-print-controls">
+        <button className="qr-btn-print" disabled={cards.length === 0 || cards.some(card => !card.qrDataUrl)} onClick={() => requestQrPrint('vowvy-printing-qr-manage')}>
+          {t('main.qr.print')}
+        </button>
+        <button className="qr-btn-close" onClick={closeQr}>{t('main.qr.close')}</button>
+      </div>
+
+      <div className="qr-print-printable qr-print-set">
+        <div className="qr-print-set-heading">
+          Child location QR codes for {parentPath}
+        </div>
+        {cards.length === 0 ? (
+          <div className="qr-print-card">
+            <div className="qr-container-name">No child locations</div>
+            <div className="qr-location">{parentPath}</div>
+          </div>
+        ) : cards.map(card => (
+          <div className="qr-print-card" key={card.location.id}>
+            <img src={logoMark} alt="Vowvy" className="qr-logo" />
+            <div className="qr-code">
+              {card.qrDataUrl && <img src={card.qrDataUrl} alt={`QR code for ${card.path}`} className="qr-code-img" />}
+            </div>
+            <div className="qr-container-name">{card.location.name}</div>
+            <div className="qr-location">{card.path}</div>
+            <div className="qr-tagline-input qr-tagline-static">Location QR</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  ), document.body);
+}
+
+
+function ContainerQRSetModal({ parent, containers, locations, onClose }: { parent: Location; containers: Container[]; locations: Location[]; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [cards, setCards] = useState<{ container: Container; locationPath: string; qrDataUrl: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.all(containers.map(async container => {
+      const qrDataUrl = await QRCode.toDataURL(`${appBaseUrl}/container/${container.id}`, { width: 240, margin: 1 }).catch(() => '');
+      const locationPath = container.locationId ? (getLocationPath(container.locationId, locations) || container.location) : container.location;
+      return { container, locationPath, qrDataUrl };
+    })).then(next => {
+      if (!cancelled) {
+        setCards([...next].sort((a, b) =>
+          a.locationPath.localeCompare(b.locationPath, undefined, { numeric: true, sensitivity: 'base' }) ||
+          a.container.name.localeCompare(b.container.name, undefined, { numeric: true, sensitivity: 'base' })
+        ));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [containers, locations]);
+
+  const closeQr = () => {
+    clearQrPrintState();
+    onClose();
+  };
+
+  const parentPath = getLocationPath(parent.id, locations) || parent.name;
+
+  return createPortal((
+    <div className="qr-print-overlay qr-print-overlay--set">
+      <div className="qr-print-controls">
+        <button className="qr-btn-print" disabled={containers.length === 0 || cards.length !== containers.length || cards.some(card => !card.qrDataUrl)} onClick={() => requestQrPrint('vowvy-printing-qr-manage')}>
+          {t('main.qr.print')}
+        </button>
+        <button className="qr-btn-close" onClick={closeQr}>{t('main.qr.close')}</button>
+      </div>
+
+      <div className="qr-print-printable qr-print-set">
+        <div className="qr-print-set-heading">
+          Container QR codes under {parentPath}
+        </div>
+        {containers.length === 0 ? (
+          <div className="qr-print-card">
+            <div className="qr-container-name">No containers under this location</div>
+            <div className="qr-location">{parentPath}</div>
+          </div>
+        ) : cards.map(card => (
+          <div className="qr-print-card" key={card.container.id}>
+            <img src={logoMark} alt="Vowvy" className="qr-logo" />
+            <div className="qr-code">
+              {card.qrDataUrl && <img src={card.qrDataUrl} alt={`QR code for ${card.container.name}`} className="qr-code-img" />}
+            </div>
+            <div className="qr-container-name">{card.container.name}</div>
+            <div className="qr-location">{card.locationPath}</div>
+            <div className="qr-tagline-input qr-tagline-static">Container QR</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  ), document.body);
+}
+
+
 export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
   const { t } = useTranslation();
   const [locations, setLocations]     = useState<Location[]>([]);
@@ -58,7 +353,14 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
   const [addingContainerUnder, setAddingContainerUnder] = useState<string | null>(null);
   const [newContainerName, setNewContainerName]         = useState('');
   const [addingTopLevel, setAddingTopLevel]             = useState(false);
+  const [movingContId, setMovingContId]   = useState<string | null>(null);
+  const [printQrContainer, setPrintQrContainer] = useState<Container | null>(null);
+  const [printQrLocation, setPrintQrLocation] = useState<Location | null>(null);
+  const [printQrLocationSet, setPrintQrLocationSet] = useState<Location | null>(null);
+  const [printQrContainerSet, setPrintQrContainerSet] = useState<Location | null>(null);
+  const [mobileActionMenuId, setMobileActionMenuId] = useState<string | null>(null);
   const [newTopLevelName, setNewTopLevelName]           = useState('');
+  const [newTopLevelParentId, setNewTopLevelParentId] = useState<string | null>(null);
   const [movingId, setMovingId]                         = useState<string | null>(null);
   const [healthOpen, setHealthOpen]                     = useState(false);
   const [menuOpenId, setMenuOpenId]                     = useState<string | null>(null);
@@ -207,9 +509,33 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
     await propagateEffective(locId, newVisibility, targetEffective);
   }
 
+  async function moveContainerToLoc(contId: string, locId: string) {
+    const newPath = getLocationPath(locId, locations);
+    await updateDoc(doc(db, `users/${user.uid}/containers/${contId}`), { locationId: locId, location: newPath });
+    setMovingContId(null);
+  }
+
+  async function deleteContainer(c: Container) {
+    if (!window.confirm(`Remove "${c.name}"?`)) return;
+    await updateDoc(doc(db, `users/${user.uid}/containers/${c.id}`), { deletedAt: serverTimestamp() });
+  }
+
+  function getContainersUnderLocation(locationId: string) {
+    const descendantIds = getDescendantIds(locationId, locations);
+    return containers
+      .filter(c => c.locationId === locationId || Boolean(c.locationId && descendantIds.has(c.locationId)))
+      .sort((a, b) => {
+        const pathA = a.locationId ? (getLocationPath(a.locationId, locations) || a.location) : a.location;
+        const pathB = b.locationId ? (getLocationPath(b.locationId, locations) || b.location) : b.location;
+        return pathA.localeCompare(pathB, undefined, { numeric: true, sensitivity: 'base' }) ||
+          a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      });
+  }
+
   function renderLocation(loc: Location, depth = 0) {
-    const children = getLocationChildren(loc.id, locations);
+    const children = getSortedLocationChildren(loc.id, locations);
     const containersHere = containers.filter(c => c.locationId === loc.id);
+    const containerSet = getContainersUnderLocation(loc.id);
     const isExpanded = expandedIds.has(loc.id);
     const isEditing = editingId === loc.id;
 
@@ -246,73 +572,138 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
             {isEditing ? (
               <button className="manage-btn save" onClick={() => renameLocation(loc.id, editingName)}>{t('shared.save')}</button>
             ) : (
-              <button className="manage-btn edit" onClick={() => { setEditingId(loc.id); setEditingName(loc.name); }}>{t('manage.rename')}</button>
-            )}
-            <button className="manage-btn edit" onClick={() => {
-              setMovingId(movingId === loc.id ? null : loc.id);
-            }}>{t('main.move.containerTitle').split(' ')[0]}</button>
-            <button className="manage-btn delete" onClick={() => deleteLocation(loc.id)}>{t('manage.delete')}</button>
-            <button
-              className={`loc-lock-btn${loc.effectiveIsPrivate ? ' is-private' : ''}${loc.visibility === 'inherit' ? ' is-inherit' : ''}`}
-              aria-label={lockAriaLabel}
-              title={lockAriaLabel}
-              onClick={async () => {
-                const newVis: Visibility =
-                  loc.visibility === 'private' ? 'inherit'
-                  : loc.effectiveIsPrivate     ? 'shared'
-                  :                              'private';
-                const ok = window.confirm(t('manage.privacyUpdateConfirm'));
-                if (!ok) return;
-                await applyLocationVisibility(loc.id, newVis);
-              }}
-            >
-              {loc.effectiveIsPrivate ? <LockedIcon /> : <UnlockedIcon />}
-            </button>
-            <div style={{ position: 'relative' }}>
-              <button
-                className="loc-menu-btn"
-                aria-label={t('manage.privacyOptions')}
-                title={t('manage.privacyOptions')}
-                onClick={e => {
-                  e.stopPropagation();
-                  setMenuOpenId(menuOpenId === loc.id ? null : loc.id);
-                }}
-              >⋯</button>
-              {menuOpenId === loc.id && (
-                <div className="loc-menu-dropdown" role="menu">
-                  {(['inherit', 'private', 'shared'] as Visibility[]).map(v => (
-                    <button
-                      key={v}
-                      className={`loc-menu-item${loc.visibility === v ? ' active' : ''}`}
-                      role="menuitem"
-                      onClick={async () => {
-                        setMenuOpenId(null);
-                        await applyLocationVisibility(loc.id, v);
-                      }}
-                    >
-                      <span className="loc-menu-check">{loc.visibility === v ? '✓' : ''}</span>
-                      {v === 'inherit' ? t('manage.followParent') : v === 'private' ? t('manage.hideFromHelpers') : t('manage.showToHelpers')}
-                    </button>
-                  ))}
+              <>
+                <button
+                  className={`loc-lock-btn manage-btn--desktop-only${loc.effectiveIsPrivate ? ' is-private' : ''}${loc.visibility === 'inherit' ? ' is-inherit' : ''}`}
+                  aria-label={lockAriaLabel}
+                  title={lockAriaLabel}
+                  onClick={async () => {
+                    const newVis: Visibility =
+                      loc.visibility === 'private' ? 'inherit'
+                      : loc.effectiveIsPrivate     ? 'shared'
+                      :                              'private';
+                    const ok = window.confirm(t('manage.privacyUpdateConfirm'));
+                    if (!ok) return;
+                    await applyLocationVisibility(loc.id, newVis);
+                  }}
+                >
+                  {loc.effectiveIsPrivate ? <LockedIcon /> : <UnlockedIcon />}
+                </button>
+                <div className="manage-privacy-wrap manage-btn--desktop-only" style={{ position: 'relative' }}>
+                  <button
+                    className="loc-menu-btn"
+                    aria-label={t('manage.privacyOptions')}
+                    title={t('manage.privacyOptions')}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setMenuOpenId(menuOpenId === loc.id ? null : loc.id);
+                    }}
+                  >⋯</button>
+                  {menuOpenId === loc.id && (
+                    <div className="loc-menu-dropdown" role="menu">
+                      {(['inherit', 'private', 'shared'] as Visibility[]).map(v => (
+                        <button
+                          key={v}
+                          className={`loc-menu-item${loc.visibility === v ? ' active' : ''}`}
+                          role="menuitem"
+                          onClick={async () => {
+                            setMenuOpenId(null);
+                            await applyLocationVisibility(loc.id, v);
+                          }}
+                        >
+                          <span className="loc-menu-check">{loc.visibility === v ? '✓' : ''}</span>
+                          {v === 'inherit' ? t('manage.followParent') : v === 'private' ? t('manage.hideFromHelpers') : t('manage.showToHelpers')}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <button className="manage-btn add" onClick={() => {
-              setAddingUnder(loc.id);
-              setNewSubName('');
-              setExpandedIds(prev => new Set([...prev, loc.id]));
-            }}>{t('manage.addSubLocation')}</button>
-            <button className="manage-btn add" onClick={() => {
-              setAddingContainerUnder(loc.id);
-              setNewContainerName('');
-              setExpandedIds(prev => new Set([...prev, loc.id]));
-            }}>{t('manage.addContainer')}</button>
+                <button className="manage-btn add" onClick={() => {
+                  setAddingUnder(loc.id);
+                  setNewSubName('');
+                  setExpandedIds(prev => new Set([...prev, loc.id]));
+                }}>{t('manage.addSubLocation')}</button>
+                <button className="manage-btn add" onClick={() => {
+                  setAddingContainerUnder(loc.id);
+                  setNewContainerName('');
+                  setExpandedIds(prev => new Set([...prev, loc.id]));
+                }}>{t('manage.addContainer')}</button>
+
+                {/* LOCATION ROW INVARIANT: Every location row must ALWAYS expose:
+                    Rename, Move/re-parent, Print QR, Add sub-location, Add container.
+                    This applies to Home, rooms, Bronco, Jeep, and every location type.
+                    Vehicles are locations. Do NOT re-add manage-more-wrap--mobile here;
+                    that class hides the entire action menu on desktop (display:none). */}
+                <div className="manage-more-wrap" style={{ position: 'relative' }}>
+                  <button
+                    className="manage-more-trigger"
+                    aria-label="More location actions"
+                    onClick={e => {
+                      e.stopPropagation();
+                      setMobileActionMenuId(mobileActionMenuId === `loc-${loc.id}` ? null : `loc-${loc.id}`);
+                    }}
+                  >☰</button>
+                  {mobileActionMenuId === `loc-${loc.id}` && (
+                    <div className="manage-more-dropdown" role="menu">
+                  <button className="manage-more-item" role="menuitem" onClick={() => { setEditingId(loc.id); setEditingName(loc.name); setMobileActionMenuId(null); }}>
+                    {t('manage.rename')}
+                  </button>
+                  <button className="manage-more-item" role="menuitem" onClick={() => { setPrintQrLocation(loc); setMobileActionMenuId(null); }}>
+                    {t('main.card.printQR')}
+                  </button>
+                  {children.length > 0 && (
+                    <button className="manage-more-item" role="menuitem" onClick={() => { setPrintQrLocationSet(loc); setMobileActionMenuId(null); }}>
+                      {t('manage.printChildQRs')}
+                    </button>
+                  )}
+                  {containerSet.length > 0 && (
+                    <button className="manage-more-item" role="menuitem" onClick={() => { setPrintQrContainerSet(loc); setMobileActionMenuId(null); }}>
+                      {t('manage.printContainerQRs')}
+                    </button>
+                  )}
+                      <button className="manage-more-item" role="menuitem" onClick={() => { setMovingId(movingId === loc.id ? null : loc.id); setMobileActionMenuId(null); }}>
+                        {t('manage.move')}
+                      </button>
+                  <button className="manage-more-item danger" role="menuitem" onClick={() => { setMobileActionMenuId(null); deleteLocation(loc.id); }}>
+                    {t('manage.delete')}
+                  </button>
+                      <button className="manage-more-item" role="menuitem" onClick={() => {
+                        setAddingUnder(loc.id);
+                        setNewSubName('');
+                        setExpandedIds(prev => new Set([...prev, loc.id]));
+                        setMobileActionMenuId(null);
+                      }}>{t('manage.addSubLocation')}</button>
+                      <button className="manage-more-item" role="menuitem" onClick={() => {
+                        setAddingContainerUnder(loc.id);
+                        setNewContainerName('');
+                        setExpandedIds(prev => new Set([...prev, loc.id]));
+                        setMobileActionMenuId(null);
+                      }}>{t('manage.addContainer')}</button>
+                      <div className="manage-more-section-label">Visibility</div>
+                      {(['inherit', 'private', 'shared'] as Visibility[]).map(v => (
+                        <button
+                          key={v}
+                          className={`manage-more-item${loc.visibility === v ? ' active' : ''}`}
+                          role="menuitem"
+                          onClick={async () => {
+                            setMobileActionMenuId(null);
+                            await applyLocationVisibility(loc.id, v);
+                          }}
+                        >
+                          <span className="loc-menu-check">{loc.visibility === v ? '✓' : ''}</span>
+                          {v === 'inherit' ? t('manage.followParent') : v === 'private' ? t('manage.hideFromHelpers') : t('manage.showToHelpers')}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
         {movingId === loc.id && (() => {
           const blocked = getDescendantIds(loc.id, locations);
-          const eligible = locations.filter(l => l.id !== loc.id && !blocked.has(l.id));
           return (
             <div className="manage-add-row" style={{ marginLeft: 20 }}>
               <select
@@ -322,9 +713,27 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
                 onChange={e => moveLocation(loc.id, e.target.value === '' ? null : e.target.value)}
               >
                 <option value="">{t('manage.topLevel')}</option>
-                {eligible.map(l => (
-                  <option key={l.id} value={l.id}>{getLocationPath(l.id, locations)}</option>
-                ))}
+                {(() => {
+                  // Tree-ordered re-parent options: DFS via getSortedLocationChildren,
+                  // depth-based visual indentation with branch chars. Cycle prevention
+                  // (blocked set from getDescendantIds) is preserved throughout.
+                  const opts: React.ReactElement[] = [];
+                  const visit = (parentId: string | null, depth: number) => {
+                    for (const l of getSortedLocationChildren(parentId, locations)) {
+                      if (l.id === loc.id || blocked.has(l.id)) continue;
+                      const sibs = getSortedLocationChildren(parentId, locations)
+                        .filter(s => s.id !== loc.id && !blocked.has(s.id));
+                      const isLast = sibs.length > 0 && sibs[sibs.length - 1].id === l.id;
+                      const gap = '  ';
+                      const prefix = gap.repeat(depth);
+                      const branch = depth === 0 ? '' : (isLast ? '└ ' : '├ ');
+                      opts.push(<option key={l.id} value={l.id}>{prefix}{branch}{l.name}</option>);
+                      visit(l.id, depth + 1);
+                    }
+                  };
+                  visit(null, 0);
+                  return opts;
+                })()}
               </select>
               <button className="manage-btn" onClick={() => setMovingId(null)}>{t('manage.cancel')}</button>
             </div>
@@ -409,7 +818,7 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
               </div>
             )}
             {children.map(child => renderLocation(child, depth + 1))}
-            {containersHere.map(c => renderContainer(c))}
+            {[...containersHere].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'})).map(c=>renderContainer(c))}
           </div>
         )}
       </div>
@@ -439,14 +848,66 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
           {isEditing ? (
             <button className="manage-btn save" onClick={() => renameContainer(c.id, editingName)}>{t('shared.save')}</button>
           ) : (
-            <button className="manage-btn edit" onClick={() => { setEditingId(c.id); setEditingName(c.name); }}>{t('manage.rename')}</button>
+            <>
+            {movingContId !== c.id && <button className="manage-btn edit" onClick={() => { setEditingId(c.id); setEditingName(c.name); }}>{t('manage.rename')}</button>}
+            {movingContId !== c.id && <button className="manage-btn" onClick={() => setPrintQrContainer(c)}>{t('main.card.printQR')}</button>}
+            <button className="manage-btn manage-btn--desktop-only" onClick={() => setMovingContId(movingContId === c.id ? null : c.id)}>{t('manage.move')}</button>
+            {movingContId === c.id && (
+              <>
+                <select style={{marginTop:'4px',width:'100%'}} defaultValue="" onChange={async e => { if (e.target.value) await moveContainerToLoc(c.id, e.target.value); }}>
+                  <option value="" disabled>Pick location…</option>
+                  {(() => {
+                    // Container move destination: DFS tree via getSortedLocationChildren.
+                    // Shows all locations in true parent-child order with depth indentation.
+                    // No cycle filtering needed (container can move to any location).
+                    const opts: React.ReactElement[] = [];
+                    const visit = (parentId: string | null, depth: number) => {
+                      const sibs = getSortedLocationChildren(parentId, locations);
+                      for (const l of sibs) {
+                        const isLast = sibs[sibs.length - 1]?.id === l.id;
+                        const gap = '  ';
+                        const prefix = gap.repeat(depth);
+                        const branch = depth === 0 ? '' : (isLast ? '└ ' : '├ ');
+                        opts.push(<option key={l.id} value={l.id}>{prefix}{branch}{l.name}</option>);
+                        visit(l.id, depth + 1);
+                      }
+                    };
+                    visit(null, 0);
+                    return opts;
+                  })()}
+                </select>
+                <button className="manage-btn" onClick={() => setMovingContId(null)}>Cancel</button>
+              </>
+            )}
+            {movingContId !== c.id && <button className="manage-btn manage-btn--desktop-only" onClick={() => deleteContainer(c)}>{t('manage.delete')}</button>}
+            <div className="manage-more-wrap manage-more-wrap--mobile">
+              <button
+                className="manage-more-trigger"
+                aria-label="More container actions"
+                onClick={e => {
+                  e.stopPropagation();
+                  setMobileActionMenuId(mobileActionMenuId === `container-${c.id}` ? null : `container-${c.id}`);
+                }}
+              >☰</button>
+              {mobileActionMenuId === `container-${c.id}` && (
+                <div className="manage-more-dropdown" role="menu">
+                  <button className="manage-more-item" role="menuitem" onClick={() => { setMovingContId(movingContId === c.id ? null : c.id); setMobileActionMenuId(null); }}>
+                    {t('manage.move')}
+                  </button>
+                  <button className="manage-more-item danger" role="menuitem" onClick={() => { setMobileActionMenuId(null); deleteContainer(c); }}>
+                    {t('manage.delete')}
+                  </button>
+                </div>
+              )}
+            </div>
+            </>
           )}
         </div>
       </div>
     );
   }
 
-  const topLevel = getLocationChildren(null, locations);
+  const topLevel = getSortedLocationChildren(null, locations);
   const unassigned = containers.filter(c => !c.locationId && !c.location);
   const healthIssues = getLocationHealthIssues(locations);
 
@@ -458,9 +919,14 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
           <span className="app-wordmark">Vowvy</span>
         </div>
         <div className="header-actions">
-          <button className="sign-out-btn" onClick={() => navigate('/')}>{t('shared.back')}</button>
+        <button className="sign-out-btn" onClick={() => navigate('/')}>{t('shared.back')}</button>
         </div>
       </header>
+
+      {printQrContainer && <ManageQRModal container={printQrContainer} onClose={() => setPrintQrContainer(null)} />}
+      {printQrLocation && <LocationQRModal location={printQrLocation} locations={locations} onClose={() => setPrintQrLocation(null)} />}
+      {printQrLocationSet && <LocationQRSetModal parent={printQrLocationSet} locations={locations} onClose={() => setPrintQrLocationSet(null)} />}
+      {printQrContainerSet && <ContainerQRSetModal parent={printQrContainerSet} containers={getContainersUnderLocation(printQrContainerSet.id)} locations={locations} onClose={() => setPrintQrContainerSet(null)} />}
 
       <div className="manage-content">
         <h2 className="manage-title">{t('manage.title')}</h2>
@@ -507,28 +973,51 @@ export default function ManageScreen({ user, onStartGuidedAdd }: Props) {
           </div>
         )}
         {addingTopLevel && (
-          <div className="manage-add-row">
-            <input
-              autoFocus
-              className="manage-input"
-              placeholder={t('manage.locationPlaceholder')}
-              value={newTopLevelName}
-              onChange={e => setNewTopLevelName(e.target.value)}
-              onKeyDown={async e => {
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div className="manage-add-row">
+              <input
+                autoFocus
+                className="manage-input"
+                placeholder={t('manage.locationPlaceholder')}
+                value={newTopLevelName}
+                onChange={(e) => setNewTopLevelName(e.target.value)}
+                onKeyDown={async e => {
                 if (e.key === 'Enter' && newTopLevelName.trim()) {
-                  await createLocation(user.uid, newTopLevelName.trim(), null);
+                  await createLocation(user.uid, newTopLevelName.trim(), newTopLevelParentId);
                   setAddingTopLevel(false);
                   setNewTopLevelName('');
+                  setNewTopLevelParentId(null);
                 }
-                if (e.key === 'Escape') { setAddingTopLevel(false); setNewTopLevelName(''); }
-              }}
-            />
-            <button className="manage-btn save" onClick={async () => {
-              if (!newTopLevelName.trim()) return;
-              await createLocation(user.uid, newTopLevelName.trim(), null);
-              setAddingTopLevel(false);
-              setNewTopLevelName('');
-            }}>{t('main.capture.add')}</button>
+                if (e.key === 'Escape') { setAddingTopLevel(false); setNewTopLevelName(''); setNewTopLevelParentId(null); }
+                }}
+              />
+              <button className="manage-btn save" onClick={async () => {
+                if (!newTopLevelName.trim()) return;
+                await createLocation(user.uid, newTopLevelName.trim(), newTopLevelParentId);
+                setAddingTopLevel(false);
+                setNewTopLevelName('');
+                setNewTopLevelParentId(null);
+              }}>{t('main.capture.add')}</button>
+            </div>
+            {locations.length > 0 && (
+              <select
+                className="manage-input"
+                value={newTopLevelParentId ?? ''}
+                onChange={(e) => setNewTopLevelParentId(e.target.value || null)}
+              >
+                <option value="">{t('manage.topLevel')}</option>
+                {[...locations]
+                  .sort((a, b) =>
+                    getLocationPath(a.id, locations).localeCompare(
+                      getLocationPath(b.id, locations), undefined, { numeric: true, sensitivity: 'base' }
+                    )
+                  )
+                  .map(l => (
+                    <option key={l.id} value={l.id}>{getLocationPath(l.id, locations)}</option>
+                  ))
+                }
+              </select>
+            )}
           </div>
         )}
 

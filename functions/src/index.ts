@@ -6,12 +6,54 @@ import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
 import { getFirestore } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
+import {
+  MoveCollaboratorPhotoFailure,
+  moveCollaboratorPhotoTransaction,
+  type MoveCollaboratorPhotoInput,
+} from './moveCollaboratorPhoto';
+import { allowsSharedPhotoAccess, resolveAllowedOrigins } from './collaboratorAccess';
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 initializeApp();
 
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
+const BOOTSTRAP_UID = process.env.BOOTSTRAP_ADMIN_UID?.trim() || '';
+const ALLOWED_ORIGINS = resolveAllowedOrigins(
+  process.env.GCLOUD_PROJECT,
+  process.env.ALLOWED_ORIGINS,
+);
+
+export const moveCollaboratorPhoto = onCall(async request => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+  const input = (request.data ?? {}) as MoveCollaboratorPhotoInput;
+  try {
+    await moveCollaboratorPhotoTransaction(
+      getFirestore(),
+      request.auth.uid,
+      input,
+    );
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof MoveCollaboratorPhotoFailure) {
+      const code =
+        error.reason === 'invalid-input'
+          ? 'invalid-argument'
+          : error.reason === 'permission-denied' ||
+              error.reason === 'private-container'
+            ? 'permission-denied'
+            : error.reason === 'container-not-found' ||
+                error.reason === 'photo-not-found'
+              ? 'not-found'
+              : 'already-exists';
+      throw new HttpsError(code, error.reason);
+    }
+    console.error('moveCollaboratorPhoto failed', error);
+    throw new HttpsError('internal', 'Photo move failed.');
+  }
+});
 
 // ---------------------------------------------------------------------------
 // TEMPORARY — backfill isPrivate: false on containers missing the field.
@@ -187,7 +229,7 @@ export const dryRunContentReset = onCall(
 
     const db      = getFirestore();
     const auth    = getAuth();
-    const bucket  = getStorage().bucket('vowvy-1ba5f.firebasestorage.app');
+    const bucket  = getStorage().bucket();
 
     // --- Load all Auth users and Firestore collection-group data in parallel ---
     const [listResult, locSnap, containerSnap, collabSnap, inviteSnap] = await Promise.all([
@@ -315,7 +357,7 @@ export const dryRunContentReset = onCall(
 
 export const proxyImage = onRequest(
   {
-    cors: ['https://vowvy-1ba5f.web.app', 'https://app.vowvy.com', 'http://localhost:5173', 'http://localhost:5174'],
+    cors: ALLOWED_ORIGINS,
     timeoutSeconds: 30,
     memory: '256MiB',
   },
@@ -346,12 +388,19 @@ export const proxyImage = onRequest(
         return;
       }
       const db = getFirestore();
-      // Check if caller is an active collaborator of the path owner
-      const collabDoc = await db
-        .collection('users').doc(pathOwnerUid)
-        .collection('collaborators').doc(uid)
-        .get();
-      if (!collabDoc.exists || collabDoc.data()?.status !== 'active') {
+      const [current, previous] = await Promise.all([
+        db.collection('users').doc(pathOwnerUid)
+          .collection('collaboratorAccess').doc(uid).get(),
+        db.collection('users').doc(pathOwnerUid)
+          .collection('collaborators').doc(uid).get(),
+      ]);
+      if (!allowsSharedPhotoAccess(
+        current.exists ? current.data() : null,
+        previous.exists ? previous.data() : null,
+        pathOwnerUid,
+        uid,
+        'inventory.read',
+      )) {
         res.status(403).send('Forbidden');
         return;
       }
@@ -371,7 +420,7 @@ export const proxyImage = onRequest(
     }
 
     try {
-      const bucket = getStorage().bucket('vowvy-1ba5f.firebasestorage.app');
+      const bucket = getStorage().bucket();
       const file = bucket.file(path);
       const [metadata] = await file.getMetadata();
       const [buffer] = await file.download();
@@ -383,8 +432,6 @@ export const proxyImage = onRequest(
     }
   }
 );
-
-const BOOTSTRAP_UID = 'tn4kJIuUuQPjGZaufTMb65O5Gin2';
 
 export const setAdminClaim = onCall(async (request) => {
   const callerUid = request.auth?.uid;
@@ -541,7 +588,7 @@ export const uploadCollaboratorPhoto = onCall(
       throw new HttpsError('invalid-argument', 'Image exceeds 5 MB limit.');
     }
 
-    const bucket = getStorage().bucket('vowvy-1ba5f.firebasestorage.app');
+    const bucket = getStorage().bucket();
     const storagePath = `users/${ownerUid}/containers/${containerId}/photos/${Date.now()}.jpg`;
     const file = bucket.file(storagePath);
     const downloadToken = randomUUID();

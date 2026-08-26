@@ -249,6 +249,10 @@
       "addPhotoFailed": "Error al agregar foto: {{message}}",
       "photoFailed": "No se pudo guardar la foto.",
       "somePhotosFailed": "Algunas fotos no se pudieron guardar. Por favor intenta de nuevo."
+    },
+    "tray": {
+      "sell": "Vender",
+      "sellHeading": "Articulos para vender"
     }
   },
   "language": {
@@ -470,6 +474,14 @@
     "privacyHeading": "Los ayudantes solo ven lo que has hecho visible.",
     "privacyBody": "Antes de invitar a un ayudante, ve a Administrar ubicaciones y haz visibles los lugares o contenedores que necesite. Los lugares y contenedores ocultos permanecen ocultos — incluso después de que el ayudante se una.",
     "privacyTip": "💡 ¿Quieres que un ayudante vea algo? Primero házlo visible para ayudantes.",
+    "compatibility": {
+      "heading": "Preparar el inventario existente para compartir",
+      "description": "{{spaces}} espacios existentes y {{containers}} contenedores necesitan una pequeña actualización de compatibilidad para que los ayudantes puedan verlos.",
+      "privacy": "Los elementos privados y eliminados no cambiarán. Nada se actualizará sin tu aprobación.",
+      "repair": "Preparar inventario compartido",
+      "repairing": "Preparando inventario compartido…",
+      "confirm": "¿Actualizar {{count}} registros compartidos existentes para que los ayudantes autorizados puedan verlos? Los elementos privados y eliminados no cambiarán."
+    },
     "inviteDesc": "Genera un enlace y envíaselo a un ayudante. Pueden agregar fotos y ayudar con los lugares y contenedores que has hecho visibles.",
     "searchPlaceholder": "Buscar por nombre o correo…",
     "noCollaborators": "Aún no hay colaboradores.",

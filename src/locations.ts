@@ -47,6 +47,7 @@ export async function createLocation(
     createdAt: serverTimestamp(),
     visibility: 'inherit',
     effectiveIsPrivate: parentEffectiveIsPrivate,
+    deletedAt: null,
   });
   return ref.id;
 }

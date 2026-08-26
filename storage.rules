@@ -1,19 +1,47 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-
-    function isActiveCollaborator(userId, callerUid) {
-      return callerUid != null
-        && firestore.exists(/databases/(default)/documents/users/$(userId)/collaborators/$(callerUid))
-        && firestore.get(/databases/(default)/documents/users/$(userId)/collaborators/$(callerUid)).data.status == 'active';
+    function owns(ownerUid) {
+      return request.auth != null && request.auth.uid == ownerUid;
     }
 
-    match /users/{userId}/{allPaths=**} {
-      // Owner has full read/write access to their own storage.
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      // Active collaborators can read and upload to the owner's storage paths.
-      allow read, write: if request.auth != null && isActiveCollaborator(userId, request.auth.uid);
+    function hasCanonicalPhotoAccess(ownerUid) {
+      return request.auth != null
+        && request.auth.uid != ownerUid
+        && firestore.exists(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid)).data.schemaVersion == 1
+        && firestore.get(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid)).data.status == 'active'
+        && firestore.get(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid)).data.validFromMs <= request.time.toMillis()
+        && (firestore.get(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid)).data.expiresAtMs == null
+          || request.time.toMillis() < firestore.get(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid)).data.expiresAtMs)
+        && 'photo.create' in firestore.get(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid)).data.capabilities;
     }
 
+    function hasPhotoAccess(ownerUid) {
+      return hasCanonicalPhotoAccess(ownerUid)
+        || (request.auth != null
+          && request.auth.uid != ownerUid
+          && !firestore.exists(/databases/(default)/documents/users/$(ownerUid)/collaboratorAccess/$(request.auth.uid))
+          && firestore.exists(/databases/(default)/documents/users/$(ownerUid)/collaborators/$(request.auth.uid))
+          && firestore.get(/databases/(default)/documents/users/$(ownerUid)/collaborators/$(request.auth.uid)).data.status == 'active');
+    }
+
+    match /users/{ownerUid}/containers/{containerId}/photos/{fileName} {
+      allow read: if owns(ownerUid)
+        || (hasPhotoAccess(ownerUid)
+          && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.effectiveIsPrivate == false
+          && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.get('deletedAt', null) == null);
+      allow create: if owns(ownerUid)
+        || (hasPhotoAccess(ownerUid)
+          && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.effectiveIsPrivate == false
+          && firestore.get(/databases/(default)/documents/users/$(ownerUid)/containers/$(containerId)).data.get('deletedAt', null) == null
+          && request.resource.size < 20 * 1024 * 1024
+          && request.resource.contentType.matches('image/.*'));
+      allow update, delete: if owns(ownerUid);
+    }
+
+    match /users/{ownerUid}/{allPaths=**} {
+      allow read, write: if owns(ownerUid);
+    }
   }
 }

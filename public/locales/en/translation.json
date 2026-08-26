@@ -176,12 +176,12 @@
       "noResults": "No containers match “{{query}}”."
     },
     "card": {
-      "aiProcessing": "Analyzing…",
-      "addPhoto": "Add Photo",
-      "takePhotos": "Take Photos",
+      "aiProcessing": "VOWVY is identifying what's in your photo",
+      "addItems": "Add Items",
       "done": "Done",
       "printQR": "Print QR",
       "move": "Move",
+      "moveBox": "Move Box",
       "privateLabel": "Private — tap to make visible to collaborators",
       "visibleLabel": "Visible to collaborators — tap to make private"
     },
@@ -189,10 +189,11 @@
       "delete": "Delete",
       "movePhoto": "Move photo",
       "addPhoto": "Add Photo",
-      "moveBox": "Move box",
+      "moveBox": "Move Box",
       "descriptionPlaceholder": "Add a description…",
       "save": "Save",
-      "photoFailed": "Photo failed to save."
+      "photoFailed": "Photo failed to save.",
+      "aiProcessing": "VOWVY is identifying what's in your photo"
     },
     "ios": {
       "message": "Camera access requires Safari on iPhone. Tap below to open Vowvy in Safari.",
@@ -208,13 +209,13 @@
       "photosFailed": "Some photos failed to save. Please try again."
     },
     "move": {
-      "containerTitle": "Move to a different location",
-      "photoTitle": "Move to another container",
-      "containerSubtitle": "Select a destination location.",
-      "photoSubtitle": "Select a destination container.",
+      "containerTitle": "Move Box to a different location",
+      "photoTitle": "Move Photo to another container",
+      "containerSubtitle": "Select a destination location for this box.",
+      "photoSubtitle": "Select a destination container for this photo.",
       "noLocations": "No locations available. Create one in Manage first.",
-      "locationsHeading": "Locations",
-      "containersHeading": "Containers",
+      "locationsHeading": "Move to a different Location",
+      "containersHeading": "Move to another Box",
       "noDestinations": "No destinations available. Create a container or location first.",
       "cancel": "Cancel"
     },
@@ -249,6 +250,10 @@
       "addPhotoFailed": "Add photo failed: {{message}}",
       "photoFailed": "Photo failed to save.",
       "somePhotosFailed": "Some photos failed to save. Please try again."
+    },
+    "tray": {
+      "sell": "Sell",
+      "sellHeading": "Items to sell"
     }
   },
   "language": {
@@ -470,6 +475,14 @@
     "privacyHeading": "Helpers only see what you’ve made visible.",
     "privacyBody": "Before inviting a helper, go to Manage Locations and make the places or containers they need visible to helpers. Hidden places and containers stay hidden — even after the helper joins.",
     "privacyTip": "💡 Want a helper to see something? Make it visible to helpers first.",
+    "compatibility": {
+      "heading": "Prepare existing inventory for sharing",
+      "description": "{{spaces}} existing spaces and {{containers}} containers need a small compatibility update before helpers can see them.",
+      "privacy": "Private and deleted items remain unchanged. Nothing is updated until you approve it.",
+      "repair": "Prepare shared inventory",
+      "repairing": "Preparing shared inventory…",
+      "confirm": "Update {{count}} existing shared records so approved helpers can see them? Private and deleted items will not be changed."
+    },
     "inviteDesc": "Generate a link and send it to a helper. They can add photos and help with the places and containers you’ve made visible to them.",
     "searchPlaceholder": "Search by name or email…",
     "noCollaborators": "No collaborators yet.",

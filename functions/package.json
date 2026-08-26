@@ -3,6 +3,7 @@
   "description": "Cloud Functions for vowvy",
   "scripts": {
     "build": "tsc",
+    "test:emulator": "npm run build && node --test test/moveCollaboratorPhoto.test.js",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions"

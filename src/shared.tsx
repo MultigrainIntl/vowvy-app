@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import { auth } from './firebase';
+import { firebaseConfig, proxyBase } from './environment';
+import { stagingDirectPhotoUrl } from './staging-photo';
 
-export const PROXY_BASE = 'https://us-central1-vowvy-1ba5f.cloudfunctions.net/proxyImage';
+export const PROXY_BASE = proxyBase;
 
 export interface PhotoItem {
   id: string;
@@ -22,7 +24,8 @@ export interface PhotoItem {
   aiTags?: string[];
   aiObjects?: string[];
   aiStatus?: 'processing' | 'done' | 'error';
-}
+  aiError?: string | null;
+  aiRetryRequestedAt?: number;}
 
 export interface ContainerNote {
   id: string;
@@ -31,12 +34,18 @@ export interface ContainerNote {
   deletedAt?: number;
 }
 
-export function ThumbImage({ storagePath, alt }: { storagePath: string; alt: string }) {
+export function ThumbImage({ storagePath, url, alt }: { storagePath: string; url?: string; alt: string }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [failed, setFailed]   = useState(false);
   const [err, setErr]         = useState('');
+  const directUrl = stagingDirectPhotoUrl(firebaseConfig.projectId, url);
 
   useEffect(() => {
+    if (directUrl) {
+      setBlobUrl(directUrl);
+      setFailed(false);
+      return;
+    }
     let objectUrl: string | null = null;
     let cancelled = false;
     const proxyUrl = `${PROXY_BASE}?path=${encodeURIComponent(storagePath)}`;
@@ -63,7 +72,7 @@ export function ThumbImage({ storagePath, alt }: { storagePath: string; alt: str
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [storagePath]);
+  }, [storagePath, directUrl]);
 
   if (failed) {
     return (
@@ -78,11 +87,17 @@ export function ThumbImage({ storagePath, alt }: { storagePath: string; alt: str
   return <img src={blobUrl} alt={alt} className="container-thumb" />;
 }
 
-export function LightboxImage({ storagePath, alt }: { storagePath: string; alt: string }) {
+export function LightboxImage({ storagePath, url, alt }: { storagePath: string; url?: string; alt: string }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [failed, setFailed]   = useState(false);
+  const directUrl = stagingDirectPhotoUrl(firebaseConfig.projectId, url);
 
   useEffect(() => {
+    if (directUrl) {
+      setBlobUrl(directUrl);
+      setFailed(false);
+      return;
+    }
     let objectUrl: string | null = null;
     let cancelled = false;
     const proxyUrl = `${PROXY_BASE}?path=${encodeURIComponent(storagePath)}`;
@@ -108,7 +123,7 @@ export function LightboxImage({ storagePath, alt }: { storagePath: string; alt: 
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [storagePath]);
+  }, [storagePath, directUrl]);
 
   if (failed) return <div className="lightbox-img" style={{ background: '#fee', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />;
   if (!blobUrl) return <div className="lightbox-img" style={{ background: '#f0ece8' }} />;
@@ -125,14 +140,19 @@ export function formatNoteDate(ts: number): string {
 
 // Pure presentational component — parent is responsible for filtering deleted notes
 // and for all Firestore writes (enables soft delete in callers).
-export function ContainerNotes({ containerId, notes, onAdd, onDelete }: {
+export function ContainerNotes({ containerId, notes, onAdd, onEdit, onDelete, canDelete = true, canEdit = false }: {
   containerId: string;
   notes: ContainerNote[];
   onAdd: (containerId: string, text: string) => Promise<void>;
+  onEdit?: (containerId: string, noteId: string, text: string) => Promise<void>;
   onDelete: (containerId: string, noteId: string) => Promise<void>;
+  canDelete?: boolean;
+  canEdit?: boolean;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
   const canSave = draft.trim().length > 0;
 
   async function handleSave() {
@@ -145,11 +165,56 @@ export function ContainerNotes({ containerId, notes, onAdd, onDelete }: {
     <div className="notes-wrap">
       {notes.map(note => (
         <div key={note.id} className="note-item">
-          <span className="note-text">
-            {note.createdAt > 0 && <span className="note-date">{formatNoteDate(note.createdAt)} — </span>}
-            {note.text}
-          </span>
-          <button className="note-delete-btn" onClick={() => onDelete(containerId, note.id)}>✕</button>
+          {editingId === note.id ? (
+            <input
+              className="notes-input"
+              value={editDraft}
+              autoFocus
+              onChange={event => setEditDraft(event.target.value)}
+              onKeyDown={async event => {
+                if (event.key === 'Escape') setEditingId(null);
+                if (
+                  event.key === 'Enter' &&
+                  editDraft.trim() &&
+                  onEdit
+                ) {
+                  await onEdit(containerId, note.id, editDraft.trim());
+                  setEditingId(null);
+                }
+              }}
+            />
+          ) : (
+            <span className="note-text">
+              {note.createdAt > 0 && <span className="note-date">{formatNoteDate(note.createdAt)} — </span>}
+              {note.text}
+            </span>
+          )}
+          {editingId === note.id && onEdit && (
+            <button
+              className="notes-save-btn"
+              disabled={!editDraft.trim()}
+              onClick={async () => {
+                await onEdit(containerId, note.id, editDraft.trim());
+                setEditingId(null);
+              }}
+            >
+              {t('shared.save')}
+            </button>
+          )}
+          {canEdit && editingId !== note.id && (
+            <button
+              className="note-delete-btn"
+              onClick={() => {
+                setEditingId(note.id);
+                setEditDraft(note.text);
+              }}
+            >
+              Edit
+            </button>
+          )}
+          {canDelete && (
+            <button className="note-delete-btn" onClick={() => onDelete(containerId, note.id)}>✕</button>
+          )}
         </div>
       ))}
       <div className="notes-input-row">

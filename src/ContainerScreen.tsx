@@ -176,7 +176,7 @@ export default function ContainerScreen({ user, containerId }: Props) {
           <div className="cs-photos">
             {activePhotos.map((photo, i) => (
               <div key={photo.id} className="cs-photo-wrap" onClick={() => { setLbIndex(i); setLbOpen(true); }}>
-                <ThumbImage storagePath={photo.storagePath} alt={`${t('main.card.addPhoto')} ${i + 1}`} />
+                <ThumbImage storagePath={photo.storagePath} url={photo.url} alt={`${t('main.card.addPhoto')} ${i + 1}`} />
               </div>
             ))}
           </div>
@@ -222,7 +222,7 @@ export default function ContainerScreen({ user, containerId }: Props) {
             <button className="cs-lb-close" onClick={() => setLbOpen(false)}>✕</button>
           </div>
           <div className="cs-lb-img" onClick={e => e.stopPropagation()}>
-            <ThumbImage storagePath={activePhotos[lbIndex].storagePath} alt={`${t('main.card.addPhoto')} ${lbIndex + 1}`} />
+            <ThumbImage storagePath={activePhotos[lbIndex].storagePath} url={activePhotos[lbIndex].url} alt={`${t('main.card.addPhoto')} ${lbIndex + 1}`} />
           </div>
           {activePhotos.length > 1 && (
             <div className="cs-lb-nav" onClick={e => e.stopPropagation()}>

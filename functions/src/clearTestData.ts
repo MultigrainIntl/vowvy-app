@@ -13,12 +13,21 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const userId = process.argv[2];
+const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
 if (!userId) {
   console.error('Usage: ts-node scripts/clearTestData.ts <userId>');
   process.exit(1);
 }
+if (!projectId) {
+  console.error('FIREBASE_PROJECT_ID must be set explicitly.');
+  process.exit(1);
+}
+if (projectId !== 'vowvy-staging' && projectId !== 'vowvy-emulator') {
+  console.error('Refusing destructive cleanup outside the staging project or local emulator.');
+  process.exit(1);
+}
 
-initializeApp({ projectId: 'vowvy-1ba5f' });
+initializeApp({ projectId });
 const db = getFirestore();
 
 async function deleteCollection(path: string): Promise<number> {
