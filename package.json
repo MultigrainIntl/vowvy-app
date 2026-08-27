@@ -11,12 +11,12 @@
     "test": "vitest run",
     "test:rules": "XDG_CONFIG_HOME=/tmp/vowvy-firebase-config FIREBASE_EMULATORS_PATH=/tmp/vowvy-firebase-emulators firebase --project vowvy-emulator emulators:exec --only firestore,storage \"vitest run --config vitest.emulator.config.ts && npm --prefix functions run test:emulator\"",
     "test:browser": "VITE_USE_FIREBASE_EMULATORS=true playwright test tests/browser/public-auth.spec.ts",
-    "test:browser:collaborator": "mkdir -p /tmp/vowvy-collaborator-test /tmp/vowvy-firebase-config /tmp/vowvy-firebase-emulators && TMPDIR=/tmp/vowvy-collaborator-test XDG_CONFIG_HOME=/tmp/vowvy-firebase-config FIREBASE_EMULATORS_PATH=/tmp/vowvy-firebase-emulators firebase --project vowvy-emulator emulators:exec --only auth,firestore,storage,functions \"playwright test tests/browser/collaborator-workflow.spec.ts --project=desktop-chromium\"",
+    "test:browser:collaborator": "mkdir -p /tmp/vowvy-collaborator-test /tmp/vowvy-firebase-config /tmp/vowvy-firebase-emulators && TMPDIR=/tmp/vowvy-collaborator-test XDG_CONFIG_HOME=/tmp/vowvy-firebase-config FIREBASE_EMULATORS_PATH=/tmp/vowvy-firebase-emulators firebase --project vowvy-emulator emulators:exec --only auth,firestore,storage \"playwright test tests/browser/collaborator-workflow.spec.ts --project=desktop-chromium\"",
     "qa": "npm run test && npm run test:browser && npm run test:browser:collaborator && npx tsc --noEmit && npm run build"
   },
   "dependencies": {
     "browser-image-compression": "^2.0.2",
-    "firebase": "^12.14.0",
+    "firebase": "12.18.0",
     "i18next": "^26.3.1",
     "i18next-browser-languagedetector": "^8.2.1",
     "i18next-http-backend": "^4.0.0",
