@@ -44,3 +44,9 @@ test('language preference switches the rendered interface to Spanish', async ({ 
   await expect(page.getByRole('button', { name: 'Crea tu cuenta gratis' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('vowvy-lang'))).toBe('es');
 });
+
+test('language preference switches the rendered interface to Portuguese', async ({ page }) => {
+  await page.getByLabel('Language').selectOption('pt-BR');
+  await expect(page.getByRole('button', { name: 'Crie sua conta grátis' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('vowvy-lang'))).toBe('pt-BR');
+});
