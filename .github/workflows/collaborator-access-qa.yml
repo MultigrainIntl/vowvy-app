@@ -6,6 +6,7 @@ on:
       - collaborator-access-replacement-v1
       - agent/vowvy-staging-separation-s2a
       - agent/vowvy-release-candidate-rc2-node22
+      - agent/vowvy-release-candidate-rc3-portuguese
   pull_request:
   workflow_dispatch:
 
