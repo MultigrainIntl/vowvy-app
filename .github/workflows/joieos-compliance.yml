@@ -1,0 +1,10 @@
+name: JoieOS Compliance
+
+# This repository does not define its own rules. It inherits them.
+# The rules live in MultigrainIntl/joieos-governance and are edited there, once, for everyone.
+# That rulebook now requires a reviewed pull request to change, so propagation is not silent.
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  compliance:
+    uses: MultigrainIntl/joieos-governance/.github/workflows/compliance.yml@main
